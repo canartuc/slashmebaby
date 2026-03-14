@@ -10,7 +10,7 @@ interface ActionDef {
   id: string;
 }
 
-// Tab actions — short labels, displayed as columns
+// Tab actions — short labels, displayed as chip grid
 const TAB_ACTIONS: ActionDef[] = [
   { key: 'c', title: 'Close', id: 'close-tab' },
   { key: 'x', title: 'Others', id: 'close-other-tabs' },
@@ -20,14 +20,14 @@ const TAB_ACTIONS: ActionDef[] = [
   { key: 'w', title: 'Window', id: 'move-to-window' },
   { key: 'r', title: 'Reload', id: 'reload-tab' },
   { key: 't', title: 'New', id: 'new-tab' },
+  { key: 'z', title: 'Undo', id: 'recently-closed' },
 ];
 
-// Other actions — displayed as compact rows
+// Other actions — same chip style
 const OTHER_ACTIONS: ActionDef[] = [
-  { key: 'u', title: 'Go to URL', id: 'go-to-url' },
-  { key: 'z', title: 'Recently Closed', id: 'recently-closed' },
-  { key: 'q', title: 'Close Duplicates', id: 'close-duplicates' },
-  { key: 's', title: 'Sort by Domain', id: 'sort-by-domain' },
+  { key: 'q', title: 'Dedup', id: 'close-duplicates' },
+  { key: 's', title: 'Sort', id: 'sort-by-domain' },
+  { key: 'u', title: 'URL', id: 'go-to-url' },
   { key: ',', title: 'Settings', id: 'settings' },
 ];
 
@@ -123,12 +123,12 @@ export const TreeView: React.FC<TreeViewProps> = ({
         ))}
       </div>
 
-      {/* Other actions — compact rows */}
-      <div className="smb-actions-rows">
+      {/* Other actions — same chip style */}
+      <div className="smb-actions-grid">
         {OTHER_ACTIONS.map((action) => (
           <div
             key={action.id}
-            className="smb-action-row"
+            className="smb-action-chip"
             role="option"
             aria-label={action.title}
           >

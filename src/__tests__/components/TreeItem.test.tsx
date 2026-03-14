@@ -70,20 +70,20 @@ describe('TreeItem', () => {
     expect(badge!.textContent).toBe('b');
   });
 
-  it('dims the label badge in search mode', () => {
+  it('hides the label badge in search mode', () => {
     const { container } = render(
       <TreeItem item={tabItem} {...defaultProps} searchMode={true} />
     );
-    const badge = container.querySelector('.smb-label-badge--dimmed');
-    expect(badge).toBeTruthy();
+    const badge = container.querySelector('.smb-label-badge');
+    expect(badge).toBeNull();
   });
 
-  it('does not dim the label badge when not in search mode', () => {
+  it('shows the label badge when not in search mode', () => {
     const { container } = render(
       <TreeItem item={tabItem} {...defaultProps} searchMode={false} />
     );
-    const badge = container.querySelector('.smb-label-badge--dimmed');
-    expect(badge).toBeNull();
+    const badge = container.querySelector('.smb-label-badge');
+    expect(badge).toBeTruthy();
   });
 
   // ─── Indentation ─────────────────────────────────────────────────────────

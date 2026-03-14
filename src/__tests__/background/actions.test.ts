@@ -49,10 +49,8 @@ function makeChromeMock(overrides: Record<string, unknown> = {}) {
   };
 
   const sessions = {
-    getRecentlyClosed: vi.fn((cb: (sessions: chrome.sessions.Session[]) => void) => cb([])),
-    restore: vi.fn((_sessionId?: string, cb?: (session: chrome.sessions.Session) => void) =>
-      cb?.({ lastModified: 0 })
-    ),
+    getRecentlyClosed: vi.fn(() => Promise.resolve([])),
+    restore: vi.fn(() => Promise.resolve({ lastModified: 0 })),
   };
 
   const runtime = {

@@ -64,8 +64,7 @@ export class ActionRegistry {
           return { success: true };
 
         case 'recently-closed':
-          // Triggers sub-list mode in the UI
-          return { success: true };
+          return await this.undoCloseTab();
 
         case 'close-duplicates':
           return await this.closeDuplicates();
@@ -224,6 +223,19 @@ export class ActionRegistry {
 
   private async openSettings(): Promise<ExecuteActionResponse> {
     await chrome.runtime.openOptionsPage();
+    return { success: true };
+  }
+
+  private async undoCloseTab(): Promise<ExecuteActionResponse> {
+    const sessions = await chrome.sessions.getRecentlyClosed({ maxResults: 1 });
+    if (sessions.length > 0) {
+      const session = sessions[0];
+      if (session.tab?.sessionId) {
+        await chrome.sessions.restore(session.tab.sessionId);
+      } else if (session.window?.sessionId) {
+        await chrome.sessions.restore(session.window.sessionId);
+      }
+    }
     return { success: true };
   }
 }

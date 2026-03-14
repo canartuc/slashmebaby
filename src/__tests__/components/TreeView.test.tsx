@@ -224,7 +224,7 @@ describe('TreeView', () => {
     expect(chips.length + rows.length).toBe(13);
   });
 
-  it('renders tab action chips with correct keys', () => {
+  it('renders all action chips with correct keys', () => {
     const items = [groupItem];
     const { container } = render(
       <TreeView
@@ -235,7 +235,7 @@ describe('TreeView', () => {
     );
     const chips = container.querySelectorAll('.smb-action-chip .smb-label-badge');
     const keys = Array.from(chips).map((b) => b.textContent);
-    expect(keys).toEqual(['c', 'x', 'p', 'm', 'd', 'w', 'r', 't']);
+    expect(keys).toEqual(['c', 'x', 'p', 'm', 'd', 'w', 'r', 't', 'z', 'q', 's', 'u', ',']);
   });
 
   it('renders action labels', () => {
@@ -287,7 +287,7 @@ describe('TreeView', () => {
 
   // ─── Search mode ──────────────────────────────────────────────────────────
 
-  it('passes searchMode to tree items', () => {
+  it('hides label badges in search mode', () => {
     const items = [tab1];
     const { container } = render(
       <TreeView
@@ -297,9 +297,11 @@ describe('TreeView', () => {
         searchMode={true}
       />
     );
-    // When searchMode=true, label badges get the dimmed class
-    const dimmed = container.querySelector('.smb-label-badge--dimmed');
-    expect(dimmed).toBeTruthy();
+    // When searchMode=true, label badges are hidden entirely
+    const badge = container.querySelector('.smb-label-badge');
+    // Only action badges in the actions grid should remain
+    const treeBadges = container.querySelectorAll('.smb-tree-item .smb-label-badge');
+    expect(treeBadges).toHaveLength(0);
   });
 
   // ─── Mixed sections (tabs then bookmarks) ────────────────────────────────
