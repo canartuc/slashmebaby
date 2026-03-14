@@ -93,7 +93,7 @@ describe('TreeItem', () => {
       <TreeItem item={tabItem} {...defaultProps} />
     );
     const el = container.querySelector('.smb-tree-item') as HTMLElement;
-    expect(el.style.paddingLeft).toBe('16px'); // depth=1 * 16
+    expect(el.style.paddingLeft).toBe('32px'); // 16 + depth=1 * 16
   });
 
   it('applies 0 paddingLeft for depth 0', () => {
@@ -101,15 +101,15 @@ describe('TreeItem', () => {
       <TreeItem item={groupItem} {...defaultProps} />
     );
     const el = container.querySelector('.smb-tree-item') as HTMLElement;
-    expect(el.style.paddingLeft).toBe('0px');
+    expect(el.style.paddingLeft).toBe('16px'); // 16 + depth=0 * 16
   });
 
-  it('applies 32px paddingLeft for depth 2', () => {
+  it('applies 48px paddingLeft for depth 2', () => {
     const { container } = render(
       <TreeItem item={bookmarkItem} {...defaultProps} />
     );
     const el = container.querySelector('.smb-tree-item') as HTMLElement;
-    expect(el.style.paddingLeft).toBe('32px');
+    expect(el.style.paddingLeft).toBe('48px'); // 16 + depth=2 * 16
   });
 
   // ─── Folder indicator ─────────────────────────────────────────────────────

@@ -79,14 +79,14 @@ export const TreeView: React.FC<TreeViewProps> = ({
   searchMode,
 }) => {
   return (
-    <div className="smb-tree-view" role="listbox">
+    <div className="smb-results" role="listbox">
       {visibleItems.map((item, index) => {
         const header = getSectionHeader(visibleItems, index);
         const label = labels.get(index) ?? '';
         return (
           <React.Fragment key={item.id}>
             {header && (
-              <div className="smb-section-header">{header}</div>
+              <div className="smb-group-header">{header}</div>
             )}
             <TreeItem
               item={item}

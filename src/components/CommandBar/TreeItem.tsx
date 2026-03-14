@@ -54,7 +54,7 @@ export const TreeItem: React.FC<TreeItemProps> = ({
       role="option"
       aria-selected={isSelected}
       aria-label={item.title}
-      style={{ paddingLeft: item.depth * 16 }}
+      style={{ paddingLeft: 16 + item.depth * 16 }}
     >
       <LabelBadge label={label} dimmed={searchMode} />
 

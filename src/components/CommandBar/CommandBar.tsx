@@ -18,7 +18,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
 
-  const { visibleItems, toggleExpand, getParentId, isLoading } = useTreeData();
+  const { visibleItems, allItems, toggleExpand, getParentId, isLoading } = useTreeData();
   const { labels, labelToIndex, handleKeyPress, pendingPrefix, clearPending } = useLabelAssignment(visibleItems.length);
   const theme = useTheme(settings.theme);
 
@@ -40,15 +40,19 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   }, [visibleItems]);
 
   // Filter items based on search query
+  // When searching, filter ALL items (not just visible/expanded ones)
   const filteredItems = useMemo(() => {
     if (!query) return visibleItems;
     const lowerQuery = query.toLowerCase();
-    return visibleItems.filter((item) => {
+    const source = allItems.length > 0 ? allItems : visibleItems;
+    return source.filter((item) => {
+      // Skip folders/groups in search results — show only leaf items
+      if (item.type === 'folder' || item.type === 'group') return false;
       const titleMatch = item.title.toLowerCase().includes(lowerQuery);
       const urlMatch = item.url ? item.url.toLowerCase().includes(lowerQuery) : false;
       return titleMatch || urlMatch;
     });
-  }, [visibleItems, query]);
+  }, [visibleItems, allItems, query]);
 
   // Reset selected index when filtered items change
   useEffect(() => {

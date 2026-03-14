@@ -120,6 +120,19 @@ function computeVisibleItems(
   return result;
 }
 
+// ─── Flatten ALL items for search (ignores expand state) ─────────────────────
+
+function flattenAll(nodes: InternalNode[]): TreeItem[] {
+  const result: TreeItem[] = [];
+  for (const node of nodes) {
+    result.push({ ...node.item, isExpanded: false });
+    if (node.children.length > 0) {
+      result.push(...flattenAll(node.children));
+    }
+  }
+  return result;
+}
+
 // ─── Build parent map for ArrowLeft navigation ───────────────────────────────
 
 function buildParentMap(nodes: InternalNode[]): Map<string, string> {
@@ -140,6 +153,7 @@ function buildParentMap(nodes: InternalNode[]): Map<string, string> {
 
 export function useTreeData(): {
   visibleItems: TreeItem[];
+  allItems: TreeItem[];
   toggleExpand: (id: string) => void;
   getParentId: (id: string) => string | undefined;
   isLoading: boolean;
@@ -149,6 +163,7 @@ export function useTreeData(): {
   const treeRef = useRef<InternalNode[]>([]);
   const parentMapRef = useRef<Map<string, string>>(new Map());
   const [visibleItems, setVisibleItems] = useState<TreeItem[]>([]);
+  const [allItems, setAllItems] = useState<TreeItem[]>([]);
 
   // Fetch data on mount
   useEffect(() => {
@@ -172,6 +187,7 @@ export function useTreeData(): {
       const initialExpanded = new Set<string>();
       setExpandedIds(initialExpanded);
       setVisibleItems(computeVisibleItems(tree, initialExpanded));
+      setAllItems(flattenAll(tree));
       setIsLoading(false);
     }
 
@@ -219,5 +235,5 @@ export function useTreeData(): {
     return parentMapRef.current.get(id);
   }, []);
 
-  return { visibleItems, toggleExpand, getParentId, isLoading };
+  return { visibleItems, allItems, toggleExpand, getParentId, isLoading };
 }

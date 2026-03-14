@@ -91,7 +91,7 @@ describe('TreeView', () => {
         {...defaultProps}
       />
     );
-    const headers = container.querySelectorAll('.smb-section-header');
+    const headers = container.querySelectorAll('.smb-group-header');
     expect(headers).toHaveLength(1);
     expect(headers[0].textContent).toBe('Open Tabs');
   });
@@ -105,7 +105,7 @@ describe('TreeView', () => {
         {...defaultProps}
       />
     );
-    const headers = container.querySelectorAll('.smb-section-header');
+    const headers = container.querySelectorAll('.smb-group-header');
     expect(headers).toHaveLength(2);
     expect(headers[0].textContent).toBe('Open Tabs');
     expect(headers[1].textContent).toBe('Bookmarks');
@@ -121,7 +121,7 @@ describe('TreeView', () => {
       />
     );
     // Only one header for the tab section
-    const headers = container.querySelectorAll('.smb-section-header');
+    const headers = container.querySelectorAll('.smb-group-header');
     expect(headers).toHaveLength(1);
   });
 
@@ -312,7 +312,7 @@ describe('TreeView', () => {
         {...defaultProps}
       />
     );
-    const headers = container.querySelectorAll('.smb-section-header');
+    const headers = container.querySelectorAll('.smb-group-header');
     expect(headers).toHaveLength(2);
     expect(headers[0].textContent).toBe('Open Tabs');
     expect(headers[1].textContent).toBe('Bookmarks');
