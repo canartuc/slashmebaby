@@ -61,6 +61,8 @@ describe('CommandBar', () => {
           if (callback) callback({ groups: mockGroups });
         } else if (message.type === 'EXECUTE_ACTION') {
           if (callback) callback({ success: true });
+        } else if (message.type === 'SWITCH_TAB' || message.type === 'NAVIGATE') {
+          if (callback) callback({ success: true });
         }
         return undefined as unknown as Promise<unknown>;
       }

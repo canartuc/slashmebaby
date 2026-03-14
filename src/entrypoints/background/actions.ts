@@ -222,11 +222,8 @@ export class ActionRegistry {
     });
   }
 
-  private openSettings(): Promise<ExecuteActionResponse> {
-    return new Promise((resolve) => {
-      chrome.runtime.openOptionsPage(() => {
-        resolve({ success: true });
-      });
-    });
+  private async openSettings(): Promise<ExecuteActionResponse> {
+    await chrome.runtime.openOptionsPage();
+    return { success: true };
   }
 }

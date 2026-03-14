@@ -84,29 +84,22 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
 
   const handleSelectItem = useCallback(
     (item: SearchResultItem) => {
-      if (item.id.startsWith('tab-')) {
-        // Switch to existing tab
-        const tabId = parseInt(item.id.replace('tab-', ''), 10);
-        chrome.runtime.sendMessage({
-          type: 'SWITCH_TAB',
-          payload: { tabId },
+      const sendAndDismiss = (message: Record<string, unknown>) => {
+        chrome.runtime.sendMessage(message, () => {
+          onDismiss();
         });
+      };
+
+      if (item.id.startsWith('tab-')) {
+        const tabId = parseInt(item.id.replace('tab-', ''), 10);
+        sendAndDismiss({ type: 'SWITCH_TAB', payload: { tabId } });
       } else if (item.id.startsWith('bookmark-') || item.id.startsWith('history-')) {
-        // Navigate to URL
         if (item.url) {
-          chrome.runtime.sendMessage({
-            type: 'NAVIGATE',
-            payload: { url: item.url },
-          });
+          sendAndDismiss({ type: 'NAVIGATE', payload: { url: item.url } });
         }
       } else if (item.id.startsWith('action-')) {
-        // Execute action
-        chrome.runtime.sendMessage({
-          type: 'EXECUTE_ACTION',
-          payload: { actionId: item.id },
-        });
+        sendAndDismiss({ type: 'EXECUTE_ACTION', payload: { actionId: item.id } });
       }
-      onDismiss();
     },
     [onDismiss]
   );
