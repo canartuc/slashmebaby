@@ -1,59 +1,31 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import type { ResultGroup, SearchResultItem, UserSettings } from '../../lib/messaging';
+import type { UserSettings } from '../../lib/messaging';
 import { DEFAULT_SETTINGS } from '../../lib/messaging';
 import { SearchInput } from './SearchInput';
-import { ResultList } from './ResultList';
-import { useSearch } from '../../hooks/useSearch';
+import { TreeView } from './TreeView';
+import { useTreeData } from '../../hooks/useTreeData';
+import { useLabelAssignment } from '../../hooks/useLabelAssignment';
 import { useTheme } from '../../hooks/useTheme';
+import { isActionKey, getActionForKey } from '../../lib/labels';
 
 export interface CommandBarProps {
   onDismiss: () => void;
 }
 
-function countTotalItems(groups: ResultGroup[]): number {
-  return groups.reduce((sum, g) => sum + g.items.length, 0);
-}
-
-function computeGroupBoundaries(groups: ResultGroup[]): number[] {
-  const boundaries: number[] = [];
-  let offset = 0;
-  for (const group of groups) {
-    boundaries.push(offset);
-    offset += group.items.length;
-  }
-  return boundaries;
-}
-
-function getItemAtIndex(groups: ResultGroup[], index: number): SearchResultItem | undefined {
-  let offset = 0;
-  for (const group of groups) {
-    if (index < offset + group.items.length) {
-      return group.items[index - offset];
-    }
-    offset += group.items.length;
-  }
-  return undefined;
-}
-
 export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
+  const [mode, setMode] = useState<'jump' | 'search'>('jump');
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
 
-  const { groups, isLoading } = useSearch(query);
+  const { visibleItems, toggleExpand, getParentId, isLoading } = useTreeData();
+  const { labels, labelToIndex, handleKeyPress, pendingPrefix, clearPending } = useLabelAssignment(visibleItems.length);
   const theme = useTheme(settings.theme);
 
-  const totalItems = useMemo(() => countTotalItems(groups), [groups]);
-  const groupBoundaries = useMemo(() => computeGroupBoundaries(groups), [groups]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
 
-  // Use refs so the keydown handler always sees latest values without re-binding
-  const stateRef = useRef({ query, selectedIndex, totalItems, groupBoundaries, groups });
-  stateRef.current = { query, selectedIndex, totalItems, groupBoundaries, groups };
-
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [groups]);
-
+  // Load settings on mount
   useEffect(() => {
     chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (response) => {
       if (response?.settings) {
@@ -62,74 +34,210 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     });
   }, []);
 
-  const executeItem = useCallback(
-    (item: SearchResultItem) => {
-      const sendAndDismiss = (message: Record<string, unknown>) => {
-        chrome.runtime.sendMessage(message, () => {
-          onDismiss();
-        });
-      };
+  // Reset selected index when visible items change
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [visibleItems]);
 
-      if (item.id.startsWith('tab-')) {
-        const tabId = parseInt(item.id.replace('tab-', ''), 10);
-        sendAndDismiss({ type: 'SWITCH_TAB', payload: { tabId } });
-      } else if (item.id.startsWith('bookmark-') || item.id.startsWith('history-')) {
-        if (item.url) {
-          sendAndDismiss({ type: 'NAVIGATE', payload: { url: item.url } });
+  // Filter items based on search query
+  const filteredItems = useMemo(() => {
+    if (!query) return visibleItems;
+    const lowerQuery = query.toLowerCase();
+    return visibleItems.filter((item) => {
+      const titleMatch = item.title.toLowerCase().includes(lowerQuery);
+      const urlMatch = item.url ? item.url.toLowerCase().includes(lowerQuery) : false;
+      return titleMatch || urlMatch;
+    });
+  }, [visibleItems, query]);
+
+  // Reset selected index when filtered items change
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [filteredItems]);
+
+  // Use a ref to always have access to latest state in the handler
+  const stateRef = useRef({ mode, selectedIndex, filteredItems, visibleItems, query });
+  stateRef.current = { mode, selectedIndex, filteredItems, visibleItems, query };
+
+  const handleItemSelect = useCallback((index: number) => {
+    const items = stateRef.current.filteredItems;
+    const item = items[index];
+    if (!item) return;
+
+    if (item.type === 'folder' || item.type === 'group') {
+      toggleExpand(item.id);
+      setSelectedIndex(index);
+    } else if (item.type === 'tab' && item.tabId) {
+      chrome.runtime.sendMessage(
+        { type: 'SWITCH_TAB', payload: { tabId: item.tabId } },
+        () => onDismiss()
+      );
+    } else if (item.url) {
+      chrome.runtime.sendMessage(
+        { type: 'NAVIGATE', payload: { url: item.url } },
+        () => onDismiss()
+      );
+    }
+  }, [toggleExpand, onDismiss]);
+
+  const handleKey = useCallback((key: string, shiftKey: boolean) => {
+    const { mode: currentMode, selectedIndex: idx, filteredItems: items, query: currentQuery } = stateRef.current;
+
+    // '/' toggles mode
+    if (key === '/') {
+      setMode(prev => {
+        if (prev === 'search') {
+          setQuery('');
+          return 'jump';
         }
-      } else if (item.id.startsWith('action-')) {
-        sendAndDismiss({ type: 'EXECUTE_ACTION', payload: { actionId: item.id } });
+        return 'search';
+      });
+      return;
+    }
+
+    // Action keys work in BOTH modes
+    if (isActionKey(key)) {
+      const actionId = getActionForKey(key);
+      if (actionId) {
+        chrome.runtime.sendMessage(
+          { type: 'EXECUTE_ACTION', payload: { actionId: `action-${actionId}` } },
+          () => onDismiss()
+        );
       }
-    },
-    [onDismiss]
-  );
+      return;
+    }
 
-  // Stable native keydown handler — uses ref to read latest state
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      const { query: q, selectedIndex: idx, totalItems: total, groupBoundaries: bounds, groups: g } = stateRef.current;
-
-      switch (e.key) {
-        case 'ArrowDown': {
-          e.preventDefault();
-          if (total === 0) return;
-          setSelectedIndex(idx >= total - 1 ? 0 : idx + 1);
+    if (currentMode === 'jump') {
+      // Jump mode key handling
+      switch (key) {
+        case 'ArrowDown':
+          setSelectedIndex(prev => prev >= items.length - 1 ? 0 : prev + 1);
+          break;
+        case 'ArrowUp':
+          setSelectedIndex(prev => prev <= 0 ? items.length - 1 : prev - 1);
+          break;
+        case 'ArrowRight': {
+          const item = items[idx];
+          if (item && (item.type === 'folder' || item.type === 'group') && !item.isExpanded) {
+            toggleExpand(item.id);
+          }
           break;
         }
-        case 'ArrowUp': {
-          e.preventDefault();
-          if (total === 0) return;
-          setSelectedIndex(idx <= 0 ? total - 1 : idx - 1);
-          break;
-        }
-        case 'Tab': {
-          e.preventDefault();
-          if (total === 0 || bounds.length === 0) return;
-          if (e.shiftKey) {
-            const prev = [...bounds].reverse().find((b) => b < idx);
-            setSelectedIndex(prev ?? bounds[bounds.length - 1]);
-          } else {
-            const next = bounds.find((b) => b > idx);
-            setSelectedIndex(next ?? bounds[0]);
+        case 'ArrowLeft': {
+          const item = items[idx];
+          if (item) {
+            if ((item.type === 'folder' || item.type === 'group') && item.isExpanded) {
+              toggleExpand(item.id);
+            } else if (item.parentId) {
+              const parentIdx = items.findIndex(i => i.id === item.parentId);
+              if (parentIdx >= 0) setSelectedIndex(parentIdx);
+            }
           }
           break;
         }
         case 'Enter': {
-          e.preventDefault();
-          if (total === 0) return;
-          const item = getItemAtIndex(g, idx);
-          if (item) executeItem(item);
+          const item = items[idx];
+          if (!item) break;
+          if (item.type === 'folder' || item.type === 'group') {
+            toggleExpand(item.id);
+          } else if (item.type === 'tab' && item.tabId) {
+            chrome.runtime.sendMessage(
+              { type: 'SWITCH_TAB', payload: { tabId: item.tabId } },
+              () => onDismiss()
+            );
+          } else if (item.url) {
+            chrome.runtime.sendMessage(
+              { type: 'NAVIGATE', payload: { url: item.url } },
+              () => onDismiss()
+            );
+          }
           break;
         }
-        // Backspace just clears text normally, no dismiss
-        // Escape is handled in content script, not here
+        default: {
+          // Try label key
+          const result = handleKeyPress(key);
+          if (result.consumed && result.targetIndex !== null) {
+            const item = items[result.targetIndex];
+            if (item) {
+              if (item.type === 'folder' || item.type === 'group') {
+                toggleExpand(item.id);
+                setSelectedIndex(result.targetIndex);
+              } else if (item.type === 'tab' && item.tabId) {
+                chrome.runtime.sendMessage(
+                  { type: 'SWITCH_TAB', payload: { tabId: item.tabId } },
+                  () => onDismiss()
+                );
+              } else if (item.url) {
+                chrome.runtime.sendMessage(
+                  { type: 'NAVIGATE', payload: { url: item.url } },
+                  () => onDismiss()
+                );
+              }
+            }
+          }
+          break;
+        }
       }
-    },
-    [onDismiss, executeItem]
-  );
+    }
+    // In search mode, regular keys go to the input naturally (it's focused)
+    // But special keys still work:
+    if (currentMode === 'search') {
+      switch (key) {
+        case 'ArrowDown':
+          setSelectedIndex(prev => prev >= items.length - 1 ? 0 : prev + 1);
+          break;
+        case 'ArrowUp':
+          setSelectedIndex(prev => prev <= 0 ? items.length - 1 : prev - 1);
+          break;
+        case 'Enter': {
+          const item = items[idx];
+          if (!item) break;
+          if (item.type === 'folder' || item.type === 'group') {
+            toggleExpand(item.id);
+          } else if (item.type === 'tab' && item.tabId) {
+            chrome.runtime.sendMessage(
+              { type: 'SWITCH_TAB', payload: { tabId: item.tabId } },
+              () => onDismiss()
+            );
+          } else if (item.url) {
+            chrome.runtime.sendMessage(
+              { type: 'NAVIGATE', payload: { url: item.url } },
+              () => onDismiss()
+            );
+          }
+          break;
+        }
+      }
+    }
+  }, [toggleExpand, onDismiss, handleKeyPress]);
+
+  // Listen for smb-keydown custom events from the content script
+  useEffect(() => {
+    const shadowRoot = containerRef.current?.getRootNode();
+    if (!(shadowRoot instanceof ShadowRoot)) {
+      // Fallback for testing: listen on the container's document
+      const doc = containerRef.current?.ownerDocument;
+      if (!doc) return;
+
+      const handler = (e: Event) => {
+        const detail = (e as CustomEvent).detail;
+        handleKey(detail.key, detail.shiftKey || false);
+      };
+
+      doc.addEventListener('smb-keydown', handler);
+      return () => doc.removeEventListener('smb-keydown', handler);
+    }
+
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      handleKey(detail.key, detail.shiftKey || false);
+    };
+
+    shadowRoot.addEventListener('smb-keydown', handler);
+    return () => shadowRoot.removeEventListener('smb-keydown', handler);
+  }, [handleKey]);
 
   // Backdrop click to dismiss — use native listener since React events may not work
-  const backdropRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = backdropRef.current;
     if (!el) return;
@@ -146,24 +254,23 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   return (
     <div ref={backdropRef} className="smb-backdrop">
       <div
+        ref={containerRef}
         className={`smb-container ${positionClass}`}
         data-theme={theme}
         role="dialog"
         aria-label="Command palette"
         aria-modal="true"
       >
-        <SearchInput query={query} onQueryChange={setQuery} onKeyDown={handleKeyDown} />
-        <ResultList
-          groups={groups}
+        <SearchInput query={query} onQueryChange={setQuery} mode={mode} />
+        <TreeView
+          visibleItems={filteredItems}
+          labels={labels}
           selectedIndex={selectedIndex}
           showFavicons={settings.showFavicons}
-          onSelectItem={executeItem}
+          onSelectItem={handleItemSelect}
+          searchMode={mode === 'search'}
+          searchQuery={query}
         />
-        <div className="smb-sr-only" aria-live="polite" aria-atomic="true">
-          {!isLoading && totalItems > 0
-            ? `${totalItems} result${totalItems === 1 ? '' : 's'}${query ? ` for '${query}'` : ''}`
-            : ''}
-        </div>
       </div>
     </div>
   );

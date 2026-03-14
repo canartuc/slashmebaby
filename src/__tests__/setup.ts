@@ -37,6 +37,7 @@ if (typeof globalThis.chrome === 'undefined') {
         get: vi.fn((_keys: unknown, cb: (result: Record<string, unknown>) => void) => cb({})),
         set: vi.fn((_items: unknown, cb?: () => void) => cb?.()),
       },
+      onChanged: noopListener,
     },
     tabs: {
       query: vi.fn(),

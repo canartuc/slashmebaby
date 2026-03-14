@@ -35,8 +35,10 @@ describe('App', () => {
               searchSources: { tabs: true, bookmarks: true, history: true },
             },
           });
-        } else if (message.type === 'SMART_SUGGESTIONS' && callback) {
+        } else if (message.type === 'GET_ALL_TABS' && callback) {
           callback({ groups: [] });
+        } else if (message.type === 'GET_BOOKMARK_TREE' && callback) {
+          callback({ tree: [] });
         }
         return undefined as unknown as Promise<unknown>;
       }
@@ -49,9 +51,9 @@ describe('App', () => {
     expect(dialog).toBeTruthy();
   });
 
-  it('renders the search input', () => {
+  it('renders the search input in jump mode', () => {
     render(<App onDismiss={() => {}} />);
-    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
+    const input = screen.getByPlaceholderText('Press / to search');
     expect(input).toBeTruthy();
   });
 

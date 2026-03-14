@@ -94,6 +94,26 @@ export default defineContentScript({
         dismiss();
         return;
       }
+
+      // Forward to shadow DOM — the CommandBar decides what to do based on mode
+      const shadowRoot = host.shadowRoot;
+      if (shadowRoot) {
+        // Don't intercept if the focused element is an input in search mode
+        const activeEl = shadowRoot.activeElement;
+        const isInputFocused = activeEl?.tagName === 'INPUT';
+
+        // Always forward special keys
+        const specialKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Tab', '/'];
+        const isSpecialKey = specialKeys.includes(e.key);
+
+        if (isSpecialKey || !isInputFocused) {
+          e.preventDefault();
+          e.stopPropagation();
+          shadowRoot.dispatchEvent(new CustomEvent('smb-keydown', {
+            detail: { key: e.key, shiftKey: e.shiftKey },
+          }));
+        }
+      }
     }, true);
 
     // Also listen for toggle from background (chrome.commands)

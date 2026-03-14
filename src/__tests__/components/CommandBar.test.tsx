@@ -1,24 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { CommandBar } from '../../components/CommandBar/CommandBar';
-import type { ResultGroup } from '../../lib/messaging';
-
-const mockGroups: ResultGroup[] = [
-  {
-    category: 'tabs',
-    items: [
-      { id: 'tab-1', title: 'Gmail', url: 'https://mail.google.com', score: 0.9 },
-      { id: 'tab-2', title: 'GitHub', url: 'https://github.com', score: 0.8 },
-    ],
-  },
-  {
-    category: 'bookmarks',
-    items: [
-      { id: 'bm-1', title: 'React Docs', url: 'https://react.dev', score: 0.85 },
-    ],
-  },
-];
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -52,11 +35,31 @@ describe('CommandBar', () => {
               searchSources: { tabs: true, bookmarks: true, history: true },
             },
           });
-        } else if (
-          message.type === 'SMART_SUGGESTIONS' ||
-          message.type === 'SEARCH'
-        ) {
-          if (callback) callback({ groups: mockGroups });
+        } else if (message.type === 'GET_ALL_TABS' && callback) {
+          callback({
+            groups: [
+              {
+                label: 'Window 1',
+                type: 'window',
+                tabs: [
+                  { id: 1, title: 'Gmail', url: 'https://mail.google.com', favIconUrl: '', windowId: 1, pinned: false, audible: false },
+                  { id: 2, title: 'GitHub', url: 'https://github.com', favIconUrl: '', windowId: 1, pinned: false, audible: false },
+                ],
+              },
+            ],
+          });
+        } else if (message.type === 'GET_BOOKMARK_TREE' && callback) {
+          callback({
+            tree: [
+              {
+                id: '1',
+                title: 'Bookmarks Bar',
+                children: [
+                  { id: '2', title: 'React Docs', url: 'https://react.dev' },
+                ],
+              },
+            ],
+          });
         } else if (message.type === 'EXECUTE_ACTION') {
           if (callback) callback({ success: true });
         } else if (message.type === 'SWITCH_TAB' || message.type === 'NAVIGATE') {
@@ -67,9 +70,9 @@ describe('CommandBar', () => {
     );
   });
 
-  it('renders the search input', () => {
+  it('renders in jump mode by default with jump placeholder', async () => {
     render(<CommandBar onDismiss={() => {}} />);
-    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
+    const input = screen.getByPlaceholderText('Press / to search');
     expect(input).toBeTruthy();
   });
 
@@ -87,41 +90,18 @@ describe('CommandBar', () => {
     expect(dialog.getAttribute('aria-modal')).toBe('true');
   });
 
-  it('renders results from search', async () => {
+  it('renders tree view with tab groups', async () => {
     render(<CommandBar onDismiss={() => {}} />);
     await waitFor(() => {
-      expect(screen.getByText('Gmail')).toBeTruthy();
-      expect(screen.getByText('GitHub')).toBeTruthy();
-      expect(screen.getByText('React Docs')).toBeTruthy();
+      expect(screen.getByText('Window 1')).toBeTruthy();
     });
   });
 
-  // Escape is handled in content script (document-level listener), tested in E2E
-
-  it('does not dismiss when pressing Backspace on empty query', async () => {
-    const onDismiss = vi.fn();
-    render(<CommandBar onDismiss={onDismiss} />);
-    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
-
-    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
-    expect(onDismiss).not.toHaveBeenCalled();
-  });
-
-  it('switches tab on Enter key', async () => {
-    const onDismiss = vi.fn();
-    render(<CommandBar onDismiss={onDismiss} />);
-    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
-
-    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-
-    const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
-    const switchCall = calls.find(
-      (c) => (c[0] as { type: string }).type === 'SWITCH_TAB'
-    );
-    expect(switchCall).toBeTruthy();
-    expect(onDismiss).toHaveBeenCalled();
+  it('renders tree view with bookmark folders', async () => {
+    render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByText('Bookmarks Bar')).toBeTruthy();
+    });
   });
 
   it('calls onDismiss when clicking the backdrop', async () => {
@@ -136,7 +116,7 @@ describe('CommandBar', () => {
     const onDismiss = vi.fn();
     render(<CommandBar onDismiss={onDismiss} />);
     const dialog = screen.getByRole('dialog');
-    fireEvent.click(dialog);
+    dialog.click();
     expect(onDismiss).not.toHaveBeenCalled();
   });
 
@@ -156,27 +136,61 @@ describe('CommandBar', () => {
     });
   });
 
-  it('sends SWITCH_TAB and dismisses when clicking a tab item', async () => {
-    const onDismiss = vi.fn();
-    render(<CommandBar onDismiss={onDismiss} />);
-    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
-
-    fireEvent.click(screen.getByText('Gmail'));
-
+  it('loads settings on mount', () => {
+    render(<CommandBar onDismiss={() => {}} />);
     const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
-    const switchCall = calls.find(
-      (c) => (c[0] as { type: string }).type === 'SWITCH_TAB'
+    const settingsCall = calls.find(
+      (c) => (c[0] as { type: string }).type === 'GET_SETTINGS'
     );
-    expect(switchCall).toBeTruthy();
-    expect((switchCall![0] as { payload: { tabId: number } }).payload.tabId).toBe(1);
-    expect(onDismiss).toHaveBeenCalled();
+    expect(settingsCall).toBeTruthy();
   });
 
-  it('shows live region with result count', async () => {
+  it('switches to search mode when / key is dispatched', async () => {
+    render(<CommandBar onDismiss={() => {}} />);
+
+    // Initially in jump mode
+    expect(screen.getByPlaceholderText('Press / to search')).toBeTruthy();
+
+    // Dispatch custom event to switch mode
+    document.dispatchEvent(new CustomEvent('smb-keydown', {
+      detail: { key: '/', shiftKey: false },
+    }));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Search tabs, bookmarks, actions...')).toBeTruthy();
+    });
+  });
+
+  it('executes action when action key is dispatched', async () => {
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+
+    // Dispatch 'c' key (close tab action)
+    document.dispatchEvent(new CustomEvent('smb-keydown', {
+      detail: { key: 'c', shiftKey: false },
+    }));
+
+    await waitFor(() => {
+      const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
+      const actionCall = calls.find(
+        (c) => (c[0] as { type: string }).type === 'EXECUTE_ACTION'
+      );
+      expect(actionCall).toBeTruthy();
+      expect(onDismiss).toHaveBeenCalled();
+    });
+  });
+
+  it('renders the TreeView component (has listbox role)', async () => {
     render(<CommandBar onDismiss={() => {}} />);
     await waitFor(() => {
-      const liveRegion = document.querySelector('[aria-live="polite"]');
-      expect(liveRegion).toBeTruthy();
+      const listbox = screen.getByRole('listbox');
+      expect(listbox).toBeTruthy();
     });
+  });
+
+  it('has input readonly in jump mode', () => {
+    render(<CommandBar onDismiss={() => {}} />);
+    const input = screen.getByPlaceholderText('Press / to search') as HTMLInputElement;
+    expect(input.readOnly).toBe(true);
   });
 });
