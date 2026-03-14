@@ -26,6 +26,11 @@ These features are required for the initial public release on Chrome Web Store a
 | F14 | System Theme | Auto-detects OS light/dark preference via `prefers-color-scheme`. Command bar renders in matching theme. No manual toggle required for v1. | Complete |
 | F15 | Shadow DOM Isolation | Content script creates a `<div id="slashmebaby-root">` attached to `document.body` with an open Shadow DOM root. All styles scoped inside. Zero CSS leakage to/from host page. | Complete |
 | F16 | Cross-Browser Support | Chrome MV3 (and Chromium forks: Edge, Brave). Firefox MV2/MV3. Built via WXT with `browser` namespace auto-polyfill. Separate CI build targets for both. | Complete |
+| F25 | Tree View | Full tree of all tabs and bookmarks with expand/collapse | Complete |
+| F26 | EasyJump Labels | Dynamic keyboard labels for instant navigation | Complete |
+| F27 | Jump/Search Mode Toggle | `/` key toggles between jump and search modes | Complete |
+| F28 | Smart Tab Grouping | Tabs grouped by window/tab group with nested display | Complete |
+| F29 | Nested Bookmark Folders | Full bookmark tree with unlimited folder nesting | Complete |
 
 ---
 
