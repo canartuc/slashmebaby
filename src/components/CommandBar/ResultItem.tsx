@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import type { SearchResultItem } from '../../lib/messaging';
 
 export interface ResultItemProps {
@@ -26,6 +26,7 @@ export const ResultItem: React.FC<ResultItemProps> = ({
   showFavicons,
   onSelect,
 }) => {
+  const ref = useRef<HTMLDivElement>(null);
   const hostname = extractHostname(item.url);
   const className = [
     'smb-result-item',
@@ -34,8 +35,15 @@ export const ResultItem: React.FC<ResultItemProps> = ({
     .filter(Boolean)
     .join(' ');
 
+  useEffect(() => {
+    if (isSelected && ref.current) {
+      ref.current.scrollIntoView({ block: 'nearest' });
+    }
+  }, [isSelected]);
+
   return (
     <div
+      ref={ref}
       className={className}
       onClick={onSelect}
       role="option"
