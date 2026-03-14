@@ -87,9 +87,15 @@ export function useKeyboard(
     const el = containerRef.current;
     if (!el) return;
 
-    el.addEventListener('keydown', handleKeyDown as EventListener);
+    // Listen on the shadow root if available (events from the input bubble here),
+    // otherwise fall back to the container element
+    const target = el.getRootNode() instanceof ShadowRoot
+      ? el.getRootNode() as ShadowRoot
+      : el;
+
+    target.addEventListener('keydown', handleKeyDown as EventListener);
     return () => {
-      el.removeEventListener('keydown', handleKeyDown as EventListener);
+      target.removeEventListener('keydown', handleKeyDown as EventListener);
     };
   }, [containerRef, handleKeyDown]);
 }
