@@ -2,4 +2,6 @@
 .wxt/
 node_modules/
 dist/
+.output/
+coverage/
 *.zip
