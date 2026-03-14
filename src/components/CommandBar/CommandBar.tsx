@@ -139,7 +139,6 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   return (
     <div
       className="smb-backdrop"
-      onKeyDown={handleKeyDown}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onDismiss();
@@ -153,7 +152,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
         aria-label="Command palette"
         aria-modal="true"
       >
-        <SearchInput query={query} onQueryChange={setQuery} />
+        <SearchInput query={query} onQueryChange={setQuery} onKeyDown={handleKeyDown} />
         <ResultList
           groups={groups}
           selectedIndex={selectedIndex}

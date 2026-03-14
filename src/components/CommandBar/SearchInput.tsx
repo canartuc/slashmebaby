@@ -3,6 +3,7 @@ import React from 'react';
 export interface SearchInputProps {
   query: string;
   onQueryChange: (q: string) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
 const SearchIcon: React.FC = () => (
@@ -23,7 +24,7 @@ const SearchIcon: React.FC = () => (
   </svg>
 );
 
-export const SearchInput: React.FC<SearchInputProps> = ({ query, onQueryChange }) => {
+export const SearchInput: React.FC<SearchInputProps> = ({ query, onQueryChange, onKeyDown }) => {
   return (
     <div className="smb-input-wrapper">
       <SearchIcon />
@@ -32,6 +33,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({ query, onQueryChange }
         type="text"
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
+        onKeyDown={onKeyDown}
         placeholder="Search tabs, bookmarks, actions..."
         autoFocus
         autoComplete="off"
