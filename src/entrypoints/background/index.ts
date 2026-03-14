@@ -9,7 +9,10 @@ import {
   isSmartSuggestionsRequest,
   isExecuteActionRequest,
   isGetSettingsRequest,
+  isGetAllTabsRequest,
+  isGetBookmarkTreeRequest,
 } from '../../lib/messaging';
+import type { TabWithGroup, TabGroupInfo, BookmarkNode } from '../../lib/messaging';
 import type { SearchableItem } from '../../lib/search';
 
 // ─── Message Router Factory ───────────────────────────────────────────────
@@ -176,7 +179,133 @@ export async function createMessageRouter() {
       return { settings };
     }
 
+    if (isGetAllTabsRequest(message)) {
+      const allTabs = await chrome.tabs.query({});
+      const allWindows = await chrome.windows.getAll();
+
+      // Try to get tab groups (Chrome only, fails on Firefox)
+      let chromeTabGroups: chrome.tabGroups.TabGroup[] = [];
+      try {
+        if (chrome.tabGroups) {
+          chromeTabGroups = await chrome.tabGroups.query({});
+        }
+      } catch { /* Firefox doesn't support tabGroups */ }
+
+      const hasTabGroups = chromeTabGroups.length > 0;
+      const hasMultipleWindows = allWindows.length > 1;
+
+      const groups: TabGroupInfo[] = [];
+
+      if (hasTabGroups) {
+        // Group by window, then by tab group within each window
+        for (const win of allWindows) {
+          const windowTabs = allTabs.filter(t => t.windowId === win.id);
+          if (windowTabs.length === 0) continue;
+
+          const windowLabel = hasMultipleWindows ? `Window ${allWindows.indexOf(win) + 1}` : undefined;
+
+          // Group tabs by their groupId
+          const grouped = new Map<number, chrome.tabs.Tab[]>();
+          const ungrouped: chrome.tabs.Tab[] = [];
+
+          for (const tab of windowTabs) {
+            if (tab.groupId && tab.groupId !== -1) {
+              if (!grouped.has(tab.groupId)) grouped.set(tab.groupId, []);
+              grouped.get(tab.groupId)!.push(tab);
+            } else {
+              ungrouped.push(tab);
+            }
+          }
+
+          // Add tab group sections
+          for (const [groupId, tabs] of grouped) {
+            const groupInfo = chromeTabGroups.find(g => g.id === groupId);
+            groups.push({
+              label: groupInfo?.title || `Group ${groupId}`,
+              type: 'tabGroup',
+              tabs: tabs.map(mapTab),
+            });
+          }
+
+          // Add ungrouped
+          if (ungrouped.length > 0) {
+            groups.push({
+              label: windowLabel ? `${windowLabel} — Ungrouped` : 'Ungrouped',
+              type: 'window',
+              tabs: ungrouped.map(mapTab),
+            });
+          }
+        }
+      } else if (hasMultipleWindows) {
+        // Group by window
+        for (let i = 0; i < allWindows.length; i++) {
+          const win = allWindows[i];
+          const windowTabs = allTabs.filter(t => t.windowId === win.id);
+          if (windowTabs.length === 0) continue;
+          groups.push({
+            label: `Window ${i + 1}`,
+            type: 'window',
+            tabs: windowTabs.map(mapTab),
+          });
+        }
+      } else {
+        // Flat list
+        if (allTabs.length > 0) {
+          groups.push({
+            label: 'Open Tabs',
+            type: 'window',
+            tabs: allTabs.map(mapTab),
+          });
+        }
+      }
+
+      return { groups };
+    }
+
+    if (isGetBookmarkTreeRequest(message)) {
+      const rawTree = await chrome.bookmarks.getTree();
+
+      function convertNode(node: chrome.bookmarks.BookmarkTreeNode): BookmarkNode {
+        const result: BookmarkNode = {
+          id: node.id,
+          title: node.title,
+          url: node.url,
+          dateAdded: node.dateAdded,
+        };
+        if (node.children) {
+          result.children = node.children.map(convertNode);
+        }
+        return result;
+      }
+
+      // The root node has children that are the top-level folders
+      const rootChildren = rawTree[0]?.children || [];
+      // Filter out empty root folders (like Mobile Bookmarks)
+      const tree = rootChildren
+        .map(convertNode)
+        .filter(node => node.children && node.children.length > 0);
+
+      return { tree };
+    }
+
     return { error: 'Unknown message type' };
+  };
+}
+
+// ─── Helper Functions ─────────────────────────────────────────────────────
+
+function mapTab(tab: chrome.tabs.Tab): TabWithGroup {
+  return {
+    id: tab.id!,
+    title: tab.title || 'Untitled',
+    url: tab.url || '',
+    favIconUrl: tab.favIconUrl,
+    windowId: tab.windowId,
+    groupId: tab.groupId !== undefined && tab.groupId !== -1 ? tab.groupId : undefined,
+    pinned: tab.pinned,
+    audible: tab.audible || false,
+    muted: tab.mutedInfo?.muted || false,
+    lastAccessed: tab.lastAccessed,
   };
 }
 

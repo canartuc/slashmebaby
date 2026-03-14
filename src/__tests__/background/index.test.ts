@@ -441,4 +441,317 @@ describe('createMessageRouter', () => {
       expect(nonActionGroups).toHaveLength(0);
     });
   });
+
+  // ─── GET_ALL_TABS tests ────────────────────────────────────────────────────
+
+  // Helper: dual-mode tabs.query mock (callback for init, promise for handler)
+  function makeDualQueryMock(tabs: chrome.tabs.Tab[]) {
+    return vi.fn((_queryInfo: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+      if (cb) { cb(tabs); return; }
+      return Promise.resolve(tabs);
+    });
+  }
+
+  // Helper: dual-mode bookmarks.getTree mock
+  function makeDualGetTreeMock(tree: chrome.bookmarks.BookmarkTreeNode[]) {
+    return vi.fn((cb?: (results: chrome.bookmarks.BookmarkTreeNode[]) => void) => {
+      if (cb) { cb(tree); return; }
+      return Promise.resolve(tree);
+    });
+  }
+
+  describe('GET_ALL_TABS message', () => {
+    it('returns flat "Open Tabs" group for single window, no tab groups', async () => {
+      const baseMock = makeChromeMock();
+      const tabs = [
+        makeFakeTab({ id: 1, windowId: 1, title: 'Tab One', url: 'https://one.com', groupId: -1 }),
+        makeFakeTab({ id: 2, windowId: 1, title: 'Tab Two', url: 'https://two.com', groupId: -1 }),
+      ];
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          query: makeDualQueryMock(tabs),
+        },
+        windows: {
+          ...baseMock.windows,
+          getAll: vi.fn(() =>
+            Promise.resolve([
+              { id: 1, focused: true, alwaysOnTop: false, incognito: false, state: 'normal', type: 'normal' },
+            ])
+          ),
+        },
+        tabGroups: undefined, // Firefox / no tabGroups support
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_ALL_TABS' }) as { groups: Array<{ label: string; type: string; tabs: unknown[] }> };
+
+      expect(response).toHaveProperty('groups');
+      expect(response.groups).toHaveLength(1);
+      expect(response.groups[0].label).toBe('Open Tabs');
+      expect(response.groups[0].type).toBe('window');
+      expect(response.groups[0].tabs).toHaveLength(2);
+    });
+
+    it('returns 0 groups when there are no tabs', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          query: makeDualQueryMock([]),
+        },
+        windows: {
+          ...baseMock.windows,
+          getAll: vi.fn(() =>
+            Promise.resolve([
+              { id: 1, focused: true, alwaysOnTop: false, incognito: false, state: 'normal', type: 'normal' },
+            ])
+          ),
+        },
+        tabGroups: undefined,
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_ALL_TABS' }) as { groups: unknown[] };
+      expect(response.groups).toHaveLength(0);
+    });
+
+    it('groups tabs by window when multiple windows exist', async () => {
+      const baseMock = makeChromeMock();
+      const tabs = [
+        makeFakeTab({ id: 1, windowId: 1, title: 'Tab One', url: 'https://one.com', groupId: -1 }),
+        makeFakeTab({ id: 2, windowId: 2, title: 'Tab Two', url: 'https://two.com', groupId: -1 }),
+      ];
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          query: makeDualQueryMock(tabs),
+        },
+        windows: {
+          ...baseMock.windows,
+          getAll: vi.fn(() =>
+            Promise.resolve([
+              { id: 1, focused: true, alwaysOnTop: false, incognito: false, state: 'normal', type: 'normal' },
+              { id: 2, focused: false, alwaysOnTop: false, incognito: false, state: 'normal', type: 'normal' },
+            ])
+          ),
+        },
+        tabGroups: undefined,
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_ALL_TABS' }) as { groups: Array<{ label: string; type: string; tabs: unknown[] }> };
+
+      expect(response.groups).toHaveLength(2);
+      expect(response.groups[0].label).toBe('Window 1');
+      expect(response.groups[1].label).toBe('Window 2');
+      expect(response.groups[0].tabs).toHaveLength(1);
+      expect(response.groups[1].tabs).toHaveLength(1);
+    });
+
+    it('groups tabs by tab group when chrome.tabGroups is available', async () => {
+      const baseMock = makeChromeMock();
+      const tabs = [
+        makeFakeTab({ id: 1, windowId: 1, title: 'Tab One', groupId: 10 }),
+        makeFakeTab({ id: 2, windowId: 1, title: 'Tab Two', groupId: 10 }),
+        makeFakeTab({ id: 3, windowId: 1, title: 'Ungrouped', groupId: -1 }),
+      ];
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          query: makeDualQueryMock(tabs),
+        },
+        windows: {
+          ...baseMock.windows,
+          getAll: vi.fn(() =>
+            Promise.resolve([
+              { id: 1, focused: true, alwaysOnTop: false, incognito: false, state: 'normal', type: 'normal' },
+            ])
+          ),
+        },
+        tabGroups: {
+          query: vi.fn(() =>
+            Promise.resolve([
+              { id: 10, title: 'My Group', color: 'blue', windowId: 1, collapsed: false },
+            ])
+          ),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_ALL_TABS' }) as { groups: Array<{ label: string; type: string; tabs: unknown[] }> };
+
+      expect(response.groups.length).toBeGreaterThanOrEqual(2);
+      const myGroup = response.groups.find(g => g.label === 'My Group');
+      expect(myGroup).toBeDefined();
+      expect(myGroup!.type).toBe('tabGroup');
+      expect(myGroup!.tabs).toHaveLength(2);
+
+      const ungrouped = response.groups.find(g => g.label.includes('Ungrouped'));
+      expect(ungrouped).toBeDefined();
+      expect(ungrouped!.tabs).toHaveLength(1);
+    });
+  });
+
+  // ─── GET_BOOKMARK_TREE tests ───────────────────────────────────────────────
+
+  describe('GET_BOOKMARK_TREE message', () => {
+    it('returns a tree of bookmark nodes', async () => {
+      const baseMock = makeChromeMock();
+      const tree = [
+        {
+          id: 'root',
+          title: '',
+          index: 0,
+          children: [
+            {
+              id: 'f1',
+              title: 'Bookmarks Bar',
+              index: 0,
+              children: [
+                { id: 'bm1', title: 'Site A', url: 'https://a.com', dateAdded: 1000, index: 0 },
+                { id: 'bm2', title: 'Site B', url: 'https://b.com', dateAdded: 2000, index: 1 },
+              ],
+            },
+            {
+              id: 'f2',
+              title: 'Other Bookmarks',
+              index: 1,
+              children: [
+                { id: 'bm3', title: 'Site C', url: 'https://c.com', dateAdded: 3000, index: 0 },
+              ],
+            },
+          ],
+        },
+      ];
+      const chromeMock = {
+        ...baseMock,
+        bookmarks: {
+          ...baseMock.bookmarks,
+          getTree: makeDualGetTreeMock(tree),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_BOOKMARK_TREE' }) as { tree: Array<{ id: string; title: string; children?: unknown[] }> };
+
+      expect(response).toHaveProperty('tree');
+      expect(response.tree).toHaveLength(2);
+      expect(response.tree[0].title).toBe('Bookmarks Bar');
+      expect(response.tree[0].children).toHaveLength(2);
+    });
+
+    it('filters out empty root folders', async () => {
+      const baseMock = makeChromeMock();
+      const tree = [
+        {
+          id: 'root',
+          title: '',
+          index: 0,
+          children: [
+            {
+              id: 'f1',
+              title: 'Bookmarks Bar',
+              index: 0,
+              children: [
+                { id: 'bm1', title: 'Site A', url: 'https://a.com', index: 0 },
+              ],
+            },
+            {
+              id: 'f2',
+              title: 'Mobile Bookmarks',
+              index: 1,
+              children: [], // empty — should be filtered
+            },
+          ],
+        },
+      ];
+      const chromeMock = {
+        ...baseMock,
+        bookmarks: {
+          ...baseMock.bookmarks,
+          getTree: makeDualGetTreeMock(tree),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_BOOKMARK_TREE' }) as { tree: Array<{ id: string; title: string }> };
+
+      expect(response.tree).toHaveLength(1);
+      expect(response.tree[0].title).toBe('Bookmarks Bar');
+    });
+
+    it('handles nested folders correctly', async () => {
+      const baseMock = makeChromeMock();
+      const tree = [
+        {
+          id: 'root',
+          title: '',
+          index: 0,
+          children: [
+            {
+              id: 'f1',
+              title: 'Bookmarks Bar',
+              index: 0,
+              children: [
+                {
+                  id: 'sub1',
+                  title: 'Subfolder',
+                  index: 0,
+                  children: [
+                    { id: 'bm1', title: 'Deep Site', url: 'https://deep.com', index: 0 },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ];
+      const chromeMock = {
+        ...baseMock,
+        bookmarks: {
+          ...baseMock.bookmarks,
+          getTree: makeDualGetTreeMock(tree),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_BOOKMARK_TREE' }) as { tree: Array<{ children?: Array<{ title: string; children?: unknown[] }> }> };
+
+      expect(response.tree).toHaveLength(1);
+      const folder = response.tree[0].children?.[0];
+      expect(folder?.title).toBe('Subfolder');
+      expect(folder?.children).toHaveLength(1);
+    });
+
+    it('returns empty tree when root has no children', async () => {
+      const baseMock = makeChromeMock();
+      const tree = [{ id: 'root', title: '', index: 0, children: [] }];
+      const chromeMock = {
+        ...baseMock,
+        bookmarks: {
+          ...baseMock.bookmarks,
+          getTree: makeDualGetTreeMock(tree),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_BOOKMARK_TREE' }) as { tree: unknown[] };
+
+      expect(response.tree).toHaveLength(0);
+    });
+
+  });
 });
