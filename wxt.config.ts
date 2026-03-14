@@ -10,7 +10,7 @@ export default defineConfig({
     version: '1.0.0',
     permissions: ['tabs', 'bookmarks', 'history', 'storage', 'activeTab', 'sessions', 'commands'],
     options_ui: {
-      page: 'settings/index.html',
+      page: 'settings.html',
       open_in_tab: true,
     },
     action: {
