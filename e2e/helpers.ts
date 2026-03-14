@@ -40,7 +40,9 @@ export async function isOverlayOpen(page: Page): Promise<boolean> {
 export async function getSelectedItemTitle(page: Page): Promise<string> {
   return page.evaluate(() => {
     const host = document.getElementById('slashmebaby-root');
-    const selected = host?.shadowRoot?.querySelector('.smb-result-item--selected');
+    // Try new tree view selector first, fall back to old result item selector
+    const selected = host?.shadowRoot?.querySelector('.smb-tree-item--selected')
+      || host?.shadowRoot?.querySelector('.smb-result-item--selected');
     return selected?.querySelector('.smb-title')?.textContent || '';
   });
 }
@@ -48,14 +50,18 @@ export async function getSelectedItemTitle(page: Page): Promise<string> {
 export async function getResultCount(page: Page): Promise<number> {
   return page.evaluate(() => {
     const host = document.getElementById('slashmebaby-root');
-    return host?.shadowRoot?.querySelectorAll('.smb-result-item').length || 0;
+    // Count tree items (new UI) or result items (old UI)
+    const treeItems = host?.shadowRoot?.querySelectorAll('.smb-tree-item')?.length || 0;
+    const resultItems = host?.shadowRoot?.querySelectorAll('.smb-result-item')?.length || 0;
+    return treeItems || resultItems;
   });
 }
 
 export async function getGroupHeaders(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const host = document.getElementById('slashmebaby-root');
-    const headers = host?.shadowRoot?.querySelectorAll('.smb-group-header');
+    // Check for action dividers (new UI) or group headers (old UI)
+    const headers = host?.shadowRoot?.querySelectorAll('.smb-group-header, .smb-action-divider');
     return Array.from(headers || []).map(h => h.textContent || '');
   });
 }

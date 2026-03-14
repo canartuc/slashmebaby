@@ -6,8 +6,6 @@ import {
   isOverlayOpen,
   typeInCommandBar,
   getInputValue,
-  getResultCount,
-  getGroupHeaders,
 } from './helpers';
 
 // ─── Test 1: Opens with shortcut ─────────────────────────────────────────────
@@ -111,31 +109,37 @@ test('Clean state on reopen', async () => {
   await context.close();
 });
 
-// ─── Test 7: Shows smart suggestions on open ─────────────────────────────────
+// ─── Test 7: Shows tree items on open (jump mode) ───────────────────────────
 
-test('Shows smart suggestions on open', async () => {
+test('Shows tree items on open', async () => {
   const context = await launchBrowserWithExtension();
   const page = await openPage(context);
 
   await openCommandBar(page);
-  // Give background time to respond with suggestions
+  // Give background time to respond with tree data
   await new Promise(r => setTimeout(r, 1000));
-  const count = await getResultCount(page);
+  const count = await page.evaluate(() => {
+    const host = document.getElementById('slashmebaby-root');
+    return host?.shadowRoot?.querySelectorAll('.smb-tree-item')?.length || 0;
+  });
   expect(count).toBeGreaterThan(0);
 
   await context.close();
 });
 
-// ─── Test 8: Results are grouped ─────────────────────────────────────────────
+// ─── Test 8: Actions section visible in tree view ───────────────────────────
 
-test('Results are grouped', async () => {
+test('Actions section visible in tree view', async () => {
   const context = await launchBrowserWithExtension();
   const page = await openPage(context);
 
   await openCommandBar(page);
   await new Promise(r => setTimeout(r, 1000));
-  const headers = await getGroupHeaders(page);
-  expect(headers.length).toBeGreaterThan(0);
+  const hasActions = await page.evaluate(() => {
+    const host = document.getElementById('slashmebaby-root');
+    return !!host?.shadowRoot?.querySelector('.smb-action-divider');
+  });
+  expect(hasActions).toBe(true);
 
   await context.close();
 });
@@ -157,20 +161,19 @@ test('Input has placeholder', async () => {
   await context.close();
 });
 
-// ─── Test 10: Input is focused ───────────────────────────────────────────────
+// ─── Test 10: Opens in jump mode (input readonly) ───────────────────────────
 
-test('Input is focused', async () => {
+test('Opens in jump mode', async () => {
   const context = await launchBrowserWithExtension();
   const page = await openPage(context);
 
   await openCommandBar(page);
-  const isFocused = await page.evaluate(() => {
+  const isReadonly = await page.evaluate(() => {
     const host = document.getElementById('slashmebaby-root');
-    const shadow = host?.shadowRoot;
-    const input = shadow?.querySelector('.smb-input');
-    return shadow?.activeElement === input;
+    const input = host?.shadowRoot?.querySelector('.smb-input') as HTMLInputElement;
+    return input?.readOnly === true;
   });
-  expect(isFocused).toBe(true);
+  expect(isReadonly).toBe(true);
 
   await context.close();
 });

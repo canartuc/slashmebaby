@@ -7,9 +7,14 @@ import {
   typeInCommandBar,
   getInputValue,
   getResultCount,
-  getGroupHeaders,
   getSelectedItemTitle,
 } from './helpers';
+
+// Helper: switch from jump mode to search mode by pressing /
+async function enterSearchMode(page: import('@playwright/test').Page): Promise<void> {
+  await page.keyboard.press('/');
+  await new Promise(r => setTimeout(r, 500));
+}
 
 // ─── Test 1: Typing filters results ──────────────────────────────────────────
 
@@ -18,17 +23,19 @@ test('Typing filters results', async () => {
   const page = await openPage(context);
 
   await openCommandBar(page);
-  // Wait for smart suggestions to load
+  // Switch to search mode (command bar opens in jump mode by default)
+  await enterSearchMode(page);
+  // Wait for tree data to load
   await new Promise(r => setTimeout(r, 1000));
   const initialCount = await getResultCount(page);
 
-  // Type a query that should match some actions
-  await typeInCommandBar(page, 'tab');
+  // Type a query — tree view filters items by title/url match
+  await typeInCommandBar(page, 'example');
   const filteredCount = await getResultCount(page);
 
-  // The result count should differ from initial suggestions (either more specific or different set)
+  // Should have some results matching
   expect(filteredCount).toBeGreaterThan(0);
-  // Typing a query changes from smart-suggestions mode to search mode
+  // Filtered count should differ from full tree
   expect(filteredCount).not.toBe(initialCount);
 
   await context.close();
@@ -43,6 +50,11 @@ test('Arrow down moves selection', async () => {
   await openCommandBar(page);
   await new Promise(r => setTimeout(r, 1000));
 
+  // Expand the first group so we get child items to navigate
+  await page.keyboard.press('Enter');
+  await new Promise(r => setTimeout(r, 500));
+
+  // Now there should be multiple items (group + expanded children)
   const initialTitle = await getSelectedItemTitle(page);
   expect(initialTitle.length).toBeGreaterThan(0);
 
@@ -50,7 +62,7 @@ test('Arrow down moves selection', async () => {
   await new Promise(r => setTimeout(r, 300));
 
   const afterDownTitle = await getSelectedItemTitle(page);
-  // Selection should have moved to a different item
+  // Selection should have moved to a different item (a child tab)
   expect(afterDownTitle.length).toBeGreaterThan(0);
   expect(afterDownTitle).not.toBe(initialTitle);
 
@@ -66,7 +78,11 @@ test('Arrow up moves selection', async () => {
   await openCommandBar(page);
   await new Promise(r => setTimeout(r, 1000));
 
-  // Press ArrowDown twice
+  // Expand the first group so we get child items to navigate
+  await page.keyboard.press('Enter');
+  await new Promise(r => setTimeout(r, 500));
+
+  // Press ArrowDown twice to move past the group header
   await page.keyboard.press('ArrowDown');
   await new Promise(r => setTimeout(r, 200));
   await page.keyboard.press('ArrowDown');
@@ -85,79 +101,76 @@ test('Arrow up moves selection', async () => {
   await context.close();
 });
 
-// ─── Test 4: Enter executes and closes ───────────────────────────────────────
+// ─── Test 4: Enter on folder toggles expand ─────────────────────────────────
 
-test('Enter executes', async () => {
+test('Enter toggles folder expand', async () => {
   const context = await launchBrowserWithExtension();
   const page = await openPage(context);
 
   await openCommandBar(page);
   await new Promise(r => setTimeout(r, 1000));
 
-  expect(await isOverlayOpen(page)).toBe(true);
+  // The first item is typically a folder/group — press Enter to toggle
+  const countBefore = await getResultCount(page);
 
   await page.keyboard.press('Enter');
-  await new Promise(r => setTimeout(r, 800));
+  await new Promise(r => setTimeout(r, 500));
 
-  // Overlay should close after executing
-  expect(await isOverlayOpen(page)).toBe(false);
+  // If it was a folder, the count should change (expand/collapse)
+  // Overlay should remain open (folders don't dismiss)
+  expect(await isOverlayOpen(page)).toBe(true);
 
-  await context.close();
-});
-
-// ─── Test 5: Action prefix mode ──────────────────────────────────────────────
-
-test('Action prefix mode', async () => {
-  const context = await launchBrowserWithExtension();
-  const page = await openPage(context);
-
-  await openCommandBar(page);
-  await new Promise(r => setTimeout(r, 1000));
-
-  // Type ">tab" — action prefix mode that matches action items with "tab" in title
-  await typeInCommandBar(page, '>tab');
-  await new Promise(r => setTimeout(r, 800));
-
-  const headers = await getGroupHeaders(page);
-  const count = await getResultCount(page);
-
-  // Should have results and only actions group should be present
-  expect(count).toBeGreaterThan(0);
-  expect(headers.length).toBeGreaterThan(0);
-
-  // All visible group headers should be the Actions group only
-  const nonActionHeaders = headers.filter(
-    h => h.toLowerCase() !== 'actions'
-  );
-  expect(nonActionHeaders.length).toBe(0);
+  const countAfter = await getResultCount(page);
+  // Count should have changed (items expanded or collapsed)
+  expect(countAfter).not.toBe(countBefore);
 
   await context.close();
 });
 
-// ─── Test 6: Clearing search returns to suggestions ──────────────────────────
+// ─── Test 5: Search mode shows filtered results ─────────────────────────────
 
-test('Clearing search returns to suggestions', async () => {
+test('Search mode shows filtered results', async () => {
   const context = await launchBrowserWithExtension();
   const page = await openPage(context);
 
   await openCommandBar(page);
+  // Switch to search mode
+  await enterSearchMode(page);
   await new Promise(r => setTimeout(r, 1000));
 
-  // Type a query that likely returns no or few results
+  // Type a query that won't match anything
   await typeInCommandBar(page, 'xyzabc123noresults');
   await new Promise(r => setTimeout(r, 600));
 
   const countAfterQuery = await getResultCount(page);
-  // May be 0 or very few — either way we proceed
+  // May be 0 or very few
 
-  // Clear the input
+  // Clear the input — tree items should reappear
   await typeInCommandBar(page, '');
   await new Promise(r => setTimeout(r, 800));
 
   const countAfterClear = await getResultCount(page);
-  // After clearing, smart suggestions should reappear
+  // After clearing, full tree should reappear
   expect(countAfterClear).toBeGreaterThan(0);
   expect(countAfterClear).toBeGreaterThan(countAfterQuery);
+
+  await context.close();
+});
+
+// ─── Test 6: Search input value updates correctly ───────────────────────────
+
+test('Search input value updates', async () => {
+  const context = await launchBrowserWithExtension();
+  const page = await openPage(context);
+
+  await openCommandBar(page);
+  // Switch to search mode
+  await enterSearchMode(page);
+  await new Promise(r => setTimeout(r, 500));
+
+  await typeInCommandBar(page, 'test');
+  const value = await getInputValue(page);
+  expect(value).toBe('test');
 
   await context.close();
 });
