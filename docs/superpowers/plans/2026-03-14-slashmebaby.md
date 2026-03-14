@@ -875,7 +875,7 @@ export function computeRecencyScore(
 ): number {
   if (timestamp === undefined || halfLifeHours === 0) return 0;
   const ageInHours = (Date.now() - timestamp) / (1000 * 60 * 60);
-  return Math.exp(-ageInHours / halfLifeHours);
+  return Math.exp(-Math.LN2 * ageInHours / halfLifeHours);
 }
 
 export function computeFinalScore(fuseScore: number, recencyScore: number): number {
@@ -971,7 +971,7 @@ export function createSearchEngine(
 npx vitest run src/__tests__/lib/search.test.ts
 ```
 
-Expected: PASS — all 8 tests pass.
+Expected: PASS — all 10 tests pass.
 
 - [ ] **Step 5: Commit**
 
@@ -1434,6 +1434,7 @@ vi.stubGlobal('chrome', {
     reload: mockTabsReload,
     query: mockTabsQuery,
     move: mockTabsMove,
+    get: vi.fn().mockResolvedValue({ pinned: false, mutedInfo: { muted: false } }),
   },
   windows: { create: mockWindowsCreate },
   sessions: {
@@ -1605,6 +1606,15 @@ export class ActionRegistry {
         },
       },
       {
+        id: 'go-to-url',
+        title: 'Go to URL',
+        execute: async (tabId) => {
+          // URL navigation is handled by the UI — it detects URL-like input
+          // and navigates the current tab via chrome.tabs.update
+          return { success: true };
+        },
+      },
+      {
         id: 'recently-closed',
         title: 'Recently Closed',
         execute: async () => {
@@ -1714,6 +1724,8 @@ import type { SearchRequest, ExecuteActionRequest, SmartSuggestionsRequest } fro
 vi.stubGlobal('chrome', {
   tabs: {
     query: vi.fn().mockResolvedValue([]),
+    create: vi.fn().mockResolvedValue({}),
+    get: vi.fn().mockResolvedValue({}),
     onCreated: { addListener: vi.fn() },
     onRemoved: { addListener: vi.fn() },
     onUpdated: { addListener: vi.fn() },
@@ -1760,9 +1772,6 @@ describe('createMessageRouter', () => {
       type: 'EXECUTE_ACTION',
       payload: { actionId: 'new-tab' },
     };
-    vi.mocked(chrome.tabs.create).mockResolvedValue({} as chrome.tabs.Tab);
-    // Add chrome.tabs.create mock
-    (chrome.tabs as any).create = vi.fn().mockResolvedValue({});
     const response = await router(msg);
     expect(response).toHaveProperty('success');
   });
@@ -1834,7 +1843,7 @@ export async function createMessageRouter() {
         ...(message.payload.sources.includes('tabs') ? tabCache.getItems() : []),
         ...(message.payload.sources.includes('bookmarks') ? bookmarkCache.getItems() : []),
         ...(message.payload.sources.includes('history') ? historyCache.getItems() : []),
-        ...actionRegistry.getItems(),
+        ...actionRegistry.getItems(), // Actions always included (not user-toggleable per spec)
       ];
       const engine = createSearchEngine(allItems, {
         maxResultsPerGroup: settings.maxResultsPerGroup,
@@ -1844,16 +1853,15 @@ export async function createMessageRouter() {
     }
 
     if (isSmartSuggestionsRequest(message)) {
-      const settings = await getSettings();
-      const allItems = [
-        ...tabCache.getItems(),
-        ...bookmarkCache.getItems(),
-        ...actionRegistry.getItems(),
+      // Spec: 3 recent tabs + 2 frequent bookmarks + 2 contextual actions
+      const tabEngine = createSearchEngine(tabCache.getItems(), { maxResultsPerGroup: 3 });
+      const bookmarkEngine = createSearchEngine(bookmarkCache.getItems(), { maxResultsPerGroup: 2 });
+      const actionEngine = createSearchEngine(actionRegistry.getItems(), { maxResultsPerGroup: 2 });
+      const groups = [
+        ...tabEngine.search(''),
+        ...bookmarkEngine.search(''),
+        ...actionEngine.search(''),
       ];
-      const engine = createSearchEngine(allItems, {
-        maxResultsPerGroup: settings.maxResultsPerGroup,
-      });
-      const groups = engine.search('');
       return { groups } satisfies SearchResponse;
     }
 
@@ -1872,6 +1880,7 @@ export async function createMessageRouter() {
 }
 
 // WXT entrypoint — only runs in actual extension context
+// Note: defineBackground is auto-imported by WXT, no explicit import needed
 export default defineBackground(() => {
   createMessageRouter().then(router => {
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

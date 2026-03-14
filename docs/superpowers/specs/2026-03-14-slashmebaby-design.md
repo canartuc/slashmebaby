@@ -75,7 +75,7 @@ Users choose their preferred position in settings. Three options:
 Each data source derives a `recencyScore` (0.0–1.0) using exponential decay:
 
 ```
-recencyScore = Math.exp(-ageInHours / halfLifeHours)
+recencyScore = Math.exp(-ln(2) * ageInHours / halfLifeHours)
 ```
 
 | Source | Timestamp Field | Half-life |
