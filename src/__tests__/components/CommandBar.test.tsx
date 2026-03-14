@@ -20,7 +20,6 @@ const mockGroups: ResultGroup[] = [
   },
 ];
 
-// Mock matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
@@ -39,7 +38,6 @@ describe('CommandBar', () => {
   beforeEach(() => {
     vi.mocked(chrome.runtime.sendMessage).mockReset();
 
-    // Default mock: respond to GET_SETTINGS and SMART_SUGGESTIONS
     vi.mocked(chrome.runtime.sendMessage).mockImplementation(
       (msg: unknown, callback?: (response: unknown) => void) => {
         const message = msg as { type: string };
@@ -91,12 +89,47 @@ describe('CommandBar', () => {
 
   it('renders results from search', async () => {
     render(<CommandBar onDismiss={() => {}} />);
-
     await waitFor(() => {
       expect(screen.getByText('Gmail')).toBeTruthy();
       expect(screen.getByText('GitHub')).toBeTruthy();
       expect(screen.getByText('React Docs')).toBeTruthy();
     });
+  });
+
+  it('calls onDismiss when pressing Escape', async () => {
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onDismiss when pressing Backspace on empty query', async () => {
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
+    fireEvent.keyDown(input, { key: 'Backspace' });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('switches tab on Enter key', async () => {
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
+    const switchCall = calls.find(
+      (c) => (c[0] as { type: string }).type === 'SWITCH_TAB'
+    );
+    expect(switchCall).toBeTruthy();
+    expect(onDismiss).toHaveBeenCalled();
   });
 
   it('calls onDismiss when clicking the backdrop', async () => {
@@ -117,7 +150,6 @@ describe('CommandBar', () => {
 
   it('applies the correct position class', async () => {
     render(<CommandBar onDismiss={() => {}} />);
-
     await waitFor(() => {
       const dialog = screen.getByRole('dialog');
       expect(dialog.classList.contains('smb-container--center')).toBe(true);
@@ -126,20 +158,16 @@ describe('CommandBar', () => {
 
   it('applies theme data attribute', async () => {
     render(<CommandBar onDismiss={() => {}} />);
-
     await waitFor(() => {
       const dialog = screen.getByRole('dialog');
       expect(dialog.getAttribute('data-theme')).toBe('dark');
     });
   });
 
-  it('sends SWITCH_TAB and dismisses when selecting a tab item', async () => {
+  it('sends SWITCH_TAB and dismisses when clicking a tab item', async () => {
     const onDismiss = vi.fn();
     render(<CommandBar onDismiss={onDismiss} />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Gmail')).toBeTruthy();
-    });
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
 
     fireEvent.click(screen.getByText('Gmail'));
 
@@ -154,7 +182,6 @@ describe('CommandBar', () => {
 
   it('shows live region with result count', async () => {
     render(<CommandBar onDismiss={() => {}} />);
-
     await waitFor(() => {
       const liveRegion = document.querySelector('[aria-live="polite"]');
       expect(liveRegion).toBeTruthy();

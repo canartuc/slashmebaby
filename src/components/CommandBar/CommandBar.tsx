@@ -1,19 +1,15 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { ResultGroup, SearchResultItem, UserSettings } from '../../lib/messaging';
 import { DEFAULT_SETTINGS } from '../../lib/messaging';
 import { SearchInput } from './SearchInput';
 import { ResultList } from './ResultList';
 import { useSearch } from '../../hooks/useSearch';
 import { useTheme } from '../../hooks/useTheme';
-import { useKeyboard } from '../../hooks/useKeyboard';
 
 export interface CommandBarProps {
   onDismiss: () => void;
 }
 
-/**
- * Computes the flat indices where each group starts in the result list.
- */
 function computeGroupBoundaries(groups: ResultGroup[]): number[] {
   const boundaries: number[] = [];
   let offset = 0;
@@ -24,16 +20,10 @@ function computeGroupBoundaries(groups: ResultGroup[]): number[] {
   return boundaries;
 }
 
-/**
- * Counts total items across all result groups.
- */
 function countTotalItems(groups: ResultGroup[]): number {
   return groups.reduce((sum, g) => sum + g.items.length, 0);
 }
 
-/**
- * Gets the flat item at a given index across all groups.
- */
 function getItemAtIndex(
   groups: ResultGroup[],
   index: number
@@ -52,7 +42,6 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const { groups, isLoading } = useSearch(query);
   const theme = useTheme(settings.theme);
@@ -60,12 +49,10 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   const totalItems = useMemo(() => countTotalItems(groups), [groups]);
   const groupBoundaries = useMemo(() => computeGroupBoundaries(groups), [groups]);
 
-  // Reset selection when results change
   useEffect(() => {
     setSelectedIndex(0);
   }, [groups]);
 
-  // Load settings from background on mount
   useEffect(() => {
     chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (response) => {
       if (response && response.settings) {
@@ -73,14 +60,6 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
       }
     });
   }, []);
-
-  const handleExecute = useCallback(() => {
-    if (totalItems === 0) return;
-    const item = getItemAtIndex(groups, selectedIndex);
-    if (!item) return;
-
-    handleSelectItem(item);
-  }, [groups, selectedIndex, totalItems]);
 
   const handleSelectItem = useCallback(
     (item: SearchResultItem) => {
@@ -104,36 +83,75 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     [onDismiss]
   );
 
-  useKeyboard(containerRef, {
-    totalItems,
-    selectedIndex,
-    onMove: setSelectedIndex,
-    onExecute: handleExecute,
-    onDismiss,
-    groupBoundaries,
-    query,
-  });
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      switch (e.key) {
+        case 'Escape': {
+          e.preventDefault();
+          onDismiss();
+          break;
+        }
+        case 'ArrowDown': {
+          e.preventDefault();
+          if (totalItems === 0) return;
+          setSelectedIndex((prev) => (prev >= totalItems - 1 ? 0 : prev + 1));
+          break;
+        }
+        case 'ArrowUp': {
+          e.preventDefault();
+          if (totalItems === 0) return;
+          setSelectedIndex((prev) => (prev <= 0 ? totalItems - 1 : prev - 1));
+          break;
+        }
+        case 'Tab': {
+          e.preventDefault();
+          if (totalItems === 0 || groupBoundaries.length === 0) return;
+          if (e.shiftKey) {
+            const prev = [...groupBoundaries].reverse().find((b) => b < selectedIndex);
+            setSelectedIndex(prev ?? groupBoundaries[groupBoundaries.length - 1]);
+          } else {
+            const next = groupBoundaries.find((b) => b > selectedIndex);
+            setSelectedIndex(next ?? groupBoundaries[0]);
+          }
+          break;
+        }
+        case 'Enter': {
+          e.preventDefault();
+          if (totalItems === 0) return;
+          const item = getItemAtIndex(groups, selectedIndex);
+          if (item) handleSelectItem(item);
+          break;
+        }
+        case 'Backspace': {
+          if (query === '') {
+            e.preventDefault();
+            onDismiss();
+          }
+          break;
+        }
+      }
+    },
+    [onDismiss, totalItems, selectedIndex, groupBoundaries, groups, query, handleSelectItem]
+  );
 
   const positionClass = `smb-container--${settings.position}`;
 
   return (
     <div
       className="smb-backdrop"
+      onKeyDown={handleKeyDown}
       onClick={(e) => {
-        // Only dismiss if clicking the backdrop itself, not the container
         if (e.target === e.currentTarget) {
           onDismiss();
         }
       }}
     >
       <div
-        ref={containerRef}
         className={`smb-container ${positionClass}`}
         data-theme={theme}
         role="dialog"
         aria-label="Command palette"
         aria-modal="true"
-        tabIndex={-1}
       >
         <SearchInput query={query} onQueryChange={setQuery} />
         <ResultList
