@@ -98,14 +98,14 @@ describe('CommandBar', () => {
 
   // Escape is handled in content script (document-level listener), tested in E2E
 
-  it('calls onDismiss when pressing Backspace on empty query', async () => {
+  it('does not dismiss when pressing Backspace on empty query', async () => {
     const onDismiss = vi.fn();
     render(<CommandBar onDismiss={onDismiss} />);
     await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
 
     const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
-    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 
   it('switches tab on Enter key', async () => {
