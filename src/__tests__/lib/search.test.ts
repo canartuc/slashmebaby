@@ -252,4 +252,18 @@ describe('createSearchEngine', () => {
       }
     });
   });
+
+  describe('empty effective query', () => {
+    it('returns empty results for whitespace-only query', () => {
+      const engine = createSearchEngine(sampleItems);
+      const results = engine.search('   ');
+      expect(results).toEqual([]);
+    });
+
+    it('returns empty results for > followed by whitespace', () => {
+      const engine = createSearchEngine(sampleItems);
+      const results = engine.search('>   ');
+      expect(results).toEqual([]);
+    });
+  });
 });
