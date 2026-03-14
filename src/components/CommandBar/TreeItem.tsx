@@ -56,7 +56,7 @@ export const TreeItem: React.FC<TreeItemProps> = ({
       aria-label={item.title}
       style={{ paddingLeft: 16 + item.depth * 16 }}
     >
-      <LabelBadge label={label} dimmed={searchMode} />
+      {!searchMode && <LabelBadge label={label} />}
 
       {isFolder && (
         <span className="smb-folder-indicator">

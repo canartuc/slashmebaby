@@ -109,8 +109,10 @@ export default defineContentScript({
         if (isSpecialKey || !isInputFocused) {
           e.preventDefault();
           e.stopPropagation();
+          // Normalize key to lowercase so label matching works with Shift held
+          const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
           shadowRoot.dispatchEvent(new CustomEvent('smb-keydown', {
-            detail: { key: e.key, shiftKey: e.shiftKey },
+            detail: { key, shiftKey: e.shiftKey },
           }));
         }
       }
