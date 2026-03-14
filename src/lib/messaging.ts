@@ -86,6 +86,45 @@ export const DEFAULT_SETTINGS: UserSettings = {
   searchSources: { tabs: true, bookmarks: true, history: true },
 };
 
+// ─── Tree View Messages ─────────────────────────────────────────────────────
+
+export interface GetAllTabsRequest { type: 'GET_ALL_TABS'; }
+
+export interface TabWithGroup {
+  id: number;
+  title: string;
+  url: string;
+  favIconUrl?: string;
+  windowId: number;
+  groupId?: number;
+  groupName?: string;
+  groupColor?: string;
+  pinned: boolean;
+  audible: boolean;
+  muted: boolean;
+  lastAccessed?: number;
+}
+
+export interface TabGroupInfo {
+  label: string;
+  type: 'window' | 'tabGroup';
+  tabs: TabWithGroup[];
+}
+
+export interface GetAllTabsResponse { groups: TabGroupInfo[]; }
+
+export interface GetBookmarkTreeRequest { type: 'GET_BOOKMARK_TREE'; }
+
+export interface BookmarkNode {
+  id: string;
+  title: string;
+  url?: string;
+  children?: BookmarkNode[];
+  dateAdded?: number;
+}
+
+export interface GetBookmarkTreeResponse { tree: BookmarkNode[]; }
+
 // ─── Union Type ───────────────────────────────────────────────────────────────
 
 export type Message =
@@ -93,7 +132,9 @@ export type Message =
   | SmartSuggestionsRequest
   | ExecuteActionRequest
   | GetSettingsRequest
-  | ToggleOverlayCommand;
+  | ToggleOverlayCommand
+  | GetAllTabsRequest
+  | GetBookmarkTreeRequest;
 
 // ─── Type Guards ──────────────────────────────────────────────────────────────
 
@@ -127,4 +168,12 @@ export function isGetSettingsRequest(
   value: unknown
 ): value is GetSettingsRequest {
   return isObject(value) && value['type'] === 'GET_SETTINGS';
+}
+
+export function isGetAllTabsRequest(v: unknown): v is GetAllTabsRequest {
+  return isObject(v) && v['type'] === 'GET_ALL_TABS';
+}
+
+export function isGetBookmarkTreeRequest(v: unknown): v is GetBookmarkTreeRequest {
+  return isObject(v) && v['type'] === 'GET_BOOKMARK_TREE';
 }

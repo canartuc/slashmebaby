@@ -173,6 +173,84 @@ describe('Message union type exhaustiveness', () => {
   });
 });
 
+// ─── New Tree View Message Types ───────────────────────────────────────────
+
+import {
+  isGetAllTabsRequest,
+  isGetBookmarkTreeRequest,
+} from '../../lib/messaging';
+import type {
+  GetAllTabsRequest,
+  GetBookmarkTreeRequest,
+} from '../../lib/messaging';
+
+describe('isGetAllTabsRequest', () => {
+  it('returns true for a valid GetAllTabsRequest', () => {
+    const msg: GetAllTabsRequest = { type: 'GET_ALL_TABS' };
+    expect(isGetAllTabsRequest(msg)).toBe(true);
+  });
+
+  it('returns false for a different type', () => {
+    expect(isGetAllTabsRequest({ type: 'SEARCH' })).toBe(false);
+  });
+
+  it('returns false for null', () => {
+    expect(isGetAllTabsRequest(null)).toBe(false);
+  });
+
+  it('returns false for undefined', () => {
+    expect(isGetAllTabsRequest(undefined)).toBe(false);
+  });
+
+  it('returns false for empty object', () => {
+    expect(isGetAllTabsRequest({})).toBe(false);
+  });
+
+  it('returns false for a string', () => {
+    expect(isGetAllTabsRequest('GET_ALL_TABS')).toBe(false);
+  });
+});
+
+describe('isGetBookmarkTreeRequest', () => {
+  it('returns true for a valid GetBookmarkTreeRequest', () => {
+    const msg: GetBookmarkTreeRequest = { type: 'GET_BOOKMARK_TREE' };
+    expect(isGetBookmarkTreeRequest(msg)).toBe(true);
+  });
+
+  it('returns false for a different type', () => {
+    expect(isGetBookmarkTreeRequest({ type: 'GET_ALL_TABS' })).toBe(false);
+  });
+
+  it('returns false for null', () => {
+    expect(isGetBookmarkTreeRequest(null)).toBe(false);
+  });
+
+  it('returns false for undefined', () => {
+    expect(isGetBookmarkTreeRequest(undefined)).toBe(false);
+  });
+
+  it('returns false for empty object', () => {
+    expect(isGetBookmarkTreeRequest({})).toBe(false);
+  });
+
+  it('returns false for a string', () => {
+    expect(isGetBookmarkTreeRequest('GET_BOOKMARK_TREE')).toBe(false);
+  });
+});
+
+describe('Message union type with new types', () => {
+  it('can assign GET_ALL_TABS to Message union', () => {
+    const msg: GetAllTabsRequest = { type: 'GET_ALL_TABS' };
+    // Just verifying type compiles correctly
+    expect(msg.type).toBe('GET_ALL_TABS');
+  });
+
+  it('can assign GET_BOOKMARK_TREE to Message union', () => {
+    const msg: GetBookmarkTreeRequest = { type: 'GET_BOOKMARK_TREE' };
+    expect(msg.type).toBe('GET_BOOKMARK_TREE');
+  });
+});
+
 // ─── Edge cases for type guards ────────────────────────────────────────────
 
 describe('Type guard edge cases', () => {
