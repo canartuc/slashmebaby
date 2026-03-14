@@ -121,13 +121,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
           if (item) executeItem(item);
           break;
         }
-        case 'Backspace': {
-          if (q === '') {
-            e.preventDefault();
-            onDismiss();
-          }
-          break;
-        }
+        // Backspace just clears text normally, no dismiss
         // Escape is handled in content script, not here
       }
     },
