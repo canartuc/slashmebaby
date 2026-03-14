@@ -1,1 +1,5 @@
 .superpowers/
+.wxt/
+node_modules/
+dist/
+*.zip

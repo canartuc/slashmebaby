@@ -1,0 +1,35 @@
+{
+  "name": "slashmebaby",
+  "description": "Arc & Zen-style command palette for any browser.",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "pack": "wxt zip",
+    "pack:firefox": "wxt zip -b firefox",
+    "prepare": "wxt prepare",
+    "postinstall": "wxt prepare",
+    "compile": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "fuse.js": "^7.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
+    "@vitest/coverage-v8": "^2.1.9",
+    "@wxt-dev/module-react": "^1.1.0",
+    "playwright": "^1.58.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9",
+    "wxt": "^0.20.18"
+  }
+}
