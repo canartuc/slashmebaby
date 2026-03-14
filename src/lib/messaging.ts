@@ -75,8 +75,10 @@ export interface UserSettings {
   searchSources: { tabs: boolean; bookmarks: boolean; history: boolean };
 }
 
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent);
+
 export const DEFAULT_SETTINGS: UserSettings = {
-  shortcut: 'Ctrl+Shift+Space',
+  shortcut: isMac ? 'Command+Shift+Space' : 'Ctrl+Shift+Space',
   position: 'center',
   theme: 'system',
   maxResultsPerGroup: 5,
