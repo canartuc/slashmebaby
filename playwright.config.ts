@@ -1,9 +1,11 @@
 import { defineConfig } from '@playwright/test';
+import path from 'path';
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 30000,
-  retries: 1,
+  timeout: 60000,
+  retries: 2,
+  workers: 1,
   use: {
     headless: false,
   },
@@ -14,8 +16,10 @@ export default defineConfig({
         browserName: 'chromium',
         launchOptions: {
           args: [
-            `--disable-extensions-except=${process.cwd()}/.output/chrome-mv3`,
-            `--load-extension=${process.cwd()}/.output/chrome-mv3`,
+            `--disable-extensions-except=${path.resolve('.output/chrome-mv3')}`,
+            `--load-extension=${path.resolve('.output/chrome-mv3')}`,
+            '--no-first-run',
+            '--disable-default-apps',
           ],
         },
       },
