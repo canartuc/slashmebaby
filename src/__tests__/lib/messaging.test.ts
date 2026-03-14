@@ -172,3 +172,73 @@ describe('Message union type exhaustiveness', () => {
     expect(messages).toHaveLength(5);
   });
 });
+
+// ─── Edge cases for type guards ────────────────────────────────────────────
+
+describe('Type guard edge cases', () => {
+  describe('isSearchRequest with edge inputs', () => {
+    it('returns false for empty object', () => {
+      expect(isSearchRequest({})).toBe(false);
+    });
+
+    it('returns false for object with wrong type field', () => {
+      expect(isSearchRequest({ type: 'WRONG' })).toBe(false);
+    });
+
+    it('returns false for number', () => {
+      expect(isSearchRequest(42)).toBe(false);
+    });
+
+    it('returns false for string', () => {
+      expect(isSearchRequest('SEARCH')).toBe(false);
+    });
+  });
+
+  describe('isExecuteActionRequest with edge inputs', () => {
+    it('returns false for empty object', () => {
+      expect(isExecuteActionRequest({})).toBe(false);
+    });
+
+    it('returns false for object with wrong type field', () => {
+      expect(isExecuteActionRequest({ type: 'SEARCH' })).toBe(false);
+    });
+
+    it('returns false for undefined', () => {
+      expect(isExecuteActionRequest(undefined)).toBe(false);
+    });
+  });
+
+  describe('isToggleOverlayCommand with edge inputs', () => {
+    it('returns false for empty object', () => {
+      expect(isToggleOverlayCommand({})).toBe(false);
+    });
+
+    it('returns false for object with wrong type field', () => {
+      expect(isToggleOverlayCommand({ type: 'SEARCH' })).toBe(false);
+    });
+  });
+
+  describe('isSmartSuggestionsRequest with edge inputs', () => {
+    it('returns false for empty object', () => {
+      expect(isSmartSuggestionsRequest({})).toBe(false);
+    });
+
+    it('returns false for undefined', () => {
+      expect(isSmartSuggestionsRequest(undefined)).toBe(false);
+    });
+  });
+
+  describe('isGetSettingsRequest with edge inputs', () => {
+    it('returns false for empty object', () => {
+      expect(isGetSettingsRequest({})).toBe(false);
+    });
+
+    it('returns false for undefined', () => {
+      expect(isGetSettingsRequest(undefined)).toBe(false);
+    });
+
+    it('returns false for object with wrong type field', () => {
+      expect(isGetSettingsRequest({ type: 'WRONG' })).toBe(false);
+    });
+  });
+});

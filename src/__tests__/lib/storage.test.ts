@@ -179,3 +179,57 @@ describe('saveOnboardingState', () => {
     expect(retrieved).toEqual(newState);
   });
 });
+
+// ─── Edge cases ────────────────────────────────────────────────────────────
+
+describe('getSettings edge cases', () => {
+  it('handles corrupted/partial settings object — falls back to defaults for missing fields', async () => {
+    // Partial settings: only 'theme' is present, rest is missing
+    const partialSettings = { theme: 'dark' };
+    const syncStore = makeSyncStore({ settings: partialSettings });
+    const localStore = makeLocalStore();
+    vi.stubGlobal('chrome', { storage: { sync: syncStore, local: localStore } });
+
+    const settings = await getSettings();
+    // Overridden field
+    expect(settings.theme).toBe('dark');
+    // Default fields should still be present
+    expect(settings.shortcut).toBe(DEFAULT_SETTINGS.shortcut);
+    expect(settings.position).toBe(DEFAULT_SETTINGS.position);
+    expect(settings.maxResultsPerGroup).toBe(DEFAULT_SETTINGS.maxResultsPerGroup);
+    expect(settings.showFavicons).toBe(DEFAULT_SETTINGS.showFavicons);
+    expect(settings.searchSources).toEqual(DEFAULT_SETTINGS.searchSources);
+  });
+
+  it('handles completely empty settings object ({})', async () => {
+    const syncStore = makeSyncStore({ settings: {} });
+    const localStore = makeLocalStore();
+    vi.stubGlobal('chrome', { storage: { sync: syncStore, local: localStore } });
+
+    const settings = await getSettings();
+    expect(settings).toEqual(DEFAULT_SETTINGS);
+  });
+});
+
+describe('getOnboardingState edge cases', () => {
+  it('returns default state when onboarding key is missing from storage', async () => {
+    // Storage has keys, but not 'onboarding'
+    const syncStore = makeSyncStore();
+    const localStore = makeLocalStore({ someOtherKey: 'value' });
+    vi.stubGlobal('chrome', { storage: { sync: syncStore, local: localStore } });
+
+    const state = await getOnboardingState();
+    expect(state).toEqual({ completedStep: 0, completed: false });
+  });
+
+  it('handles partially corrupted onboarding state', async () => {
+    // Only completedStep present, completed missing
+    const localStore = makeLocalStore({ onboarding: { completedStep: 4 } });
+    const syncStore = makeSyncStore();
+    vi.stubGlobal('chrome', { storage: { sync: syncStore, local: localStore } });
+
+    const state = await getOnboardingState();
+    expect(state.completedStep).toBe(4);
+    expect(state.completed).toBe(false); // defaults
+  });
+});

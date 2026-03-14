@@ -267,4 +267,178 @@ describe('createMessageRouter', () => {
       expect(response.error).toBeTruthy();
     });
   });
+
+  describe('SWITCH_TAB message', () => {
+    it('returns success when switching to a valid tab', async () => {
+      // Build a fresh chrome mock with promise-returning update/get/windows.update
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          update: vi.fn(() => Promise.resolve(makeFakeTab())),
+          get: vi.fn(() => Promise.resolve(makeFakeTab({ windowId: 1 }))),
+        },
+        windows: {
+          ...baseMock.windows,
+          update: vi.fn(() => Promise.resolve()),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SWITCH_TAB', payload: { tabId: 1 } }) as { success: boolean };
+      expect(response.success).toBe(true);
+    });
+
+    it('returns failure when switching throws an error', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          update: vi.fn(() => Promise.reject(new Error('Tab not found'))),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SWITCH_TAB', payload: { tabId: 999 } }) as { success: boolean; error: string };
+      expect(response.success).toBe(false);
+      expect(response.error).toContain('Tab not found');
+    });
+  });
+
+  describe('NAVIGATE message', () => {
+    it('updates active tab URL when active tab exists', async () => {
+      const baseMock = makeChromeMock();
+      // For NAVIGATE, tabs.query needs to return a Promise (the router uses await)
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          // initialization (callback style) + navigate (promise style)
+          query: vi.fn((queryInfo: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+            if (cb) {
+              // callback-style call (used by TabCache.refresh in init)
+              cb([makeFakeTab({ id: 1, title: 'Tab One', url: 'https://one.com', lastAccessed: Date.now() })]);
+              return;
+            }
+            // Promise-style call (used by NAVIGATE handler)
+            return Promise.resolve([makeFakeTab({ id: 5, active: true })]);
+          }),
+          update: vi.fn(() => Promise.resolve(makeFakeTab())),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'NAVIGATE', payload: { url: 'https://example.com' } }) as { success: boolean };
+      expect(response.success).toBe(true);
+    });
+
+    it('creates new tab when no active tab exists', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          query: vi.fn((queryInfo: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+            if (cb) {
+              cb([makeFakeTab({ id: 1, title: 'Tab One', url: 'https://one.com', lastAccessed: Date.now() })]);
+              return;
+            }
+            return Promise.resolve([]);
+          }),
+          create: vi.fn((props: object, cb?: (tab: chrome.tabs.Tab) => void) => {
+            if (cb) { cb(makeFakeTab({ id: 99 })); return; }
+            return Promise.resolve(makeFakeTab({ id: 99 }));
+          }),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'NAVIGATE', payload: { url: 'https://newpage.com' } }) as { success: boolean };
+      expect(response.success).toBe(true);
+    });
+
+    it('returns failure when navigate throws an error', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          query: vi.fn((queryInfo: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+            if (cb) {
+              cb([makeFakeTab({ id: 1, title: 'Tab One', url: 'https://one.com', lastAccessed: Date.now() })]);
+              return;
+            }
+            return Promise.reject(new Error('Query failed'));
+          }),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'NAVIGATE', payload: { url: 'https://example.com' } }) as { success: boolean; error: string };
+      expect(response.success).toBe(false);
+      expect(response.error).toContain('Query failed');
+    });
+  });
+
+  describe('EXECUTE_ACTION without action- prefix', () => {
+    it('executes action without action- prefix stripping', async () => {
+      const chromeMock = makeChromeMock();
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const request: ExecuteActionRequest = {
+        type: 'EXECUTE_ACTION',
+        payload: { actionId: 'new-tab' }, // no 'action-' prefix
+      };
+
+      const response = await router(request) as { success: boolean };
+      expect(response.success).toBe(true);
+      expect(chromeMock.tabs.create).toHaveBeenCalled();
+    });
+  });
+
+  describe('SEARCH with different source combinations', () => {
+    it('returns results with only bookmarks source', async () => {
+      const router = await createMessageRouter();
+      const request: SearchRequest = {
+        type: 'SEARCH',
+        payload: { query: 'Bookmark', sources: ['bookmarks'] },
+      };
+
+      const response = await router(request) as { groups: unknown[] };
+      expect(response).toHaveProperty('groups');
+    });
+
+    it('returns results with only history source', async () => {
+      const router = await createMessageRouter();
+      const request: SearchRequest = {
+        type: 'SEARCH',
+        payload: { query: 'History', sources: ['history'] },
+      };
+
+      const response = await router(request) as { groups: unknown[] };
+      expect(response).toHaveProperty('groups');
+    });
+
+    it('returns results with empty sources array (actions only)', async () => {
+      const router = await createMessageRouter();
+      const request: SearchRequest = {
+        type: 'SEARCH',
+        payload: { query: 'tab', sources: [] },
+      };
+
+      const response = await router(request) as { groups: Array<{ category: string }> };
+      expect(response).toHaveProperty('groups');
+      // Only actions should be present
+      const nonActionGroups = response.groups.filter((g) => g.category !== 'actions');
+      expect(nonActionGroups).toHaveLength(0);
+    });
+  });
 });

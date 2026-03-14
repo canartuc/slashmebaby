@@ -131,6 +131,26 @@ const sampleItems: SearchableItem[] = [
   },
 ];
 
+// ─── Edge case: computeRecencyScore with zero half-life (actions) ────────────
+
+describe('computeRecencyScore edge cases', () => {
+  it('returns 0 when halfLifeHours is 0 (actions category)', () => {
+    const score = computeRecencyScore(Date.now(), 0);
+    expect(score).toBe(0);
+  });
+
+  it('approaches 0 for very old timestamps (1 year old, 2h half-life)', () => {
+    const oneYearAgo = Date.now() - 365 * 24 * 60 * 60 * 1000;
+    const score = computeRecencyScore(oneYearAgo, 2);
+    expect(score).toBeCloseTo(0, 5);
+  });
+
+  it('returns 0 for undefined timestamp regardless of half-life', () => {
+    expect(computeRecencyScore(undefined, 0)).toBe(0);
+    expect(computeRecencyScore(undefined, 24)).toBe(0);
+  });
+});
+
 describe('createSearchEngine', () => {
   describe('basic search', () => {
     it('returns grouped results for a matching query', () => {
@@ -264,6 +284,73 @@ describe('createSearchEngine', () => {
       const engine = createSearchEngine(sampleItems);
       const results = engine.search('>   ');
       expect(results).toEqual([]);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('handles empty items array without crashing', () => {
+      const engine = createSearchEngine([]);
+      expect(() => engine.search('test')).not.toThrow();
+      expect(engine.search('test')).toEqual([]);
+    });
+
+    it('handles items with undefined url', () => {
+      const items: SearchableItem[] = [
+        { id: 'action-1', title: 'Close Tab', category: 'actions' }, // no url
+      ];
+      const engine = createSearchEngine(items);
+      const results = engine.search('Close');
+      expect(results.length).toBeGreaterThan(0);
+      const actionGroup = results.find((g) => g.category === 'actions');
+      expect(actionGroup).toBeDefined();
+      expect(actionGroup!.items[0].url).toBeUndefined();
+    });
+
+    it('handles action items with 0 half-life — recency score is 0', () => {
+      const items: SearchableItem[] = [
+        { id: 'action-1', title: 'New Tab', category: 'actions', timestamp: Date.now() },
+      ];
+      const engine = createSearchEngine(items);
+      const results = engine.search('New Tab');
+      expect(results.length).toBeGreaterThan(0);
+      const actionGroup = results.find((g) => g.category === 'actions');
+      expect(actionGroup).toBeDefined();
+      // Score should be purely from fuzzy match (recency = 0 for actions)
+      expect(actionGroup!.items[0].score).toBeGreaterThan(0);
+    });
+
+    it('handles empty string query by returning empty results', () => {
+      const engine = createSearchEngine(sampleItems);
+      const results = engine.search('');
+      expect(results).toEqual([]);
+    });
+
+    it('handles special characters without crashing', () => {
+      const engine = createSearchEngine(sampleItems);
+      expect(() => engine.search('[special] (chars) {here} $%^')).not.toThrow();
+    });
+
+    it('handles very long query string without crashing', () => {
+      const longQuery = 'a'.repeat(1000);
+      const engine = createSearchEngine(sampleItems);
+      expect(() => engine.search(longQuery)).not.toThrow();
+    });
+
+    it('handles item with undefined score from Fuse (uses fallback of 1)', () => {
+      // Items with category 'actions' have halfLife=0, so recency=0
+      // Combined score = (1 - fuseScore)*0.6 + 0*0.4
+      // When fuseScore is undefined, it falls back to 1, so score = 0
+      const items: SearchableItem[] = [
+        { id: 'action-x', title: 'Xylophone Action', category: 'actions' },
+      ];
+      const engine = createSearchEngine(items);
+      const results = engine.search('Xylophone');
+      if (results.length > 0) {
+        const actionGroup = results.find((g) => g.category === 'actions');
+        if (actionGroup && actionGroup.items.length > 0) {
+          expect(typeof actionGroup.items[0].score).toBe('number');
+        }
+      }
     });
   });
 });

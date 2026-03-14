@@ -302,5 +302,112 @@ describe('ActionRegistry', () => {
       // tabs.move should have been called to reorder tabs
       expect(chromeMock.tabs.move).toHaveBeenCalled();
     });
+
+    it('executes pin-tab action — already pinned tab gets unpinned', async () => {
+      const tab = makeFakeTab({ id: 42, pinned: true }); // already pinned
+      const chromeMock = makeChromeMock();
+      chromeMock.tabs.get = vi.fn((_tabId: number, cb: (tab: chrome.tabs.Tab) => void) => cb(tab));
+      vi.stubGlobal('chrome', chromeMock);
+
+      const registry = new ActionRegistry();
+      const result = await registry.execute('pin-tab', 42);
+
+      expect(result.success).toBe(true);
+      // Should toggle: pinned=true → pinned=false
+      expect(chromeMock.tabs.update).toHaveBeenCalledWith(42, { pinned: false }, expect.any(Function));
+    });
+
+    it('executes mute-tab action — already muted tab gets unmuted', async () => {
+      const tab = makeFakeTab({ id: 42, mutedInfo: { muted: true } }); // already muted
+      const chromeMock = makeChromeMock();
+      chromeMock.tabs.get = vi.fn((_tabId: number, cb: (tab: chrome.tabs.Tab) => void) => cb(tab));
+      vi.stubGlobal('chrome', chromeMock);
+
+      const registry = new ActionRegistry();
+      const result = await registry.execute('mute-tab', 42);
+
+      expect(result.success).toBe(true);
+      // Should toggle: muted=true → muted=false
+      expect(chromeMock.tabs.update).toHaveBeenCalledWith(42, { muted: false }, expect.any(Function));
+    });
+
+    it('close-other-tabs returns success when there are no other tabs to close', async () => {
+      // Only the active tab, nothing else
+      const tabs = [makeFakeTab({ id: 1, active: true, pinned: false })];
+      const chromeMock = makeChromeMock();
+      chromeMock.tabs.query = vi.fn(
+        (_queryInfo: object, cb: (tabs: chrome.tabs.Tab[]) => void) => cb(tabs)
+      );
+      vi.stubGlobal('chrome', chromeMock);
+
+      const registry = new ActionRegistry();
+      const result = await registry.execute('close-other-tabs', 1);
+
+      expect(result.success).toBe(true);
+      // No tabs to remove, so remove should not be called
+      expect(chromeMock.tabs.remove).not.toHaveBeenCalled();
+    });
+
+    it('close-duplicates returns success when there are no duplicates', async () => {
+      const tabs = [
+        makeFakeTab({ id: 1, url: 'https://unique1.com' }),
+        makeFakeTab({ id: 2, url: 'https://unique2.com' }),
+      ];
+      const chromeMock = makeChromeMock();
+      chromeMock.tabs.query = vi.fn(
+        (_queryInfo: object, cb: (tabs: chrome.tabs.Tab[]) => void) => cb(tabs)
+      );
+      vi.stubGlobal('chrome', chromeMock);
+
+      const registry = new ActionRegistry();
+      const result = await registry.execute('close-duplicates');
+
+      expect(result.success).toBe(true);
+      // No duplicates, remove should not be called
+      expect(chromeMock.tabs.remove).not.toHaveBeenCalled();
+    });
+
+    it('sort-by-domain handles tabs with invalid URLs gracefully', async () => {
+      const tabs = [
+        makeFakeTab({ id: 1, url: 'not-a-valid-url', index: 0 }),
+        makeFakeTab({ id: 2, url: 'https://alpha.com', index: 1 }),
+      ];
+      const chromeMock = makeChromeMock();
+      chromeMock.tabs.query = vi.fn(
+        (_queryInfo: object, cb: (tabs: chrome.tabs.Tab[]) => void) => cb(tabs)
+      );
+      vi.stubGlobal('chrome', chromeMock);
+
+      const registry = new ActionRegistry();
+      // Should not throw even with invalid URLs
+      await expect(registry.execute('sort-by-domain')).resolves.toEqual({ success: true });
+    });
+
+    it('execute with no targetTabId for an action that requires it', async () => {
+      const chromeMock = makeChromeMock();
+      vi.stubGlobal('chrome', chromeMock);
+
+      const registry = new ActionRegistry();
+      // close-tab with no tabId — undefined will be passed, chrome.tabs.remove will be called with undefined
+      // The action itself should still resolve (behavior is implementation-defined)
+      const result = await registry.execute('close-tab', undefined);
+      // Should either succeed or fail gracefully
+      expect(result).toHaveProperty('success');
+    });
+
+    it('execute catches errors thrown by underlying chrome API', async () => {
+      const chromeMock = makeChromeMock();
+      // Make tabs.create throw synchronously
+      chromeMock.tabs.create = vi.fn(() => {
+        throw new Error('Chrome API failure');
+      });
+      vi.stubGlobal('chrome', chromeMock);
+
+      const registry = new ActionRegistry();
+      const result = await registry.execute('new-tab');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Chrome API failure');
+    });
   });
 });
