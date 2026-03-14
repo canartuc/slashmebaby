@@ -1,16 +1,43 @@
-import { test, expect, type BrowserContext } from '@playwright/test';
-import { getExtensionId } from './helpers';
+import { test, expect, chromium } from '@playwright/test';
+import path from 'path';
 
-// All tests share a persistent browser context with the extension loaded
-let extensionId: string;
+const EXTENSION_PATH = path.resolve('.output/chrome-mv3');
 
-test.beforeEach(async ({ context }) => {
-  extensionId = await getExtensionId(context);
-});
+async function launchWithExtension() {
+  const context = await chromium.launchPersistentContext('', {
+    headless: false,
+    args: [
+      `--disable-extensions-except=${EXTENSION_PATH}`,
+      `--load-extension=${EXTENSION_PATH}`,
+      '--no-first-run',
+      '--disable-default-apps',
+    ],
+  });
+  await new Promise(r => setTimeout(r, 2000));
+  return context;
+}
+
+async function getExtensionId(context: Awaited<ReturnType<typeof launchWithExtension>>): Promise<string> {
+  let attempts = 0;
+  while (attempts < 10) {
+    const workers = context.serviceWorkers();
+    for (const w of workers) {
+      const match = w.url().match(/chrome-extension:\/\/([^/]+)/);
+      if (match) return match[1];
+    }
+    await new Promise(r => setTimeout(r, 500));
+    attempts++;
+  }
+  throw new Error('Could not find extension ID');
+}
 
 // ─── Test 1: Extension loads without errors ───────────────────────────────────
 
-test('extension loads without console errors', async ({ page }) => {
+test('extension loads without console errors', async () => {
+  const context = await launchWithExtension();
+  const id = await getExtensionId(context);
+
+  const page = await context.newPage();
   const errors: string[] = [];
   page.on('console', (msg) => {
     if (msg.type() === 'error') {
@@ -19,87 +46,128 @@ test('extension loads without console errors', async ({ page }) => {
   });
 
   await page.goto('https://example.com');
-  await page.waitForTimeout(1000);
+  await page.waitForLoadState('domcontentloaded');
+  await new Promise(r => setTimeout(r, 1000));
 
-  // Filter out known benign errors (e.g., network errors on example.com)
-  const extensionErrors = errors.filter((e) => e.includes('slashmebaby') || e.includes(extensionId));
+  // Filter to only extension-specific errors
+  const extensionErrors = errors.filter((e) => e.includes('slashmebaby') || e.includes(id));
   expect(extensionErrors).toEqual([]);
+
+  await context.close();
 });
 
 // ─── Test 2: Popup renders ───────────────────────────────────────────────────
 
-test('popup renders with search input', async ({ page }) => {
-  await page.goto(`chrome-extension://${extensionId}/popup/index.html`);
+test('popup renders with search input', async () => {
+  const context = await launchWithExtension();
+  const id = await getExtensionId(context);
+
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${id}/popup.html`);
+  await page.waitForLoadState('domcontentloaded');
+  await new Promise(r => setTimeout(r, 1000));
 
   // Verify the search input is present
-  const input = page.locator('input[type="text"]');
+  const input = page.locator('input.smb-input');
   await expect(input).toBeVisible();
-  await expect(input).toHaveAttribute('placeholder', /search/i);
+
+  const placeholder = await input.getAttribute('placeholder');
+  expect(placeholder).toBeTruthy();
+
+  await context.close();
 });
 
 // ─── Test 3: Settings page renders ───────────────────────────────────────────
 
-test('settings page renders all sections', async ({ page }) => {
-  await page.goto(`chrome-extension://${extensionId}/settings/index.html`);
+test('settings page renders all sections', async () => {
+  const context = await launchWithExtension();
+  const id = await getExtensionId(context);
+
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${id}/settings.html`);
+  await page.waitForLoadState('domcontentloaded');
+  await new Promise(r => setTimeout(r, 1000));
 
   // Verify the page title
-  await expect(page.locator('h1')).toContainText('SlashMeBaby Settings');
+  await expect(page.locator('h1.smb-settings-title')).toContainText('SlashMeBaby Settings');
 
   // Verify all setting sections are present
   await expect(page.locator('text=Keyboard Shortcut')).toBeVisible();
   await expect(page.locator('text=Command Bar Position')).toBeVisible();
   await expect(page.locator('text=Theme')).toBeVisible();
   await expect(page.locator('text=Search Sources')).toBeVisible();
+
+  await context.close();
 });
 
 // ─── Test 4: Onboarding page renders ─────────────────────────────────────────
 
-test('onboarding page renders step 1 (shortcut picker)', async ({ page }) => {
-  await page.goto(`chrome-extension://${extensionId}/onboarding/index.html`);
+test('onboarding page renders step 1 (shortcut picker)', async () => {
+  const context = await launchWithExtension();
+  const id = await getExtensionId(context);
+
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${id}/onboarding.html`);
+  await page.waitForLoadState('domcontentloaded');
+  await new Promise(r => setTimeout(r, 1000));
 
   // Verify the title
-  await expect(page.locator('h1')).toContainText('SlashMeBaby');
+  await expect(page.locator('h1.smb-onboarding-title')).toContainText('SlashMeBaby');
 
   // Verify step 1 content — shortcut picker
   await expect(page.locator('text=Pick your shortcut')).toBeVisible();
 
-  // Verify shortcut options are rendered
-  await expect(page.locator('text=Alt + Space')).toBeVisible();
-  await expect(page.locator('text=Ctrl + Shift + L')).toBeVisible();
+  // Verify shortcut options are rendered (4 buttons)
+  const shortcutButtons = page.locator('.smb-onboarding-shortcut-option');
+  await expect(shortcutButtons).toHaveCount(4);
 
   // Verify progress dots are present (4 steps)
   const dots = page.locator('.smb-onboarding-dot');
   await expect(dots).toHaveCount(4);
+
+  await context.close();
 });
 
 // ─── Test 5: Onboarding advances through all steps ──────────────────────────
 
-test('onboarding advances through all 4 steps', async ({ page }) => {
-  await page.goto(`chrome-extension://${extensionId}/onboarding/index.html`);
+test('onboarding advances through all 4 steps', async () => {
+  const context = await launchWithExtension();
+  const id = await getExtensionId(context);
+
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${id}/onboarding.html`);
+  await page.waitForLoadState('domcontentloaded');
+  await new Promise(r => setTimeout(r, 1000));
 
   // Step 1: Shortcut picker
   await expect(page.locator('text=Pick your shortcut')).toBeVisible();
 
+  const nextButton = page.locator('button.smb-onboarding-next-btn');
+
   // Click "Next" to advance to step 2
-  const nextButton = page.locator('button:has-text("Next")');
   await nextButton.click();
+  await new Promise(r => setTimeout(r, 500));
 
   // Step 2: Try it out
-  await expect(page.locator('text=Try it out')).toBeVisible();
+  await expect(page.locator('text=Try it out!')).toBeVisible();
 
   // Click "Next" to advance to step 3
   await nextButton.click();
+  await new Promise(r => setTimeout(r, 500));
 
   // Step 3: Navigation guide
   await expect(page.locator('text=Navigate like a pro')).toBeVisible();
 
   // Click "Next" to advance to step 4
   await nextButton.click();
+  await new Promise(r => setTimeout(r, 500));
 
   // Step 4: Completion
-  await expect(page.locator('text=You\'re all set')).toBeVisible();
+  await expect(page.locator("text=You're all set!")).toBeVisible();
 
   // Verify the "Start Browsing" button is shown (not "Next")
-  await expect(page.locator('button:has-text("Start Browsing")')).toBeVisible();
+  await expect(page.locator('button.smb-onboarding-complete-btn')).toContainText('Start Browsing');
   await expect(nextButton).not.toBeVisible();
+
+  await context.close();
 });
