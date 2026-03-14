@@ -166,12 +166,18 @@ export async function createMessageRouter() {
 
     if (isExecuteActionRequest(message)) {
       const { actionId, targetTabId } = message.payload;
-      // Strip 'action-' prefix before delegating to registry
       const bareActionId = actionId.startsWith('action-')
         ? actionId.slice('action-'.length)
         : actionId;
 
-      return await actionRegistry.execute(bareActionId, targetTabId);
+      // If no targetTabId provided, use the active tab
+      let resolvedTabId = targetTabId;
+      if (resolvedTabId === undefined) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+
+      return await actionRegistry.execute(bareActionId, resolvedTabId);
     }
 
     if (isGetSettingsRequest(message)) {
