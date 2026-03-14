@@ -28,12 +28,14 @@ function makeFakeTab(overrides: Partial<chrome.tabs.Tab> = {}): chrome.tabs.Tab 
 function makeChromeMock() {
   return {
     tabs: {
-      query: vi.fn((_: object, cb: (tabs: chrome.tabs.Tab[]) => void) =>
-        cb([
+      query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+        const tabs = [
           makeFakeTab({ id: 1, title: 'Tab One', url: 'https://one.com', lastAccessed: Date.now() }),
           makeFakeTab({ id: 2, title: 'Tab Two', url: 'https://two.com', lastAccessed: Date.now() - 1000 }),
-        ])
-      ),
+        ];
+        if (cb) cb(tabs);
+        return Promise.resolve(tabs);
+      }),
       remove: vi.fn((_: number | number[], cb?: () => void) => cb?.()),
       create: vi.fn((_: object, cb?: (tab: chrome.tabs.Tab) => void) => cb?.(makeFakeTab({ id: 99 }))),
       duplicate: vi.fn((_: number, cb?: (tab: chrome.tabs.Tab) => void) => cb?.(makeFakeTab({ id: 100 }))),

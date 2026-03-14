@@ -150,10 +150,17 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
               () => onDismiss()
             );
           } else if (item.url) {
-            chrome.runtime.sendMessage(
-              { type: 'NAVIGATE', payload: { url: item.url } },
-              () => onDismiss()
-            );
+            if (shiftKey) {
+              chrome.runtime.sendMessage(
+                { type: 'OPEN_NEW_TAB', payload: { url: item.url } },
+                () => onDismiss()
+              );
+            } else {
+              chrome.runtime.sendMessage(
+                { type: 'NAVIGATE', payload: { url: item.url } },
+                () => onDismiss()
+              );
+            }
           }
           break;
         }
@@ -172,10 +179,18 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
                   () => onDismiss()
                 );
               } else if (item.url) {
-                chrome.runtime.sendMessage(
-                  { type: 'NAVIGATE', payload: { url: item.url } },
-                  () => onDismiss()
-                );
+                if (shiftKey) {
+                  // Shift+label: open bookmark/history in NEW tab
+                  chrome.runtime.sendMessage(
+                    { type: 'OPEN_NEW_TAB', payload: { url: item.url } },
+                    () => onDismiss()
+                  );
+                } else {
+                  chrome.runtime.sendMessage(
+                    { type: 'NAVIGATE', payload: { url: item.url } },
+                    () => onDismiss()
+                  );
+                }
               }
             }
           }
@@ -204,10 +219,17 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
               () => onDismiss()
             );
           } else if (item.url) {
-            chrome.runtime.sendMessage(
-              { type: 'NAVIGATE', payload: { url: item.url } },
-              () => onDismiss()
-            );
+            if (shiftKey) {
+              chrome.runtime.sendMessage(
+                { type: 'OPEN_NEW_TAB', payload: { url: item.url } },
+                () => onDismiss()
+              );
+            } else {
+              chrome.runtime.sendMessage(
+                { type: 'NAVIGATE', payload: { url: item.url } },
+                () => onDismiss()
+              );
+            }
           }
           break;
         }

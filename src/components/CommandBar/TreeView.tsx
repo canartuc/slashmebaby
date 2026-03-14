@@ -10,15 +10,20 @@ interface ActionDef {
   id: string;
 }
 
-const ACTIONS: ActionDef[] = [
-  { key: 'c', title: 'Close Tab', id: 'close-tab' },
-  { key: 'x', title: 'Close Other Tabs', id: 'close-other-tabs' },
-  { key: 'p', title: 'Pin Tab', id: 'pin-tab' },
-  { key: 'm', title: 'Mute Tab', id: 'mute-tab' },
-  { key: 'd', title: 'Duplicate Tab', id: 'duplicate-tab' },
-  { key: 'w', title: 'Move to Window', id: 'move-to-window' },
-  { key: 'r', title: 'Reload Tab', id: 'reload-tab' },
-  { key: 't', title: 'New Tab', id: 'new-tab' },
+// Tab actions — short labels, displayed as columns
+const TAB_ACTIONS: ActionDef[] = [
+  { key: 'c', title: 'Close', id: 'close-tab' },
+  { key: 'x', title: 'Others', id: 'close-other-tabs' },
+  { key: 'p', title: 'Pin', id: 'pin-tab' },
+  { key: 'm', title: 'Mute', id: 'mute-tab' },
+  { key: 'd', title: 'Dup', id: 'duplicate-tab' },
+  { key: 'w', title: 'Window', id: 'move-to-window' },
+  { key: 'r', title: 'Reload', id: 'reload-tab' },
+  { key: 't', title: 'New', id: 'new-tab' },
+];
+
+// Other actions — displayed as compact rows
+const OTHER_ACTIONS: ActionDef[] = [
   { key: 'u', title: 'Go to URL', id: 'go-to-url' },
   { key: 'z', title: 'Recently Closed', id: 'recently-closed' },
   { key: 'q', title: 'Close Duplicates', id: 'close-duplicates' },
@@ -103,19 +108,32 @@ export const TreeView: React.FC<TreeViewProps> = ({
       {/* Action divider */}
       <div className="smb-action-divider" />
 
-      {/* Actions section */}
-      <div className="smb-actions-section">
-        {ACTIONS.map((action) => (
+      {/* Tab actions — compact column grid */}
+      <div className="smb-actions-grid">
+        {TAB_ACTIONS.map((action) => (
           <div
             key={action.id}
-            className="smb-tree-item smb-tree-item--action"
+            className="smb-action-chip"
             role="option"
             aria-label={action.title}
           >
-            <span className="smb-label-badge smb-label-badge--action">
-              {action.key}
-            </span>
-            <span className="smb-title">{action.title}</span>
+            <span className="smb-label-badge">{action.key}</span>
+            <span className="smb-action-label">{action.title}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Other actions — compact rows */}
+      <div className="smb-actions-rows">
+        {OTHER_ACTIONS.map((action) => (
+          <div
+            key={action.id}
+            className="smb-action-row"
+            role="option"
+            aria-label={action.title}
+          >
+            <span className="smb-label-badge">{action.key}</span>
+            <span className="smb-action-label">{action.title}</span>
           </div>
         ))}
       </div>

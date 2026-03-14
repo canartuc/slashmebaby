@@ -148,6 +148,17 @@ export async function createMessageRouter() {
       }
     }
 
+    // Open URL in a new tab
+    if (msg.type === 'OPEN_NEW_TAB') {
+      const payload = msg.payload as { url: string };
+      try {
+        await chrome.tabs.create({ url: payload.url });
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    }
+
     // Navigate current tab to a URL
     if (msg.type === 'NAVIGATE') {
       const payload = msg.payload as { url: string };

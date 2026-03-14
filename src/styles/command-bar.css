@@ -466,6 +466,61 @@
   margin: var(--space-2) var(--space-4);
 }
 
+/* ─── Actions Grid (tab actions as columns) ─────────────────────────────── */
+
+.smb-actions-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: var(--space-2) var(--space-4);
+}
+
+.smb-action-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.smb-action-chip:hover {
+  background: var(--color-bg-hover);
+}
+
+.smb-action-label {
+  white-space: nowrap;
+}
+
+/* ─── Actions Rows (other actions as compact rows) ──────────────────────── */
+
+.smb-actions-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: var(--space-1) var(--space-4) var(--space-2);
+}
+
+.smb-action-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 3px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.smb-action-row:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+}
+
 /* ─── Mode Indicator (search input area) ────────────────────────────────── */
 
 .smb-input-wrapper--jump .smb-input {

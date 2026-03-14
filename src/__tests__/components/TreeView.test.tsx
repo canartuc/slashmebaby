@@ -210,7 +210,7 @@ describe('TreeView', () => {
 
   // ─── Actions section ──────────────────────────────────────────────────────
 
-  it('renders all 13 action items', () => {
+  it('renders all 13 action items in grid and rows', () => {
     const items = [groupItem];
     const { container } = render(
       <TreeView
@@ -219,11 +219,12 @@ describe('TreeView', () => {
         {...defaultProps}
       />
     );
-    const actionItems = container.querySelectorAll('.smb-tree-item--action');
-    expect(actionItems).toHaveLength(13);
+    const chips = container.querySelectorAll('.smb-action-chip');
+    const rows = container.querySelectorAll('.smb-action-row');
+    expect(chips.length + rows.length).toBe(13);
   });
 
-  it('renders action items with correct mnemonic keys', () => {
+  it('renders tab action chips with correct keys', () => {
     const items = [groupItem];
     const { container } = render(
       <TreeView
@@ -232,12 +233,12 @@ describe('TreeView', () => {
         {...defaultProps}
       />
     );
-    const actionBadges = container.querySelectorAll('.smb-label-badge--action');
-    const keys = Array.from(actionBadges).map((b) => b.textContent);
-    expect(keys).toEqual(['c', 'x', 'p', 'm', 'd', 'w', 'r', 't', 'u', 'z', 'q', 's', ',']);
+    const chips = container.querySelectorAll('.smb-action-chip .smb-label-badge');
+    const keys = Array.from(chips).map((b) => b.textContent);
+    expect(keys).toEqual(['c', 'x', 'p', 'm', 'd', 'w', 'r', 't']);
   });
 
-  it('renders action titles', () => {
+  it('renders action labels', () => {
     const items: TreeItemData[] = [];
     render(
       <TreeView
@@ -246,9 +247,9 @@ describe('TreeView', () => {
         {...defaultProps}
       />
     );
-    expect(screen.getByText('Close Tab')).toBeTruthy();
-    expect(screen.getByText('Pin Tab')).toBeTruthy();
-    expect(screen.getByText('New Tab')).toBeTruthy();
+    expect(screen.getByText('Close')).toBeTruthy();
+    expect(screen.getByText('Pin')).toBeTruthy();
+    expect(screen.getByText('New')).toBeTruthy();
     expect(screen.getByText('Settings')).toBeTruthy();
   });
 
@@ -263,11 +264,11 @@ describe('TreeView', () => {
         {...defaultProps}
       />
     );
-    // No tree items, but actions are still shown
-    const treeItems = container.querySelectorAll('.smb-tree-item:not(.smb-tree-item--action)');
+    const treeItems = container.querySelectorAll('.smb-tree-item');
     expect(treeItems).toHaveLength(0);
-    const actionItems = container.querySelectorAll('.smb-tree-item--action');
-    expect(actionItems).toHaveLength(13);
+    const chips = container.querySelectorAll('.smb-action-chip');
+    const rows = container.querySelectorAll('.smb-action-row');
+    expect(chips.length + rows.length).toBe(13);
   });
 
   // ─── Listbox role ─────────────────────────────────────────────────────────
