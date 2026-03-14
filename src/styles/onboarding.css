@@ -1,0 +1,405 @@
+/* ─── SlashMeBaby Onboarding Wizard ──────────────────────────────────────── */
+/* Uses the Luminal design language tokens and patterns.                     */
+
+/* ─── CSS Custom Properties ──────────────────────────────────────────────── */
+
+:root {
+  /* ── Spacing ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+
+  /* ── Typography ── */
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-lg: 16px;
+
+  /* ── Radii ── */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* ── Animation ── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 100ms;
+  --duration-base: 150ms;
+
+  /* ── Dark palette (default) ── */
+  --color-bg-primary: #1a1a2e;
+  --color-bg-secondary: #16213e;
+  --color-bg-hover: rgba(99, 102, 241, 0.15);
+  --color-border: rgba(255, 255, 255, 0.10);
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #a0a4b8;
+  --color-text-muted: #6c7293;
+  --color-accent: #6366f1;
+  --color-accent-hover: #818cf8;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg-primary: #ffffff;
+    --color-bg-secondary: #f8f9fc;
+    --color-bg-hover: rgba(99, 102, 241, 0.08);
+    --color-border: rgba(0, 0, 0, 0.08);
+    --color-text-primary: #1a1a2e;
+    --color-text-secondary: #4a4e69;
+    --color-text-muted: #9ca3af;
+    --color-accent: #6366f1;
+    --color-accent-hover: #4f46e5;
+  }
+}
+
+/* ─── Global Reset ───────────────────────────────────────────────────────── */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Oxygen, Ubuntu, sans-serif;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Page Layout ────────────────────────────────────────────────────────── */
+
+.smb-onboarding-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.smb-onboarding-container {
+  width: 100%;
+  max-width: 600px;
+}
+
+.smb-onboarding-loading {
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+
+.smb-onboarding-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.smb-onboarding-title {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-5);
+  letter-spacing: -0.02em;
+}
+
+/* ─── Progress Dots ──────────────────────────────────────────────────────── */
+
+.smb-onboarding-progress {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.smb-onboarding-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  transition: background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.smb-onboarding-dot--active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.smb-onboarding-dot--completed {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  opacity: 0.5;
+}
+
+/* ─── Step Container ─────────────────────────────────────────────────────── */
+
+.smb-onboarding-step {
+  text-align: center;
+}
+
+.smb-onboarding-step-title {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.smb-onboarding-step-desc {
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-6);
+  max-width: 440px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ─── Shortcut Picker Grid ───────────────────────────────────────────────── */
+
+.smb-onboarding-shortcut-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.smb-onboarding-shortcut-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  background: var(--color-bg-secondary);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+  font-family: inherit;
+  color: inherit;
+}
+
+.smb-onboarding-shortcut-option:hover {
+  background: var(--color-bg-hover);
+}
+
+.smb-onboarding-shortcut-option--selected {
+  border-color: var(--color-accent);
+  background: var(--color-bg-hover);
+}
+
+.smb-onboarding-shortcut-key {
+  font-size: var(--text-lg);
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.smb-onboarding-shortcut-desc {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* ─── Try It Step ────────────────────────────────────────────────────────── */
+
+.smb-onboarding-try-it {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.smb-onboarding-try-it-prompt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.smb-onboarding-try-it-label {
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+}
+
+.smb-onboarding-try-it-kbd {
+  font-size: var(--text-lg);
+  font-weight: 500;
+  color: var(--color-accent);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+}
+
+.smb-onboarding-try-it-animation {
+  width: 100%;
+  max-width: 400px;
+}
+
+.smb-onboarding-try-it-bar {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  animation: smb-onboarding-pulse 2s var(--ease-out) infinite;
+}
+
+.smb-onboarding-try-it-bar-inner {
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+}
+
+@keyframes smb-onboarding-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(0.98); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+/* ─── Navigation Guide ───────────────────────────────────────────────────── */
+
+.smb-onboarding-keys-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.smb-onboarding-key-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+}
+
+.smb-onboarding-key-badges {
+  display: flex;
+  gap: var(--space-1);
+  min-width: 64px;
+  justify-content: center;
+}
+
+.smb-onboarding-key-badge {
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  min-width: 28px;
+  text-align: center;
+}
+
+.smb-onboarding-key-action {
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+}
+
+/* ─── Completion Step ────────────────────────────────────────────────────── */
+
+.smb-onboarding-tips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 400px;
+  margin: 0 auto var(--space-6);
+  text-align: left;
+}
+
+.smb-onboarding-tip {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+}
+
+.smb-onboarding-tip-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-lg);
+}
+
+.smb-onboarding-tip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.smb-onboarding-tip-content strong {
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.smb-onboarding-tip-content span {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* ─── Buttons ────────────────────────────────────────────────────────────── */
+
+.smb-onboarding-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 40px;
+}
+
+.smb-onboarding-next-btn,
+.smb-onboarding-complete-btn {
+  padding: var(--space-3) var(--space-8);
+  font-size: var(--text-base);
+  font-weight: 500;
+  font-family: inherit;
+  color: #ffffff;
+  background: var(--color-accent);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.smb-onboarding-next-btn:hover,
+.smb-onboarding-complete-btn:hover {
+  background: var(--color-accent-hover);
+}
+
+.smb-onboarding-next-btn:focus-visible,
+.smb-onboarding-complete-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.smb-onboarding-complete-btn {
+  margin-top: var(--space-4);
+}
+
+/* ─── Focus Rings ────────────────────────────────────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ─── Reduced Motion ─────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
