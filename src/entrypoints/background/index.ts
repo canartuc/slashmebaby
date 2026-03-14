@@ -129,6 +129,38 @@ export async function createMessageRouter() {
       return { groups };
     }
 
+    // Switch to an existing tab
+    const msg = message as Record<string, unknown>;
+    if (msg.type === 'SWITCH_TAB') {
+      const payload = msg.payload as { tabId: number };
+      try {
+        await chrome.tabs.update(payload.tabId, { active: true });
+        const tab = await chrome.tabs.get(payload.tabId);
+        if (tab.windowId) {
+          await chrome.windows.update(tab.windowId, { focused: true });
+        }
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    }
+
+    // Navigate current tab to a URL
+    if (msg.type === 'NAVIGATE') {
+      const payload = msg.payload as { url: string };
+      try {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (activeTab?.id) {
+          await chrome.tabs.update(activeTab.id, { url: payload.url });
+        } else {
+          await chrome.tabs.create({ url: payload.url });
+        }
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    }
+
     if (isExecuteActionRequest(message)) {
       const { actionId, targetTabId } = message.payload;
       // Strip 'action-' prefix before delegating to registry

@@ -48,6 +48,16 @@ export interface GetSettingsResponse {
   settings: UserSettings;
 }
 
+export interface SwitchTabRequest {
+  type: 'SWITCH_TAB';
+  payload: { tabId: number };
+}
+
+export interface NavigateRequest {
+  type: 'NAVIGATE';
+  payload: { url: string };
+}
+
 // ─── Background → Content Messages ───────────────────────────────────────────
 
 export interface ToggleOverlayCommand {

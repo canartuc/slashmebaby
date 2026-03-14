@@ -84,14 +84,23 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
 
   const handleSelectItem = useCallback(
     (item: SearchResultItem) => {
-      // If item has a URL, it's a tab/bookmark/history item — switch to it
-      if (item.url) {
+      if (item.id.startsWith('tab-')) {
+        // Switch to existing tab
+        const tabId = parseInt(item.id.replace('tab-', ''), 10);
         chrome.runtime.sendMessage({
-          type: 'EXECUTE_ACTION',
-          payload: { actionId: item.id },
+          type: 'SWITCH_TAB',
+          payload: { tabId },
         });
-      } else {
-        // Action item
+      } else if (item.id.startsWith('bookmark-') || item.id.startsWith('history-')) {
+        // Navigate to URL
+        if (item.url) {
+          chrome.runtime.sendMessage({
+            type: 'NAVIGATE',
+            payload: { url: item.url },
+          });
+        }
+      } else if (item.id.startsWith('action-')) {
+        // Execute action
         chrome.runtime.sendMessage({
           type: 'EXECUTE_ACTION',
           payload: { actionId: item.id },

@@ -131,7 +131,7 @@ describe('CommandBar', () => {
     });
   });
 
-  it('sends EXECUTE_ACTION and dismisses when selecting an item', async () => {
+  it('sends SWITCH_TAB and dismisses when selecting a tab item', async () => {
     const onDismiss = vi.fn();
     render(<CommandBar onDismiss={onDismiss} />);
 
@@ -141,13 +141,12 @@ describe('CommandBar', () => {
 
     fireEvent.click(screen.getByText('Gmail'));
 
-    // Verify EXECUTE_ACTION was sent (no callback passed)
     const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
-    const executeCall = calls.find(
-      (c) => (c[0] as { type: string }).type === 'EXECUTE_ACTION'
+    const switchCall = calls.find(
+      (c) => (c[0] as { type: string }).type === 'SWITCH_TAB'
     );
-    expect(executeCall).toBeTruthy();
-    expect((executeCall![0] as { payload: { actionId: string } }).payload.actionId).toBe('tab-1');
+    expect(switchCall).toBeTruthy();
+    expect((switchCall![0] as { payload: { tabId: number } }).payload.tabId).toBe(1);
     expect(onDismiss).toHaveBeenCalled();
   });
 
