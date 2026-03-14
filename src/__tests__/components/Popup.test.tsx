@@ -137,7 +137,8 @@ describe('Popup', () => {
     render(<Popup />);
 
     const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
-    fireEvent.change(input, { target: { value: 'gmail' } });
+    (input as HTMLInputElement).value = 'gmail';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
 
     // Should send a SEARCH message
     await waitFor(() => {

@@ -96,15 +96,7 @@ describe('CommandBar', () => {
     });
   });
 
-  it('calls onDismiss when pressing Escape', async () => {
-    const onDismiss = vi.fn();
-    render(<CommandBar onDismiss={onDismiss} />);
-    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
-
-    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
-    fireEvent.keyDown(input, { key: 'Escape' });
-    expect(onDismiss).toHaveBeenCalledTimes(1);
-  });
+  // Escape is handled in content script (document-level listener), tested in E2E
 
   it('calls onDismiss when pressing Backspace on empty query', async () => {
     const onDismiss = vi.fn();
@@ -112,7 +104,7 @@ describe('CommandBar', () => {
     await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
 
     const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
-    fireEvent.keyDown(input, { key: 'Backspace' });
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
@@ -122,7 +114,7 @@ describe('CommandBar', () => {
     await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
 
     const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
-    fireEvent.keyDown(input, { key: 'Enter' });
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 
     const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
     const switchCall = calls.find(
@@ -136,7 +128,7 @@ describe('CommandBar', () => {
     const onDismiss = vi.fn();
     const { container } = render(<CommandBar onDismiss={onDismiss} />);
     const backdrop = container.querySelector('.smb-backdrop')!;
-    fireEvent.click(backdrop);
+    backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 

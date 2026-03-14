@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { ResultGroup, SearchResultItem, UserSettings } from '../../lib/messaging';
 import { DEFAULT_SETTINGS } from '../../lib/messaging';
 import { SearchInput } from './SearchInput';
@@ -8,6 +8,10 @@ import { useTheme } from '../../hooks/useTheme';
 
 export interface CommandBarProps {
   onDismiss: () => void;
+}
+
+function countTotalItems(groups: ResultGroup[]): number {
+  return groups.reduce((sum, g) => sum + g.items.length, 0);
 }
 
 function computeGroupBoundaries(groups: ResultGroup[]): number[] {
@@ -20,14 +24,7 @@ function computeGroupBoundaries(groups: ResultGroup[]): number[] {
   return boundaries;
 }
 
-function countTotalItems(groups: ResultGroup[]): number {
-  return groups.reduce((sum, g) => sum + g.items.length, 0);
-}
-
-function getItemAtIndex(
-  groups: ResultGroup[],
-  index: number
-): SearchResultItem | undefined {
+function getItemAtIndex(groups: ResultGroup[], index: number): SearchResultItem | undefined {
   let offset = 0;
   for (const group of groups) {
     if (index < offset + group.items.length) {
@@ -49,19 +46,23 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   const totalItems = useMemo(() => countTotalItems(groups), [groups]);
   const groupBoundaries = useMemo(() => computeGroupBoundaries(groups), [groups]);
 
+  // Use refs so the keydown handler always sees latest values without re-binding
+  const stateRef = useRef({ query, selectedIndex, totalItems, groupBoundaries, groups });
+  stateRef.current = { query, selectedIndex, totalItems, groupBoundaries, groups };
+
   useEffect(() => {
     setSelectedIndex(0);
   }, [groups]);
 
   useEffect(() => {
     chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (response) => {
-      if (response && response.settings) {
+      if (response?.settings) {
         setSettings(response.settings);
       }
     });
   }, []);
 
-  const handleSelectItem = useCallback(
+  const executeItem = useCallback(
     (item: SearchResultItem) => {
       const sendAndDismiss = (message: Record<string, unknown>) => {
         chrome.runtime.sendMessage(message, () => {
@@ -83,68 +84,73 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     [onDismiss]
   );
 
+  // Stable native keydown handler — uses ref to read latest state
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: KeyboardEvent) => {
+      const { query: q, selectedIndex: idx, totalItems: total, groupBoundaries: bounds, groups: g } = stateRef.current;
+
       switch (e.key) {
-        case 'Escape': {
-          e.preventDefault();
-          onDismiss();
-          break;
-        }
         case 'ArrowDown': {
           e.preventDefault();
-          if (totalItems === 0) return;
-          setSelectedIndex((prev) => (prev >= totalItems - 1 ? 0 : prev + 1));
+          if (total === 0) return;
+          setSelectedIndex(idx >= total - 1 ? 0 : idx + 1);
           break;
         }
         case 'ArrowUp': {
           e.preventDefault();
-          if (totalItems === 0) return;
-          setSelectedIndex((prev) => (prev <= 0 ? totalItems - 1 : prev - 1));
+          if (total === 0) return;
+          setSelectedIndex(idx <= 0 ? total - 1 : idx - 1);
           break;
         }
         case 'Tab': {
           e.preventDefault();
-          if (totalItems === 0 || groupBoundaries.length === 0) return;
+          if (total === 0 || bounds.length === 0) return;
           if (e.shiftKey) {
-            const prev = [...groupBoundaries].reverse().find((b) => b < selectedIndex);
-            setSelectedIndex(prev ?? groupBoundaries[groupBoundaries.length - 1]);
+            const prev = [...bounds].reverse().find((b) => b < idx);
+            setSelectedIndex(prev ?? bounds[bounds.length - 1]);
           } else {
-            const next = groupBoundaries.find((b) => b > selectedIndex);
-            setSelectedIndex(next ?? groupBoundaries[0]);
+            const next = bounds.find((b) => b > idx);
+            setSelectedIndex(next ?? bounds[0]);
           }
           break;
         }
         case 'Enter': {
           e.preventDefault();
-          if (totalItems === 0) return;
-          const item = getItemAtIndex(groups, selectedIndex);
-          if (item) handleSelectItem(item);
+          if (total === 0) return;
+          const item = getItemAtIndex(g, idx);
+          if (item) executeItem(item);
           break;
         }
         case 'Backspace': {
-          if (query === '') {
+          if (q === '') {
             e.preventDefault();
             onDismiss();
           }
           break;
         }
+        // Escape is handled in content script, not here
       }
     },
-    [onDismiss, totalItems, selectedIndex, groupBoundaries, groups, query, handleSelectItem]
+    [onDismiss, executeItem]
   );
+
+  // Backdrop click to dismiss — use native listener since React events may not work
+  const backdropRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = backdropRef.current;
+    if (!el) return;
+
+    const handler = (e: MouseEvent) => {
+      if (e.target === el) onDismiss();
+    };
+    el.addEventListener('click', handler);
+    return () => el.removeEventListener('click', handler);
+  }, [onDismiss]);
 
   const positionClass = `smb-container--${settings.position}`;
 
   return (
-    <div
-      className="smb-backdrop"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onDismiss();
-        }
-      }}
-    >
+    <div ref={backdropRef} className="smb-backdrop">
       <div
         className={`smb-container ${positionClass}`}
         data-theme={theme}
@@ -157,13 +163,9 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
           groups={groups}
           selectedIndex={selectedIndex}
           showFavicons={settings.showFavicons}
-          onSelectItem={handleSelectItem}
+          onSelectItem={executeItem}
         />
-        <div
-          className="smb-sr-only"
-          aria-live="polite"
-          aria-atomic="true"
-        >
+        <div className="smb-sr-only" aria-live="polite" aria-atomic="true">
           {!isLoading && totalItems > 0
             ? `${totalItems} result${totalItems === 1 ? '' : 's'}${query ? ` for '${query}'` : ''}`
             : ''}

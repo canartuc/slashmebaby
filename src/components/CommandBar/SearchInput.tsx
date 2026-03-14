@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 
 export interface SearchInputProps {
   query: string;
   onQueryChange: (q: string) => void;
-  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  onKeyDown?: (e: KeyboardEvent) => void;
 }
 
 const SearchIcon: React.FC = () => (
@@ -25,17 +25,41 @@ const SearchIcon: React.FC = () => (
 );
 
 export const SearchInput: React.FC<SearchInputProps> = ({ query, onQueryChange, onKeyDown }) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Attach native keydown listener directly — React events don't work in Shadow DOM
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el || !onKeyDown) return;
+
+    el.addEventListener('keydown', onKeyDown);
+    return () => el.removeEventListener('keydown', onKeyDown);
+  }, [onKeyDown]);
+
+  // Attach native input listener for onChange — React onChange may not work in Shadow DOM
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+
+    const handler = () => onQueryChange(el.value);
+    el.addEventListener('input', handler);
+    return () => el.removeEventListener('input', handler);
+  }, [onQueryChange]);
+
+  // Auto-focus
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
   return (
     <div className="smb-input-wrapper">
       <SearchIcon />
       <input
+        ref={inputRef}
         className="smb-input"
         type="text"
-        value={query}
-        onChange={(e) => onQueryChange(e.target.value)}
-        onKeyDown={onKeyDown}
+        defaultValue={query}
         placeholder="Search tabs, bookmarks, actions..."
-        autoFocus
         autoComplete="off"
         spellCheck={false}
         autoCorrect="off"

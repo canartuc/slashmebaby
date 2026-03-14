@@ -19,8 +19,10 @@ describe('SearchInput', () => {
   it('calls onQueryChange when input value changes', () => {
     const onChange = vi.fn();
     render(<SearchInput query="" onQueryChange={onChange} />);
-    const input = screen.getByRole('combobox');
-    fireEvent.change(input, { target: { value: 'react' } });
+    const input = screen.getByRole('combobox') as HTMLInputElement;
+    // Native input event listener — set value then dispatch
+    input.value = 'react';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
     expect(onChange).toHaveBeenCalledWith('react');
   });
 
