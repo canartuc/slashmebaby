@@ -135,8 +135,8 @@
 /* ─── Container ──────────────────────────────────────────────────────────── */
 
 .smb-container {
-  width: 100%;
-  max-width: 640px;
+  width: 90%;
+  max-width: min(768px, 60vw);
   background: var(--color-bg-primary);
   border-radius: var(--radius-lg);
   padding: var(--space-5) 0;
@@ -207,7 +207,7 @@
 /* ─── Results Container ──────────────────────────────────────────────────── */
 
 .smb-results {
-  max-height: 400px;
+  max-height: min(480px, 50vh);
   overflow-y: auto;
   overflow-x: hidden;
   text-rendering: optimizeSpeed;
