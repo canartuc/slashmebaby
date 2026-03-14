@@ -16,7 +16,8 @@ export default defineConfig({
     commands: {
       'toggle-command-bar': {
         suggested_key: {
-          default: 'Alt+Space',
+          default: 'Ctrl+Shift+Space',
+          mac: 'Command+Shift+Space',
         },
         description: 'Open SlashMeBaby command bar',
       },

@@ -132,7 +132,7 @@ describe('Type Guards', () => {
 
 describe('DEFAULT_SETTINGS', () => {
   it('has the correct shortcut', () => {
-    expect(DEFAULT_SETTINGS.shortcut).toBe('Alt+Space');
+    expect(DEFAULT_SETTINGS.shortcut).toBe('Ctrl+Shift+Space');
   });
 
   it('has position center', () => {

@@ -255,7 +255,7 @@ describe('createMessageRouter', () => {
       const request: GetSettingsRequest = { type: 'GET_SETTINGS' };
 
       const response = await router(request) as { settings: { shortcut: string } };
-      expect(response.settings.shortcut).toBe('Alt+Space');
+      expect(response.settings.shortcut).toBe('Ctrl+Shift+Space');
     });
   });
 

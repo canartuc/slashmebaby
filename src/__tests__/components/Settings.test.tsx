@@ -29,7 +29,7 @@ describe('ShortcutSetting', () => {
     const onUpdate = vi.fn();
     render(<ShortcutSetting settings={DEFAULT_SETTINGS} onUpdate={onUpdate} />);
 
-    expect(screen.getByText('Alt + Space')).toBeTruthy();
+    expect(screen.getByText('Ctrl + Shift + Space')).toBeTruthy();
     expect(screen.getByText('Ctrl + Shift + L')).toBeTruthy();
     expect(screen.getByText('Ctrl + .')).toBeTruthy();
     expect(screen.getByText('Ctrl + /')).toBeTruthy();
@@ -41,7 +41,7 @@ describe('ShortcutSetting', () => {
 
     const radios = screen.getAllByRole('radio') as HTMLInputElement[];
     const selected = radios.find((r) => r.checked);
-    expect(selected?.value).toBe('Alt+Space');
+    expect(selected?.value).toBe('Ctrl+Shift+Space');
   });
 
   it('calls onUpdate when a different shortcut is selected', () => {

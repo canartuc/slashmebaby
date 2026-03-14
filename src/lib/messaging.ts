@@ -66,7 +66,7 @@ export interface UserSettings {
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
-  shortcut: 'Alt+Space',
+  shortcut: 'Ctrl+Shift+Space',
   position: 'center',
   theme: 'system',
   maxResultsPerGroup: 5,

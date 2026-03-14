@@ -14,9 +14,9 @@ Object.defineProperty(window, 'close', { value: mockClose, writable: true });
 describe('ShortcutPicker', () => {
   it('renders all 4 shortcut options', () => {
     const onSelect = vi.fn();
-    render(<ShortcutPicker selectedShortcut="Alt+Space" onSelect={onSelect} />);
+    render(<ShortcutPicker selectedShortcut="Ctrl+Shift+Space" onSelect={onSelect} />);
 
-    expect(screen.getByText('Alt + Space')).toBeTruthy();
+    expect(screen.getByText('Ctrl + Shift + Space')).toBeTruthy();
     expect(screen.getByText('Ctrl + Shift + L')).toBeTruthy();
     expect(screen.getByText('Ctrl + .')).toBeTruthy();
     expect(screen.getByText('Ctrl + /')).toBeTruthy();
@@ -35,14 +35,14 @@ describe('ShortcutPicker', () => {
 
   it('calls onSelect when an option is clicked', () => {
     const onSelect = vi.fn();
-    render(<ShortcutPicker selectedShortcut="Alt+Space" onSelect={onSelect} />);
+    render(<ShortcutPicker selectedShortcut="Ctrl+Shift+Space" onSelect={onSelect} />);
 
     fireEvent.click(screen.getByText('Ctrl + /'));
     expect(onSelect).toHaveBeenCalledWith('Ctrl+/');
   });
 
   it('renders the step title', () => {
-    render(<ShortcutPicker selectedShortcut="Alt+Space" onSelect={vi.fn()} />);
+    render(<ShortcutPicker selectedShortcut="Ctrl+Shift+Space" onSelect={vi.fn()} />);
     expect(screen.getByText('Pick your shortcut')).toBeTruthy();
   });
 });
@@ -55,14 +55,14 @@ describe('TryItStep', () => {
   });
 
   it('renders the animated bar placeholder', () => {
-    const { container } = render(<TryItStep shortcut="Alt+Space" />);
+    const { container } = render(<TryItStep shortcut="Ctrl+Shift+Space" />);
 
     const bar = container.querySelector('.smb-onboarding-try-it-bar');
     expect(bar).toBeTruthy();
   });
 
   it('renders the step title', () => {
-    render(<TryItStep shortcut="Alt+Space" />);
+    render(<TryItStep shortcut="Ctrl+Shift+Space" />);
     expect(screen.getByText('Try it out!')).toBeTruthy();
   });
 });

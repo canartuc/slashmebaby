@@ -5,12 +5,21 @@ export interface ShortcutPickerProps {
   onSelect: (shortcut: string) => void;
 }
 
-const SHORTCUT_OPTIONS = [
-  { value: 'Alt+Space', label: 'Alt + Space', description: 'Quick and universal' },
-  { value: 'Ctrl+Shift+L', label: 'Ctrl + Shift + L', description: 'Familiar for launcher users' },
-  { value: 'Ctrl+.', label: 'Ctrl + .', description: 'Fast single-hand access' },
-  { value: 'Ctrl+/', label: 'Ctrl + /', description: 'Common command shortcut' },
-] as const;
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent);
+
+const SHORTCUT_OPTIONS = isMac
+  ? [
+      { value: 'Command+Shift+Space', label: '⌘ + Shift + Space', description: 'Quick and natural' },
+      { value: 'Command+Shift+L', label: '⌘ + Shift + L', description: 'Familiar for launcher users' },
+      { value: 'Command+.', label: '⌘ + .', description: 'Fast single-hand access' },
+      { value: 'Command+/', label: '⌘ + /', description: 'Common command shortcut' },
+    ] as const
+  : [
+      { value: 'Ctrl+Shift+Space', label: 'Ctrl + Shift + Space', description: 'Quick and universal' },
+      { value: 'Ctrl+Shift+L', label: 'Ctrl + Shift + L', description: 'Familiar for launcher users' },
+      { value: 'Ctrl+.', label: 'Ctrl + .', description: 'Fast single-hand access' },
+      { value: 'Ctrl+/', label: 'Ctrl + /', description: 'Common command shortcut' },
+    ] as const;
 
 export const ShortcutPicker: React.FC<ShortcutPickerProps> = ({ selectedShortcut, onSelect }) => {
   return (

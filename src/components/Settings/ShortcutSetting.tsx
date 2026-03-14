@@ -6,12 +6,21 @@ export interface ShortcutSettingProps {
   onUpdate: <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => void;
 }
 
-const SHORTCUT_OPTIONS = [
-  { value: 'Alt+Space', label: 'Alt + Space' },
-  { value: 'Ctrl+Shift+L', label: 'Ctrl + Shift + L' },
-  { value: 'Ctrl+.', label: 'Ctrl + .' },
-  { value: 'Ctrl+/', label: 'Ctrl + /' },
-] as const;
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent);
+
+const SHORTCUT_OPTIONS = isMac
+  ? [
+      { value: 'Command+Shift+Space', label: '⌘ + Shift + Space' },
+      { value: 'Command+Shift+L', label: '⌘ + Shift + L' },
+      { value: 'Command+.', label: '⌘ + .' },
+      { value: 'Command+/', label: '⌘ + /' },
+    ] as const
+  : [
+      { value: 'Ctrl+Shift+Space', label: 'Ctrl + Shift + Space' },
+      { value: 'Ctrl+Shift+L', label: 'Ctrl + Shift + L' },
+      { value: 'Ctrl+.', label: 'Ctrl + .' },
+      { value: 'Ctrl+/', label: 'Ctrl + /' },
+    ] as const;
 
 export const ShortcutSetting: React.FC<ShortcutSettingProps> = ({ settings, onUpdate }) => {
   return (

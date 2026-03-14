@@ -27,7 +27,7 @@ describe('App', () => {
         if (message.type === 'GET_SETTINGS' && callback) {
           callback({
             settings: {
-              shortcut: 'Alt+Space',
+              shortcut: 'Ctrl+Shift+Space',
               position: 'center',
               theme: 'dark',
               maxResultsPerGroup: 5,
