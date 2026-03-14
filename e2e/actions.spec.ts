@@ -1,9 +1,9 @@
-import { test, expect, chromium } from '@playwright/test';
+import { test, expect, chromium, type BrowserContext, type Page } from '@playwright/test';
 import path from 'path';
 
 const EXT_PATH = path.resolve('.output/chrome-mv3');
 
-async function launch() {
+async function launch(): Promise<BrowserContext> {
   const ctx = await chromium.launchPersistentContext('', {
     headless: false,
     args: [
@@ -16,118 +16,226 @@ async function launch() {
   return ctx;
 }
 
-test('Action: t (new tab) works', async () => {
-  const ctx = await launch();
+async function openPageAndBar(ctx: BrowserContext, url = 'https://example.com'): Promise<Page> {
   const page = await ctx.newPage();
-  await page.goto('https://example.com');
+  await page.goto(url);
+  await page.waitForLoadState('domcontentloaded');
   await new Promise(r => setTimeout(r, 1000));
-
-  const before = ctx.pages().length;
   await page.keyboard.press('Meta+Shift+Space');
   await new Promise(r => setTimeout(r, 800));
+  return page;
+}
+
+async function isOverlayClosed(page: Page): Promise<boolean> {
+  try {
+    return await page.evaluate(() => {
+      const host = document.getElementById('slashmebaby-root');
+      return !host?.shadowRoot?.querySelector('.smb-backdrop');
+    });
+  } catch {
+    return true; // page closed = overlay closed
+  }
+}
+
+// ─── t: New Tab ─────────────────────────────────────────────────────────────
+
+test('Action t: New Tab', async () => {
+  const ctx = await launch();
+  const page = await openPageAndBar(ctx);
+  const before = ctx.pages().length;
+
   await page.keyboard.press('t');
   await new Promise(r => setTimeout(r, 1000));
 
   expect(ctx.pages().length).toBeGreaterThan(before);
-  console.log('NEW TAB: OK');
   await ctx.close();
 });
 
-test('Action: c (close tab) works', async () => {
+// ─── c: Close Tab ───────────────────────────────────────────────────────────
+
+test('Action c: Close Tab', async () => {
   const ctx = await launch();
-
-  // Create 2 pages so closing one doesn't close the browser
-  const page1 = await ctx.newPage();
-  await page1.goto('https://example.com');
-  await new Promise(r => setTimeout(r, 1000));
-
-  const page2 = await ctx.newPage();
-  await page2.goto('https://example.org');
+  const p1 = await ctx.newPage();
+  await p1.goto('https://example.com');
+  await new Promise(r => setTimeout(r, 500));
+  const p2 = await ctx.newPage();
+  await p2.goto('https://example.org');
   await new Promise(r => setTimeout(r, 1000));
 
   const before = ctx.pages().length;
-  console.log('Pages before close:', before);
-
-  // Open command bar and press 'c'
-  await page2.keyboard.press('Meta+Shift+Space');
+  await p2.keyboard.press('Meta+Shift+Space');
   await new Promise(r => setTimeout(r, 800));
-  await page2.keyboard.press('c');
+  await p2.keyboard.press('c');
   await new Promise(r => setTimeout(r, 1500));
 
-  const after = ctx.pages().length;
-  console.log('Pages after close:', after);
-  expect(after).toBeLessThan(before);
-  console.log('CLOSE TAB: OK');
+  expect(ctx.pages().length).toBeLessThan(before);
   await ctx.close();
 });
 
-test('Action: p (pin tab) works', async () => {
+// ─── x: Close Other Tabs ────────────────────────────────────────────────────
+
+test('Action x: Close Other Tabs', async () => {
   const ctx = await launch();
-  const page = await ctx.newPage();
-  await page.goto('https://example.com');
+  const p1 = await ctx.newPage();
+  await p1.goto('https://example.com');
+  await new Promise(r => setTimeout(r, 500));
+  const p2 = await ctx.newPage();
+  await p2.goto('https://example.org');
+  await new Promise(r => setTimeout(r, 500));
+  const p3 = await ctx.newPage();
+  await p3.goto('https://example.net');
   await new Promise(r => setTimeout(r, 1000));
 
-  // Open command bar and press 'p'
-  await page.keyboard.press('Meta+Shift+Space');
+  await p3.keyboard.press('Meta+Shift+Space');
   await new Promise(r => setTimeout(r, 800));
+  await p3.keyboard.press('x');
+  await new Promise(r => setTimeout(r, 1500));
+
+  // p3 survives, others closed. about:blank default may survive too.
+  expect(ctx.pages().length).toBeLessThanOrEqual(2);
+  await ctx.close();
+});
+
+// ─── p: Pin Tab ─────────────────────────────────────────────────────────────
+
+test('Action p: Pin Tab', async () => {
+  const ctx = await launch();
+  const page = await openPageAndBar(ctx);
+
   await page.keyboard.press('p');
-  await new Promise(r => setTimeout(r, 1500));
+  await new Promise(r => setTimeout(r, 1000));
 
-  // Check if the command bar closed (action executed)
-  const isOpen = await page.evaluate(() => {
-    const host = document.getElementById('slashmebaby-root');
-    return !!host?.shadowRoot?.querySelector('.smb-backdrop');
-  }).catch(() => false);
-  console.log('Overlay still open after pin:', isOpen);
-  // Pin action should close the overlay
-  expect(isOpen).toBe(false);
-  console.log('PIN TAB: OK');
+  expect(await isOverlayClosed(page)).toBe(true);
   await ctx.close();
 });
 
-test('Action: r (reload tab) works', async () => {
+// ─── m: Mute Tab ────────────────────────────────────────────────────────────
+
+test('Action m: Mute Tab', async () => {
   const ctx = await launch();
-  const page = await ctx.newPage();
-  await page.goto('https://example.com');
+  const page = await openPageAndBar(ctx);
+
+  await page.keyboard.press('m');
   await new Promise(r => setTimeout(r, 1000));
 
-  await page.keyboard.press('Meta+Shift+Space');
-  await new Promise(r => setTimeout(r, 800));
+  expect(await isOverlayClosed(page)).toBe(true);
+  await ctx.close();
+});
+
+// ─── d: Duplicate Tab ───────────────────────────────────────────────────────
+
+test('Action d: Duplicate Tab', async () => {
+  const ctx = await launch();
+  const page = await openPageAndBar(ctx);
+  const before = ctx.pages().length;
+
+  await page.keyboard.press('d');
+  await new Promise(r => setTimeout(r, 1500));
+
+  expect(ctx.pages().length).toBeGreaterThan(before);
+  const urls = ctx.pages().map(p => p.url());
+  const exampleCount = urls.filter(u => u.includes('example.com')).length;
+  expect(exampleCount).toBeGreaterThanOrEqual(2);
+  await ctx.close();
+});
+
+// ─── w: Move to New Window ──────────────────────────────────────────────────
+
+test('Action w: Move to New Window', async () => {
+  const ctx = await launch();
+  const page = await openPageAndBar(ctx);
+
+  await page.keyboard.press('w');
+  await new Promise(r => setTimeout(r, 1500));
+
+  expect(await isOverlayClosed(page)).toBe(true);
+  await ctx.close();
+});
+
+// ─── r: Reload Tab ──────────────────────────────────────────────────────────
+
+test('Action r: Reload Tab', async () => {
+  const ctx = await launch();
+  const page = await openPageAndBar(ctx);
+
   await page.keyboard.press('r');
   await new Promise(r => setTimeout(r, 1500));
 
-  const isOpen = await page.evaluate(() => {
-    const host = document.getElementById('slashmebaby-root');
-    return !!host?.shadowRoot?.querySelector('.smb-backdrop');
-  }).catch(() => false);
-  expect(isOpen).toBe(false);
-  console.log('RELOAD TAB: OK');
+  expect(await isOverlayClosed(page)).toBe(true);
+  expect(page.url()).toContain('example.com');
   await ctx.close();
 });
 
-test('Action: , (settings) opens settings page', async () => {
+// ─── u: Go to URL ───────────────────────────────────────────────────────────
+
+test('Action u: Go to URL', async () => {
   const ctx = await launch();
-  const page = await ctx.newPage();
-  await page.goto('https://example.com');
+  const page = await openPageAndBar(ctx);
+
+  await page.keyboard.press('u');
+  await new Promise(r => setTimeout(r, 1000));
+
+  expect(await isOverlayClosed(page)).toBe(true);
+  await ctx.close();
+});
+
+// ─── z: Recently Closed ─────────────────────────────────────────────────────
+
+test('Action z: Recently Closed', async () => {
+  const ctx = await launch();
+  const page = await openPageAndBar(ctx);
+
+  await page.keyboard.press('z');
+  await new Promise(r => setTimeout(r, 1000));
+
+  expect(await isOverlayClosed(page)).toBe(true);
+  await ctx.close();
+});
+
+// ─── q: Close All Duplicates ─────────────────────────────────────────────────
+
+test('Action q: Close All Duplicates', async () => {
+  const ctx = await launch();
+  const p1 = await ctx.newPage();
+  await p1.goto('https://example.com');
+  await new Promise(r => setTimeout(r, 500));
+  const p2 = await ctx.newPage();
+  await p2.goto('https://example.com'); // duplicate
   await new Promise(r => setTimeout(r, 1000));
 
   const before = ctx.pages().length;
-  await page.keyboard.press('Meta+Shift+Space');
+  await p2.keyboard.press('Meta+Shift+Space');
   await new Promise(r => setTimeout(r, 800));
+  await p2.keyboard.press('q');
+  await new Promise(r => setTimeout(r, 1500));
 
-  // Press comma for settings
+  expect(ctx.pages().length).toBeLessThan(before);
+  await ctx.close();
+});
+
+// ─── s: Sort by Domain ──────────────────────────────────────────────────────
+
+test('Action s: Sort by Domain', async () => {
+  const ctx = await launch();
+  const page = await openPageAndBar(ctx);
+
+  await page.keyboard.press('s');
+  await new Promise(r => setTimeout(r, 1000));
+
+  expect(await isOverlayClosed(page)).toBe(true);
+  await ctx.close();
+});
+
+// ─── ,: Settings ────────────────────────────────────────────────────────────
+
+test('Action comma: Settings', async () => {
+  const ctx = await launch();
+  const page = await openPageAndBar(ctx);
+
   await page.keyboard.press(',');
   await new Promise(r => setTimeout(r, 2000));
 
-  // Settings should open in a new tab
-  const after = ctx.pages().length;
-  console.log('Pages before settings:', before, 'after:', after);
-
-  // Check if any page has settings URL
   const urls = ctx.pages().map(p => p.url());
-  console.log('URLs:', urls);
-  const hasSettings = urls.some(u => u.includes('settings'));
-  expect(hasSettings).toBe(true);
-  console.log('SETTINGS: OK');
+  expect(urls.some(u => u.includes('settings'))).toBe(true);
   await ctx.close();
 });
