@@ -114,7 +114,7 @@ Smart suggestions: 3 recent tabs + 2 frequent bookmarks + 2 contextual actions (
 | `Tab` | Jump to next group header |
 | `Enter` | Execute selected item |
 | `Escape` | Dismiss overlay |
-| `Backspace` on empty | Dismiss overlay |
+| `Backspace` on empty | No action (does not dismiss) |
 | `>` prefix | Filter to actions only |
 
 ## 4. Actions Registry (v1)
