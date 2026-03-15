@@ -98,15 +98,15 @@ export default defineContentScript({
       // Forward to shadow DOM — the CommandBar decides what to do based on mode
       const shadowRoot = host.shadowRoot;
       if (shadowRoot) {
-        // Don't intercept if the focused element is an input in search mode
-        const activeEl = shadowRoot.activeElement;
-        const isInputFocused = activeEl?.tagName === 'INPUT';
+        // Don't intercept if a writable input is focused (search mode)
+        const activeEl = shadowRoot.activeElement as HTMLInputElement | null;
+        const isSearchInputActive = activeEl?.tagName === 'INPUT' && !activeEl?.readOnly;
 
         // Always forward special keys
         const specialKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Tab', '/'];
         const isSpecialKey = specialKeys.includes(e.key);
 
-        if (isSpecialKey || !isInputFocused) {
+        if (isSpecialKey || !isSearchInputActive) {
           e.preventDefault();
           e.stopPropagation();
           // Normalize key to lowercase so label matching works with Shift held
