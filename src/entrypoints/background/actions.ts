@@ -235,6 +235,11 @@ export class ActionRegistry {
   }
 
   private async undoCloseTab(): Promise<ExecuteActionResponse> {
+    // Remember the current active tab so we can return to it after restoring
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const activeTabId = activeTab?.id;
+    const activeWindowId = activeTab?.windowId;
+
     const count = Math.max(1, this.lastCloseCount);
     const sessions = await chrome.sessions.getRecentlyClosed({ maxResults: count });
 
@@ -246,7 +251,15 @@ export class ActionRegistry {
       }
     }
 
-    this.lastCloseCount = 1; // reset after undo
+    // Switch back to the tab the user was on
+    if (activeTabId) {
+      await chrome.tabs.update(activeTabId, { active: true });
+      if (activeWindowId) {
+        await chrome.windows.update(activeWindowId, { focused: true });
+      }
+    }
+
+    this.lastCloseCount = 1;
     return { success: true };
   }
 }
