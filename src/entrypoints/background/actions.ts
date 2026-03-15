@@ -24,6 +24,9 @@ const ACTION_DEFINITIONS: ActionDefinition[] = [
 ];
 
 export class ActionRegistry {
+  // Track how many tabs the last destructive action closed, so undo can restore all
+  private lastCloseCount = 1;
+
   getItems(): SearchableItem[] {
     return ACTION_DEFINITIONS.map((action): SearchableItem => ({
       id: `action-${action.id}`,
@@ -84,6 +87,7 @@ export class ActionRegistry {
   }
 
   private closeTab(tabId: number): Promise<ExecuteActionResponse> {
+    this.lastCloseCount = 1;
     return new Promise((resolve) => {
       chrome.tabs.remove(tabId, () => {
         resolve({ success: true });
@@ -97,6 +101,8 @@ export class ActionRegistry {
         const tabsToClose = tabs
           .filter((tab) => tab.id !== targetTabId && !tab.pinned && tab.id !== undefined)
           .map((tab) => tab.id!);
+
+        this.lastCloseCount = tabsToClose.length;
 
         if (tabsToClose.length === 0) {
           resolve({ success: true });
@@ -178,6 +184,8 @@ export class ActionRegistry {
           }
         }
 
+        this.lastCloseCount = toClose.length;
+
         if (toClose.length === 0) {
           resolve({ success: true });
           return;
@@ -227,15 +235,18 @@ export class ActionRegistry {
   }
 
   private async undoCloseTab(): Promise<ExecuteActionResponse> {
-    const sessions = await chrome.sessions.getRecentlyClosed({ maxResults: 1 });
-    if (sessions.length > 0) {
-      const session = sessions[0];
+    const count = Math.max(1, this.lastCloseCount);
+    const sessions = await chrome.sessions.getRecentlyClosed({ maxResults: count });
+
+    for (const session of sessions) {
       if (session.tab?.sessionId) {
         await chrome.sessions.restore(session.tab.sessionId);
       } else if (session.window?.sessionId) {
         await chrome.sessions.restore(session.window.sessionId);
       }
     }
+
+    this.lastCloseCount = 1; // reset after undo
     return { success: true };
   }
 }
