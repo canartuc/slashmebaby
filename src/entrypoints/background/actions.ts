@@ -23,9 +23,15 @@ const ACTION_DEFINITIONS: ActionDefinition[] = [
   { id: 'settings', title: 'Open Settings', description: 'Open extension settings' },
 ];
 
+type UndoEntry =
+  | { type: 'restore-tabs'; count: number }
+  | { type: 'toggle-pin'; tabId: number }
+  | { type: 'toggle-mute'; tabId: number }
+  | { type: 'close-tab'; tabId: number }
+  | { type: 'none' };
+
 export class ActionRegistry {
-  // Track how many tabs the last destructive action closed, so undo can restore all
-  private lastCloseCount = 1;
+  private lastUndo: UndoEntry = { type: 'none' };
 
   getItems(): SearchableItem[] {
     return ACTION_DEFINITIONS.map((action): SearchableItem => ({
@@ -67,7 +73,7 @@ export class ActionRegistry {
           return { success: true };
 
         case 'recently-closed':
-          return await this.undoCloseTab();
+          return await this.undo();
 
         case 'close-duplicates':
           return await this.closeDuplicates();
@@ -87,7 +93,7 @@ export class ActionRegistry {
   }
 
   private closeTab(tabId: number): Promise<ExecuteActionResponse> {
-    this.lastCloseCount = 1;
+    this.lastUndo = { type: 'restore-tabs', count: 1 };
     return new Promise((resolve) => {
       chrome.tabs.remove(tabId, () => {
         resolve({ success: true });
@@ -102,7 +108,7 @@ export class ActionRegistry {
           .filter((tab) => tab.id !== targetTabId && !tab.pinned && tab.id !== undefined)
           .map((tab) => tab.id!);
 
-        this.lastCloseCount = tabsToClose.length;
+        this.lastUndo = { type: 'restore-tabs', count: tabsToClose.length };
 
         if (tabsToClose.length === 0) {
           resolve({ success: true });
@@ -117,6 +123,7 @@ export class ActionRegistry {
   }
 
   private pinTab(tabId: number): Promise<ExecuteActionResponse> {
+    this.lastUndo = { type: 'toggle-pin', tabId };
     return new Promise((resolve) => {
       chrome.tabs.get(tabId, (tab) => {
         chrome.tabs.update(tabId, { pinned: !tab.pinned }, () => {
@@ -127,6 +134,7 @@ export class ActionRegistry {
   }
 
   private muteTab(tabId: number): Promise<ExecuteActionResponse> {
+    this.lastUndo = { type: 'toggle-mute', tabId };
     return new Promise((resolve) => {
       chrome.tabs.get(tabId, (tab) => {
         const currentlyMuted = tab.mutedInfo?.muted ?? false;
@@ -139,7 +147,10 @@ export class ActionRegistry {
 
   private duplicateTab(tabId: number): Promise<ExecuteActionResponse> {
     return new Promise((resolve) => {
-      chrome.tabs.duplicate(tabId, () => {
+      chrome.tabs.duplicate(tabId, (newTab) => {
+        if (newTab?.id) {
+          this.lastUndo = { type: 'close-tab', tabId: newTab.id };
+        }
         resolve({ success: true });
       });
     });
@@ -163,7 +174,10 @@ export class ActionRegistry {
 
   private newTab(): Promise<ExecuteActionResponse> {
     return new Promise((resolve) => {
-      chrome.tabs.create({}, () => {
+      chrome.tabs.create({}, (tab) => {
+        if (tab?.id) {
+          this.lastUndo = { type: 'close-tab', tabId: tab.id };
+        }
         resolve({ success: true });
       });
     });
@@ -184,7 +198,7 @@ export class ActionRegistry {
           }
         }
 
-        this.lastCloseCount = toClose.length;
+        this.lastUndo = { type: 'restore-tabs', count: toClose.length };
 
         if (toClose.length === 0) {
           resolve({ success: true });
@@ -234,32 +248,65 @@ export class ActionRegistry {
     return { success: true };
   }
 
-  private async undoCloseTab(): Promise<ExecuteActionResponse> {
-    // Remember the current active tab so we can return to it after restoring
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const activeTabId = activeTab?.id;
-    const activeWindowId = activeTab?.windowId;
+  private async undo(): Promise<ExecuteActionResponse> {
+    const entry = this.lastUndo;
+    this.lastUndo = { type: 'none' };
 
-    const count = Math.max(1, this.lastCloseCount);
-    const sessions = await chrome.sessions.getRecentlyClosed({ maxResults: count });
+    switch (entry.type) {
+      case 'restore-tabs': {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const activeTabId = activeTab?.id;
+        const activeWindowId = activeTab?.windowId;
 
-    for (const session of sessions) {
-      if (session.tab?.sessionId) {
-        await chrome.sessions.restore(session.tab.sessionId);
-      } else if (session.window?.sessionId) {
-        await chrome.sessions.restore(session.window.sessionId);
+        const count = Math.max(1, entry.count);
+        const sessions = await chrome.sessions.getRecentlyClosed({ maxResults: count });
+        for (const session of sessions) {
+          if (session.tab?.sessionId) {
+            await chrome.sessions.restore(session.tab.sessionId);
+          } else if (session.window?.sessionId) {
+            await chrome.sessions.restore(session.window.sessionId);
+          }
+        }
+
+        // Stay on the active tab
+        if (activeTabId) {
+          await chrome.tabs.update(activeTabId, { active: true });
+          if (activeWindowId) {
+            await chrome.windows.update(activeWindowId, { focused: true });
+          }
+        }
+        return { success: true };
       }
-    }
 
-    // Switch back to the tab the user was on
-    if (activeTabId) {
-      await chrome.tabs.update(activeTabId, { active: true });
-      if (activeWindowId) {
-        await chrome.windows.update(activeWindowId, { focused: true });
+      case 'toggle-pin': {
+        // Pin/unpin is its own inverse — just toggle again
+        return await this.pinTab(entry.tabId);
       }
-    }
 
-    this.lastCloseCount = 1;
-    return { success: true };
+      case 'toggle-mute': {
+        // Mute/unmute is its own inverse — just toggle again
+        return await this.muteTab(entry.tabId);
+      }
+
+      case 'close-tab': {
+        // Close a tab that was created (undo new-tab or duplicate)
+        await chrome.tabs.remove(entry.tabId);
+        return { success: true };
+      }
+
+      case 'none':
+      default:
+        // Nothing to undo — fall back to restoring last closed
+        const sessions = await chrome.sessions.getRecentlyClosed({ maxResults: 1 });
+        if (sessions.length > 0) {
+          const session = sessions[0];
+          if (session.tab?.sessionId) {
+            await chrome.sessions.restore(session.tab.sessionId);
+          } else if (session.window?.sessionId) {
+            await chrome.sessions.restore(session.window.sessionId);
+          }
+        }
+        return { success: true };
+    }
   }
 }
