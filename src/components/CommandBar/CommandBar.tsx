@@ -136,6 +136,15 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     if (currentMode === 'jump') {
       // Jump mode key handling
       switch (key) {
+        case 'Tab': {
+          // Tab cycles forward through all items, Shift+Tab backward
+          if (shiftKey) {
+            setSelectedIndex(prev => prev <= 0 ? items.length - 1 : prev - 1);
+          } else {
+            setSelectedIndex(prev => prev >= items.length - 1 ? 0 : prev + 1);
+          }
+          break;
+        }
         case 'ArrowDown':
           setSelectedIndex(prev => prev >= items.length - 1 ? 0 : prev + 1);
           break;
@@ -228,6 +237,14 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     // But special keys still work:
     if (currentMode === 'search') {
       switch (key) {
+        case 'Tab': {
+          if (shiftKey) {
+            setSelectedIndex(prev => prev <= 0 ? items.length - 1 : prev - 1);
+          } else {
+            setSelectedIndex(prev => prev >= items.length - 1 ? 0 : prev + 1);
+          }
+          break;
+        }
         case 'ArrowDown':
           setSelectedIndex(prev => prev >= items.length - 1 ? 0 : prev + 1);
           break;
