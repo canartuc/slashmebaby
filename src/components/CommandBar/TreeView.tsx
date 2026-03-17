@@ -156,10 +156,10 @@ export const TreeView: React.FC<TreeViewProps> = ({
         </>
       )}
 
-      {/* Bookmarks tree */}
+      {/* Bookmarks tree — labels offset by tab count */}
       {visibleItems.map((item, index) => {
         const header = getSectionHeader(visibleItems, index);
-        const label = labels.get(index) ?? '';
+        const label = labels.get(allTabs.length + index) ?? '';
         return (
           <React.Fragment key={item.id}>
             {header && (

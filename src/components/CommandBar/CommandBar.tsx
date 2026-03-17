@@ -19,8 +19,9 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
 
   const { pinnedTabs, allTabs, visibleItems, allItems, toggleExpand, getParentId, isLoading } = useTreeData();
-  // Labels assigned to tab grid cards (not tree items)
-  const { labels, labelToIndex, handleKeyPress, pendingPrefix, clearPending } = useLabelAssignment(allTabs.length);
+  // Labels assigned across tabs + bookmarks (continuous sequence)
+  const totalLabelItems = allTabs.length + visibleItems.length;
+  const { labels, labelToIndex, handleKeyPress, pendingPrefix, clearPending } = useLabelAssignment(totalLabelItems);
   const theme = useTheme(settings.theme);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -189,8 +190,11 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
           // Try label key — labels map to tab grid cards
           const result = handleKeyPress(key);
           if (result.consumed && result.targetIndex !== null) {
-            const { allTabs: tabs } = stateRef.current;
-            const item = tabs[result.targetIndex];
+            const { allTabs: tabs, filteredItems: bkItems } = stateRef.current;
+            // Labels 0..tabs.length-1 are tabs, tabs.length+ are bookmarks
+            const item = result.targetIndex < tabs.length
+              ? tabs[result.targetIndex]
+              : bkItems[result.targetIndex - tabs.length];
             if (item) {
               if (item.type === 'folder' || item.type === 'group') {
                 toggleExpand(item.id);
