@@ -128,31 +128,27 @@ export const TreeView: React.FC<TreeViewProps> = ({
         </>
       )}
 
-      {/* All tabs as a grid of cards */}
+      {/* All tabs as two-column list */}
       {allTabs.length > 0 && !searchMode && (
         <>
           <div className="smb-group-header">Open Tabs</div>
-          <div className="smb-tab-grid">
+          <div className="smb-tab-columns">
             {allTabs.map((tab, i) => {
               const label = labels.get(i) ?? '';
               return (
                 <div
                   key={tab.id}
-                  className="smb-tab-card"
+                  className="smb-tab-col-item"
                   title={tab.title}
                   onClick={() => tab.tabId && onTabGridSelect(tab.tabId)}
                   role="option"
                   aria-label={tab.title}
                 >
-                  {label && <span className="smb-tab-card-label">{label}</span>}
-                  <div className="smb-tab-card-icon">
-                    {showFavicons && tab.icon ? (
-                      <img src={tab.icon} alt="" width={18} height={18} style={{ borderRadius: '2px', objectFit: 'contain' }} />
-                    ) : (
-                      <span className="smb-tab-card-letter">{(tab.siteName || tab.title).charAt(0).toUpperCase()}</span>
-                    )}
-                  </div>
-                  <div className="smb-tab-card-name">{tab.siteName || tab.title}</div>
+                  {label && <span className="smb-label-badge">{label}</span>}
+                  {showFavicons && tab.icon && (
+                    <img className="smb-favicon" src={tab.icon} alt="" width={14} height={14} />
+                  )}
+                  <span className="smb-tab-col-title">{tab.title}</span>
                 </div>
               );
             })}

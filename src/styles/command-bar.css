@@ -443,75 +443,39 @@
   line-height: 1;
 }
 
-/* ─── Tab Grid (all open tabs as cards) ──────────────────────────────────── */
+/* ─── Tab Two-Column List ─────────────────────────────────────────────────── */
 
-.smb-tab-grid {
+.smb-tab-columns {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-  gap: 6px;
-  padding: var(--space-2) var(--space-4);
+  grid-template-columns: 1fr 1fr;
+  gap: 1px 12px;
+  padding: var(--space-1) var(--space-4);
 }
 
-.smb-tab-card {
-  position: relative;
+.smb-tab-col-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 4px;
-  padding: 10px 4px 6px;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  padding: 4px 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: border-color var(--duration-fast) var(--ease-out),
-              background var(--duration-fast) var(--ease-out);
-  min-height: 56px;
+  transition: background var(--duration-fast) var(--ease-out);
+  min-height: 26px;
+  overflow: hidden;
 }
 
-.smb-tab-card:hover {
-  border-color: var(--color-accent);
+.smb-tab-col-item:hover {
   background: var(--color-bg-hover);
 }
 
-.smb-tab-card-label {
-  position: absolute;
-  top: 3px;
-  left: 5px;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 9px;
-  font-weight: 700;
-  color: #fff;
-  background: var(--color-accent);
-  border-radius: 3px;
-  padding: 0 3px;
-  line-height: 14px;
-}
-
-.smb-tab-card-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-}
-
-.smb-tab-card-letter {
-  font-size: 14px;
-  font-weight: 600;
+.smb-tab-col-title {
+  font-size: 11px;
   color: var(--color-text-secondary);
-  line-height: 1;
-}
-
-.smb-tab-card-name {
-  font-size: 10px;
-  color: var(--color-text-secondary);
-  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  width: 100%;
-  padding: 0 2px;
+  flex: 1;
+  min-width: 0;
 }
 
 /* ─── Tree Item ─────────────────────────────────────────────────────────── */
