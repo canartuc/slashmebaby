@@ -575,33 +575,38 @@
   margin: var(--space-2) var(--space-4);
 }
 
-/* ─── Actions Grid (tab actions as columns) ─────────────────────────────── */
+/* ─── Actions Grid (fixed columns) ──────────────────────────────────────── */
 
 .smb-actions-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 4px;
   padding: var(--space-2) var(--space-4);
 }
 
 .smb-action-chip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px 3px 4px;
+  padding: 5px 6px;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
 }
 
 .smb-action-chip:hover {
   background: var(--color-bg-hover);
+  border-color: var(--color-accent);
 }
 
 .smb-action-label {
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ─── Actions Rows (other actions as compact rows) ──────────────────────── */
