@@ -121,7 +121,7 @@ describe('useTreeData', () => {
     });
   });
 
-  it('shows only top-level groups and folders when all collapsed', async () => {
+  it('shows only bookmark folders in visibleItems (tabs are in allTabs)', async () => {
     setupSendMessage();
 
     const { result } = renderHook(() => useTreeData());
@@ -132,24 +132,17 @@ describe('useTreeData', () => {
 
     const items = result.current.visibleItems;
 
-    // Should have: group-Window 1, group-Window 2, folder-1
-    expect(items).toHaveLength(3);
-    expect(items[0].id).toBe('group-Window 1');
-    expect(items[0].type).toBe('group');
+    // visibleItems only contains bookmarks tree — tabs are in allTabs
+    // Should have: folder-1 (Bookmarks Bar)
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe('folder-1');
+    expect(items[0].type).toBe('folder');
+    expect(items[0].title).toBe('Bookmarks Bar');
     expect(items[0].depth).toBe(0);
     expect(items[0].isExpanded).toBe(false);
-    expect(items[0].childCount).toBe(2);
-
-    expect(items[1].id).toBe('group-Window 2');
-    expect(items[1].type).toBe('group');
-    expect(items[1].childCount).toBe(1);
-
-    expect(items[2].id).toBe('folder-1');
-    expect(items[2].type).toBe('folder');
-    expect(items[2].title).toBe('Bookmarks Bar');
   });
 
-  it('expanding a group reveals its children', async () => {
+  it('allTabs contains all unpinned tabs as a flat list', async () => {
     setupSendMessage();
 
     const { result } = renderHook(() => useTreeData());
@@ -158,48 +151,19 @@ describe('useTreeData', () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    act(() => {
-      result.current.toggleExpand('group-Window 1');
-    });
+    const tabs = result.current.allTabs;
 
-    const items = result.current.visibleItems;
-
-    // group-Window 1 (expanded), tab-101, tab-102, group-Window 2, folder-1
-    expect(items).toHaveLength(5);
-    expect(items[0].id).toBe('group-Window 1');
-    expect(items[0].isExpanded).toBe(true);
-    expect(items[1].id).toBe('tab-101');
-    expect(items[1].type).toBe('tab');
-    expect(items[1].title).toBe('Gmail');
-    expect(items[1].depth).toBe(1);
-    expect(items[1].tabId).toBe(101);
-    expect(items[2].id).toBe('tab-102');
-    expect(items[2].type).toBe('tab');
-    expect(items[3].id).toBe('group-Window 2');
-  });
-
-  it('collapsing a group hides its children', async () => {
-    setupSendMessage();
-
-    const { result } = renderHook(() => useTreeData());
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-
-    // Expand then collapse
-    act(() => {
-      result.current.toggleExpand('group-Window 1');
-    });
-
-    expect(result.current.visibleItems).toHaveLength(5);
-
-    act(() => {
-      result.current.toggleExpand('group-Window 1');
-    });
-
-    expect(result.current.visibleItems).toHaveLength(3);
-    expect(result.current.visibleItems[0].isExpanded).toBe(false);
+    // Should have 3 unpinned tabs: Gmail, GitHub, Reddit
+    expect(tabs).toHaveLength(3);
+    expect(tabs[0].id).toBe('tab-101');
+    expect(tabs[0].type).toBe('tab');
+    expect(tabs[0].title).toBe('Gmail');
+    expect(tabs[0].depth).toBe(0);
+    expect(tabs[1].id).toBe('tab-102');
+    expect(tabs[1].type).toBe('tab');
+    expect(tabs[2].id).toBe('tab-201');
+    expect(tabs[2].type).toBe('tab');
+    expect(tabs[2].title).toBe('Reddit');
   });
 
   it('expanding nested bookmark folders shows correct depth', async () => {
@@ -217,15 +181,17 @@ describe('useTreeData', () => {
     });
 
     let items = result.current.visibleItems;
-    // group-Window 1, group-Window 2, folder-1 (expanded), bookmark-10, folder-20
-    expect(items).toHaveLength(5);
-    expect(items[3].id).toBe('bookmark-10');
-    expect(items[3].depth).toBe(1);
-    expect(items[3].type).toBe('bookmark');
-    expect(items[4].id).toBe('folder-20');
-    expect(items[4].depth).toBe(1);
-    expect(items[4].type).toBe('folder');
-    expect(items[4].childCount).toBe(1);
+    // folder-1 (expanded), bookmark-10, folder-20
+    expect(items).toHaveLength(3);
+    expect(items[0].id).toBe('folder-1');
+    expect(items[0].isExpanded).toBe(true);
+    expect(items[1].id).toBe('bookmark-10');
+    expect(items[1].depth).toBe(1);
+    expect(items[1].type).toBe('bookmark');
+    expect(items[2].id).toBe('folder-20');
+    expect(items[2].depth).toBe(1);
+    expect(items[2].type).toBe('folder');
+    expect(items[2].childCount).toBe(1);
 
     // Expand nested folder
     act(() => {
@@ -233,15 +199,15 @@ describe('useTreeData', () => {
     });
 
     items = result.current.visibleItems;
-    // 6 items now: ..., folder-20 (expanded), bookmark-21
-    expect(items).toHaveLength(6);
-    expect(items[5].id).toBe('bookmark-21');
-    expect(items[5].depth).toBe(2);
-    expect(items[5].title).toBe('MDN');
-    expect(items[5].url).toBe('https://developer.mozilla.org');
+    // 4 items now: folder-1 (expanded), bookmark-10, folder-20 (expanded), bookmark-21
+    expect(items).toHaveLength(4);
+    expect(items[3].id).toBe('bookmark-21');
+    expect(items[3].depth).toBe(2);
+    expect(items[3].title).toBe('MDN');
+    expect(items[3].url).toBe('https://developer.mozilla.org');
   });
 
-  it('getParentId returns correct parent for tabs', async () => {
+  it('collapsing a bookmark folder hides its children', async () => {
     setupSendMessage();
 
     const { result } = renderHook(() => useTreeData());
@@ -250,9 +216,36 @@ describe('useTreeData', () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    expect(result.current.getParentId('tab-101')).toBe('group-Window 1');
-    expect(result.current.getParentId('tab-102')).toBe('group-Window 1');
-    expect(result.current.getParentId('tab-201')).toBe('group-Window 2');
+    // Expand then collapse folder-1
+    act(() => {
+      result.current.toggleExpand('folder-1');
+    });
+
+    // folder-1 (expanded), bookmark-10, folder-20
+    expect(result.current.visibleItems).toHaveLength(3);
+
+    act(() => {
+      result.current.toggleExpand('folder-1');
+    });
+
+    // Back to just folder-1 collapsed
+    expect(result.current.visibleItems).toHaveLength(1);
+    expect(result.current.visibleItems[0].isExpanded).toBe(false);
+  });
+
+  it('getParentId returns undefined for tabs (flat in allTabs, no parent)', async () => {
+    setupSendMessage();
+
+    const { result } = renderHook(() => useTreeData());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Tabs are now flat in allTabs — they have no parent in the tree
+    expect(result.current.getParentId('tab-101')).toBeUndefined();
+    expect(result.current.getParentId('tab-102')).toBeUndefined();
+    expect(result.current.getParentId('tab-201')).toBeUndefined();
   });
 
   it('getParentId returns correct parent for bookmarks', async () => {
@@ -278,8 +271,7 @@ describe('useTreeData', () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    expect(result.current.getParentId('group-Window 1')).toBeUndefined();
-    expect(result.current.getParentId('group-Window 2')).toBeUndefined();
+    expect(result.current.getParentId('folder-1')).toBeUndefined();
   });
 
   it('sends GET_ALL_TABS and GET_BOOKMARK_TREE messages on mount', () => {
@@ -310,9 +302,10 @@ describe('useTreeData', () => {
     });
 
     expect(result.current.visibleItems).toEqual([]);
+    expect(result.current.allTabs).toEqual([]);
   });
 
-  it('tab items include icon from favIconUrl', async () => {
+  it('tab items in allTabs include icon from favIconUrl', async () => {
     setupSendMessage();
 
     const { result } = renderHook(() => useTreeData());
@@ -321,18 +314,15 @@ describe('useTreeData', () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    // Expand to see tabs
-    act(() => {
-      result.current.toggleExpand('group-Window 1');
-    });
+    const tabs = result.current.allTabs;
 
-    const gmail = result.current.visibleItems[1];
-    expect(gmail.id).toBe('tab-101');
-    expect(gmail.icon).toBe('https://mail.google.com/favicon.ico');
+    const gmail = tabs.find((t) => t.id === 'tab-101');
+    expect(gmail).toBeDefined();
+    expect(gmail!.icon).toBe('https://mail.google.com/favicon.ico');
 
     // Tab without favIconUrl has no icon
-    const github = result.current.visibleItems[2];
-    expect(github.id).toBe('tab-102');
-    expect(github.icon).toBeUndefined();
+    const github = tabs.find((t) => t.id === 'tab-102');
+    expect(github).toBeDefined();
+    expect(github!.icon).toBeUndefined();
   });
 });

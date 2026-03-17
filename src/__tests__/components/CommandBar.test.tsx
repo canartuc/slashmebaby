@@ -90,10 +90,11 @@ describe('CommandBar', () => {
     expect(dialog.getAttribute('aria-modal')).toBe('true');
   });
 
-  it('renders tree view with tab groups', async () => {
+  it('renders tab grid with open tabs', async () => {
     render(<CommandBar onDismiss={() => {}} />);
     await waitFor(() => {
-      expect(screen.getByText('Window 1')).toBeTruthy();
+      // Tabs are now shown in a grid under "Open Tabs", not as tree groups
+      expect(screen.getByText('Open Tabs')).toBeTruthy();
     });
   });
 
