@@ -180,24 +180,9 @@ export const TreeView: React.FC<TreeViewProps> = ({
       {/* Action divider */}
       <div className="smb-action-divider" />
 
-      {/* Tab actions — compact column grid */}
+      {/* All actions in one grid */}
       <div className="smb-actions-grid">
-        {TAB_ACTIONS.map((action) => (
-          <div
-            key={action.id}
-            className="smb-action-chip"
-            role="option"
-            aria-label={action.title}
-          >
-            <span className="smb-label-badge">{action.key}</span>
-            <span className="smb-action-label">{action.title}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Other actions — same chip style */}
-      <div className="smb-actions-grid">
-        {OTHER_ACTIONS.map((action) => (
+        {[...TAB_ACTIONS, ...OTHER_ACTIONS].map((action) => (
           <div
             key={action.id}
             className="smb-action-chip"
