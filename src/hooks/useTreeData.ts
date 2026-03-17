@@ -5,6 +5,7 @@ import type {
   TabGroupInfo,
   BookmarkNode,
 } from '../lib/messaging';
+import { getSiteName } from '../lib/site-names';
 
 // ─── Public Types ────────────────────────────────────────────────────────────
 
@@ -20,6 +21,7 @@ export interface TreeItem {
   parentId?: string;
   tabId?: number;
   pinned?: boolean;
+  siteName?: string;
 }
 
 // ─── Internal tree node (full tree, not filtered by expansion) ───────────────
@@ -47,6 +49,7 @@ function buildPinnedTabNodes(groups: TabGroupInfo[]): InternalNode[] {
             childCount: 0,
             tabId: tab.id,
             pinned: true,
+            siteName: getSiteName(tab.url),
           },
           children: [],
         });
@@ -73,6 +76,7 @@ function buildTabNodes(groups: TabGroupInfo[]): InternalNode[] {
           childCount: 0,
           parentId: groupId,
           tabId: tab.id,
+          siteName: getSiteName(tab.url),
         },
         children: [],
       }));
@@ -182,6 +186,7 @@ function buildParentMap(nodes: InternalNode[]): Map<string, string> {
 
 export function useTreeData(): {
   pinnedTabs: TreeItem[];
+  allTabs: TreeItem[];
   visibleItems: TreeItem[];
   allItems: TreeItem[];
   toggleExpand: (id: string) => void;
@@ -193,6 +198,7 @@ export function useTreeData(): {
   const treeRef = useRef<InternalNode[]>([]);
   const parentMapRef = useRef<Map<string, string>>(new Map());
   const [pinnedTabs, setPinnedTabs] = useState<TreeItem[]>([]);
+  const [allTabs, setAllTabs] = useState<TreeItem[]>([]);
   const [visibleItems, setVisibleItems] = useState<TreeItem[]>([]);
   const [allItems, setAllItems] = useState<TreeItem[]>([]);
 
@@ -212,9 +218,32 @@ export function useTreeData(): {
       const pinnedNodes = buildPinnedTabNodes(tabGroups);
       const tabNodes = buildTabNodes(tabGroups);
       const bookmarkNodes = buildBookmarkNodes(bookmarkTree, 0);
-      const tree = [...tabNodes, ...bookmarkNodes];
+      // Tree only contains bookmarks — tabs are in the grid
+      const tree = [...bookmarkNodes];
 
       setPinnedTabs(pinnedNodes.map((n) => ({ ...n.item, isExpanded: false })));
+
+      // Flat list of all unpinned tabs for grid view
+      const flatTabs: TreeItem[] = [];
+      for (const group of tabGroups) {
+        for (const tab of group.tabs) {
+          if (!tab.pinned) {
+            flatTabs.push({
+              id: `tab-${tab.id}`,
+              title: tab.title,
+              url: tab.url,
+              icon: tab.favIconUrl,
+              type: 'tab',
+              depth: 0,
+              isExpanded: false,
+              childCount: 0,
+              tabId: tab.id,
+              siteName: getSiteName(tab.url),
+            });
+          }
+        }
+      }
+      setAllTabs(flatTabs);
       treeRef.current = tree;
       parentMapRef.current = buildParentMap(tree);
 
@@ -269,5 +298,5 @@ export function useTreeData(): {
     return parentMapRef.current.get(id);
   }, []);
 
-  return { pinnedTabs, visibleItems, allItems, toggleExpand, getParentId, isLoading };
+  return { pinnedTabs, allTabs, visibleItems, allItems, toggleExpand, getParentId, isLoading };
 }

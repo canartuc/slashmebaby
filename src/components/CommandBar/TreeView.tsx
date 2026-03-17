@@ -35,12 +35,14 @@ const OTHER_ACTIONS: ActionDef[] = [
 
 export interface TreeViewProps {
   pinnedTabs: TreeItemData[];
+  allTabs: TreeItemData[];
   visibleItems: TreeItemData[];
   labels: Map<number, string>;
   selectedIndex: number;
   showFavicons: boolean;
   onSelectItem: (index: number) => void;
   onPinnedTabSelect: (tabId: number) => void;
+  onTabGridSelect: (tabId: number) => void;
   searchMode: boolean;
   searchQuery: string;
 }
@@ -79,17 +81,28 @@ function getSectionHeader(
 
 export const TreeView: React.FC<TreeViewProps> = ({
   pinnedTabs,
+  allTabs,
   visibleItems,
   labels,
   selectedIndex,
   showFavicons,
   onSelectItem,
   onPinnedTabSelect,
+  onTabGridSelect,
   searchMode,
 }) => {
+  // Build label map for tab grid (uses dynamic labels from the main pool)
+  const tabGridLabels = new Map<number, string>();
+  labels.forEach((label, index) => {
+    // Map grid index to label — tabs in grid get first N labels
+    if (index < allTabs.length) {
+      tabGridLabels.set(index, label);
+    }
+  });
+
   return (
     <div className="smb-results" role="listbox">
-      {/* Pinned tabs as a grid */}
+      {/* Pinned tabs as numbered squares */}
       {pinnedTabs.length > 0 && !searchMode && (
         <>
           <div className="smb-group-header">Pinned</div>
@@ -107,7 +120,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
                 {showFavicons && tab.icon ? (
                   <img className="smb-pinned-icon" src={tab.icon} alt="" width={16} height={16} />
                 ) : (
-                  <span className="smb-pinned-letter">{tab.title.charAt(0).toUpperCase()}</span>
+                  <span className="smb-pinned-letter">{(tab.siteName || tab.title.charAt(0)).charAt(0).toUpperCase()}</span>
                 )}
               </div>
             ))}
@@ -115,6 +128,39 @@ export const TreeView: React.FC<TreeViewProps> = ({
         </>
       )}
 
+      {/* All tabs as a grid of cards */}
+      {allTabs.length > 0 && !searchMode && (
+        <>
+          <div className="smb-group-header">Open Tabs</div>
+          <div className="smb-tab-grid">
+            {allTabs.map((tab, i) => {
+              const label = labels.get(i) ?? '';
+              return (
+                <div
+                  key={tab.id}
+                  className="smb-tab-card"
+                  title={tab.title}
+                  onClick={() => tab.tabId && onTabGridSelect(tab.tabId)}
+                  role="option"
+                  aria-label={tab.title}
+                >
+                  {label && <span className="smb-tab-card-label">{label}</span>}
+                  <div className="smb-tab-card-icon">
+                    {showFavicons && tab.icon ? (
+                      <img src={tab.icon} alt="" width={18} height={18} style={{ borderRadius: '2px', objectFit: 'contain' }} />
+                    ) : (
+                      <span className="smb-tab-card-letter">{(tab.siteName || tab.title).charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div className="smb-tab-card-name">{tab.siteName || tab.title}</div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Bookmarks tree */}
       {visibleItems.map((item, index) => {
         const header = getSectionHeader(visibleItems, index);
         const label = labels.get(index) ?? '';

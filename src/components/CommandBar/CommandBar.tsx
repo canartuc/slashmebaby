@@ -18,8 +18,9 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
 
-  const { pinnedTabs, visibleItems, allItems, toggleExpand, getParentId, isLoading } = useTreeData();
-  const { labels, labelToIndex, handleKeyPress, pendingPrefix, clearPending } = useLabelAssignment(visibleItems.length);
+  const { pinnedTabs, allTabs, visibleItems, allItems, toggleExpand, getParentId, isLoading } = useTreeData();
+  // Labels assigned to tab grid cards (not tree items)
+  const { labels, labelToIndex, handleKeyPress, pendingPrefix, clearPending } = useLabelAssignment(allTabs.length);
   const theme = useTheme(settings.theme);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -61,7 +62,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
 
   // Use a ref to always have access to latest state in the handler
   const stateRef = useRef({ mode, selectedIndex, filteredItems, visibleItems, query });
-  stateRef.current = { mode, selectedIndex, filteredItems, visibleItems, query, pinnedTabs };
+  stateRef.current = { mode, selectedIndex, filteredItems, visibleItems, query, pinnedTabs, allTabs };
 
   const handleItemSelect = useCallback((index: number) => {
     const items = stateRef.current.filteredItems;
@@ -185,10 +186,11 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
           break;
         }
         default: {
-          // Try label key
+          // Try label key — labels map to tab grid cards
           const result = handleKeyPress(key);
           if (result.consumed && result.targetIndex !== null) {
-            const item = items[result.targetIndex];
+            const { allTabs: tabs } = stateRef.current;
+            const item = tabs[result.targetIndex];
             if (item) {
               if (item.type === 'folder' || item.type === 'group') {
                 toggleExpand(item.id);
@@ -310,12 +312,14 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
         <SearchInput query={query} onQueryChange={setQuery} mode={mode} />
         <TreeView
           pinnedTabs={pinnedTabs}
+          allTabs={allTabs}
           visibleItems={filteredItems}
           labels={labels}
           selectedIndex={selectedIndex}
           showFavicons={settings.showFavicons}
           onSelectItem={handleItemSelect}
           onPinnedTabSelect={handlePinnedTabSelect}
+          onTabGridSelect={handlePinnedTabSelect}
           searchMode={mode === 'search'}
           searchQuery={query}
         />

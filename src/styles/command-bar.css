@@ -443,6 +443,77 @@
   line-height: 1;
 }
 
+/* ─── Tab Grid (all open tabs as cards) ──────────────────────────────────── */
+
+.smb-tab-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+  padding: var(--space-2) var(--space-4);
+}
+
+.smb-tab-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 4px 6px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+  min-height: 56px;
+}
+
+.smb-tab-card:hover {
+  border-color: var(--color-accent);
+  background: var(--color-bg-hover);
+}
+
+.smb-tab-card-label {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--color-accent);
+  border-radius: 3px;
+  padding: 0 3px;
+  line-height: 14px;
+}
+
+.smb-tab-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.smb-tab-card-letter {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  line-height: 1;
+}
+
+.smb-tab-card-name {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  padding: 0 2px;
+}
+
 /* ─── Tree Item ─────────────────────────────────────────────────────────── */
 
 .smb-tree-item {
