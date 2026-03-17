@@ -34,11 +34,13 @@ const OTHER_ACTIONS: ActionDef[] = [
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 export interface TreeViewProps {
+  pinnedTabs: TreeItemData[];
   visibleItems: TreeItemData[];
   labels: Map<number, string>;
   selectedIndex: number;
   showFavicons: boolean;
   onSelectItem: (index: number) => void;
+  onPinnedTabSelect: (tabId: number) => void;
   searchMode: boolean;
   searchQuery: string;
 }
@@ -76,15 +78,43 @@ function getSectionHeader(
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export const TreeView: React.FC<TreeViewProps> = ({
+  pinnedTabs,
   visibleItems,
   labels,
   selectedIndex,
   showFavicons,
   onSelectItem,
+  onPinnedTabSelect,
   searchMode,
 }) => {
   return (
     <div className="smb-results" role="listbox">
+      {/* Pinned tabs as a grid */}
+      {pinnedTabs.length > 0 && !searchMode && (
+        <>
+          <div className="smb-group-header">Pinned</div>
+          <div className="smb-pinned-grid">
+            {pinnedTabs.map((tab, i) => (
+              <div
+                key={tab.id}
+                className="smb-pinned-tab"
+                title={tab.title}
+                onClick={() => tab.tabId && onPinnedTabSelect(tab.tabId)}
+                role="option"
+                aria-label={tab.title}
+              >
+                <span className="smb-pinned-number">{i + 1}</span>
+                {showFavicons && tab.icon ? (
+                  <img className="smb-pinned-icon" src={tab.icon} alt="" width={16} height={16} />
+                ) : (
+                  <span className="smb-pinned-letter">{tab.title.charAt(0).toUpperCase()}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {visibleItems.map((item, index) => {
         const header = getSectionHeader(visibleItems, index);
         const label = labels.get(index) ?? '';

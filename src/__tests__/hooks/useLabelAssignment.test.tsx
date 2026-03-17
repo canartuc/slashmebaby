@@ -93,12 +93,12 @@ describe('useLabelAssignment', () => {
     });
     expect(result.current.pendingPrefix).toBe('a');
 
-    // Press 'a' to complete 'aa' (index 24)
+    // Press 'a' to complete 'aa' (index 14)
     let res: { targetIndex: number | null; consumed: boolean };
     act(() => {
       res = result.current.handleKeyPress('a');
     });
-    expect(res!.targetIndex).toBe(24);
+    expect(res!.targetIndex).toBe(14);
     expect(res!.consumed).toBe(true);
     expect(result.current.pendingPrefix).toBeNull();
   });
@@ -114,7 +114,7 @@ describe('useLabelAssignment', () => {
     act(() => {
       res = result.current.handleKeyPress('b');
     });
-    expect(res!.targetIndex).toBe(25);
+    expect(res!.targetIndex).toBe(15);
     expect(res!.consumed).toBe(true);
   });
 
@@ -176,11 +176,11 @@ describe('useLabelAssignment', () => {
 
   // ─── When count fits exactly in single-char pool (24 items) ───────────────
 
-  it('all 24 labels are single-char with no pending state', () => {
-    const { result } = renderHook(() => useLabelAssignment(24));
+  it('all 14 labels are single-char with no pending state', () => {
+    const { result } = renderHook(() => useLabelAssignment(14));
 
     // Each label key should directly resolve
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < 14; i++) {
       const key = LABEL_POOL[i];
       let res: { targetIndex: number | null; consumed: boolean };
       act(() => {

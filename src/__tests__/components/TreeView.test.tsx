@@ -70,9 +70,11 @@ function makeLabels(count: number): Map<number, string> {
 }
 
 const defaultProps = {
+  pinnedTabs: [],
   selectedIndex: -1,
   showFavicons: true,
   onSelectItem: vi.fn(),
+  onPinnedTabSelect: vi.fn(),
   searchMode: false,
   searchQuery: '',
 };

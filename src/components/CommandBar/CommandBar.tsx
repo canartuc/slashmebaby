@@ -18,7 +18,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
 
-  const { visibleItems, allItems, toggleExpand, getParentId, isLoading } = useTreeData();
+  const { pinnedTabs, visibleItems, allItems, toggleExpand, getParentId, isLoading } = useTreeData();
   const { labels, labelToIndex, handleKeyPress, pendingPrefix, clearPending } = useLabelAssignment(visibleItems.length);
   const theme = useTheme(settings.theme);
 
@@ -61,7 +61,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
 
   // Use a ref to always have access to latest state in the handler
   const stateRef = useRef({ mode, selectedIndex, filteredItems, visibleItems, query });
-  stateRef.current = { mode, selectedIndex, filteredItems, visibleItems, query };
+  stateRef.current = { mode, selectedIndex, filteredItems, visibleItems, query, pinnedTabs };
 
   const handleItemSelect = useCallback((index: number) => {
     const items = stateRef.current.filteredItems;
@@ -84,8 +84,28 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     }
   }, [toggleExpand, onDismiss]);
 
+  const handlePinnedTabSelect = useCallback((tabId: number) => {
+    chrome.runtime.sendMessage(
+      { type: 'SWITCH_TAB', payload: { tabId } },
+      () => onDismiss()
+    );
+  }, [onDismiss]);
+
   const handleKey = useCallback((key: string, shiftKey: boolean) => {
-    const { mode: currentMode, selectedIndex: idx, filteredItems: items, query: currentQuery } = stateRef.current;
+    const { mode: currentMode, selectedIndex: idx, filteredItems: items, query: currentQuery, pinnedTabs: pinned } = stateRef.current;
+
+    // Number keys (1-9, 0) switch to pinned tabs in jump mode
+    if (currentMode === 'jump' && /^[0-9]$/.test(key) && pinned.length > 0) {
+      const num = key === '0' ? 10 : parseInt(key, 10);
+      const pinnedTab = pinned[num - 1];
+      if (pinnedTab?.tabId) {
+        chrome.runtime.sendMessage(
+          { type: 'SWITCH_TAB', payload: { tabId: pinnedTab.tabId } },
+          () => onDismiss()
+        );
+      }
+      return;
+    }
 
     // '/' toggles mode
     if (key === '/') {
@@ -289,11 +309,13 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
       >
         <SearchInput query={query} onQueryChange={setQuery} mode={mode} />
         <TreeView
+          pinnedTabs={pinnedTabs}
           visibleItems={filteredItems}
           labels={labels}
           selectedIndex={selectedIndex}
           showFavicons={settings.showFavicons}
           onSelectItem={handleItemSelect}
+          onPinnedTabSelect={handlePinnedTabSelect}
           searchMode={mode === 'search'}
           searchQuery={query}
         />

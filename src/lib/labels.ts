@@ -1,5 +1,6 @@
 const ACTION_KEYS = new Set('c x p m d w r t u z q s ,'.split(' '));
-const LABEL_POOL = 'a b e f g h i j k l n o v y 1 2 3 4 5 6 7 8 9 0'.split(' ');
+// Numbers reserved for pinned tabs — not in dynamic pool
+const LABEL_POOL = 'a b e f g h i j k l n o v y'.split(' ');
 
 export interface LabelAssignment {
   index: number;

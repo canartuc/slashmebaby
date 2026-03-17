@@ -23,9 +23,9 @@ describe('assignLabels', () => {
     expect(result[4]).toEqual({ index: 4, label: 'g' });
   });
 
-  it('returns exactly 24 single-char labels for 24 items', () => {
-    const result = assignLabels(24);
-    expect(result).toHaveLength(24);
+  it('returns exactly 14 single-char labels for 14 items', () => {
+    const result = assignLabels(14);
+    expect(result).toHaveLength(14);
     // All labels should be single-char
     result.forEach(({ label }) => {
       expect(label).toHaveLength(1);
@@ -36,37 +36,37 @@ describe('assignLabels', () => {
     });
   });
 
-  it('returns 24 single-char + 1 two-char for 25 items', () => {
-    const result = assignLabels(25);
-    expect(result).toHaveLength(25);
-    // First 24 single-char
-    for (let i = 0; i < 24; i++) {
+  it('returns 14 single-char + 1 two-char for 15 items', () => {
+    const result = assignLabels(15);
+    expect(result).toHaveLength(15);
+    // First 14 single-char
+    for (let i = 0; i < 14; i++) {
       expect(result[i].label).toHaveLength(1);
       expect(result[i].label).toBe(LABEL_POOL[i]);
     }
-    // 25th item is a two-char label: 'aa'
-    expect(result[24]).toEqual({ index: 24, label: 'aa' });
+    // 15th item is a two-char label: 'aa'
+    expect(result[14]).toEqual({ index: 14, label: 'aa' });
   });
 
-  it('returns correct labels for 50 items (mixed single and two-char)', () => {
-    const result = assignLabels(50);
-    expect(result).toHaveLength(50);
-    // First 24 single-char
-    for (let i = 0; i < 24; i++) {
+  it('returns correct labels for 30 items (mixed single and two-char)', () => {
+    const result = assignLabels(30);
+    expect(result).toHaveLength(30);
+    // First 14 single-char
+    for (let i = 0; i < 14; i++) {
       expect(result[i].label).toHaveLength(1);
     }
-    // Remaining 26 two-char
-    for (let i = 24; i < 50; i++) {
+    // Remaining 16 two-char
+    for (let i = 14; i < 30; i++) {
       expect(result[i].label).toHaveLength(2);
     }
   });
 
   it('two-char labels start with first letter of LABEL_POOL', () => {
     const result = assignLabels(30);
-    // Item at index 24 = 'aa', index 25 = 'ab', index 26 = 'ae', ...
-    expect(result[24].label).toBe('aa');
-    expect(result[25].label).toBe('ab');
-    expect(result[26].label).toBe('ae');
+    // Item at index 14 = 'aa', index 15 = 'ab', index 16 = 'ae', ...
+    expect(result[14].label).toBe('aa');
+    expect(result[15].label).toBe('ab');
+    expect(result[16].label).toBe('ae');
   });
 
   it('all indices are sequential starting from 0', () => {
@@ -256,8 +256,8 @@ describe('getActionForKey', () => {
 });
 
 describe('LABEL_POOL', () => {
-  it('has 24 entries', () => {
-    expect(LABEL_POOL).toHaveLength(24);
+  it('has 14 entries', () => {
+    expect(LABEL_POOL).toHaveLength(14);
   });
 
   it('does not include any action keys', () => {

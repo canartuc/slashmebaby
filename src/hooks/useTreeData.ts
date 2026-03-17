@@ -19,6 +19,7 @@ export interface TreeItem {
   childCount: number;
   parentId?: string;
   tabId?: number;
+  pinned?: boolean;
 }
 
 // ─── Internal tree node (full tree, not filtered by expansion) ───────────────
@@ -30,23 +31,51 @@ interface InternalNode {
 
 // ─── Build internal tree from API responses ──────────────────────────────────
 
+function buildPinnedTabNodes(groups: TabGroupInfo[]): InternalNode[] {
+  const pinned: InternalNode[] = [];
+  for (const group of groups) {
+    for (const tab of group.tabs) {
+      if (tab.pinned) {
+        pinned.push({
+          item: {
+            id: `tab-${tab.id}`,
+            title: tab.title,
+            url: tab.url,
+            icon: tab.favIconUrl,
+            type: 'tab' as const,
+            depth: 0,
+            childCount: 0,
+            tabId: tab.id,
+            pinned: true,
+          },
+          children: [],
+        });
+      }
+    }
+  }
+  return pinned;
+}
+
 function buildTabNodes(groups: TabGroupInfo[]): InternalNode[] {
   return groups.map((group) => {
     const groupId = `group-${group.label}`;
-    const children: InternalNode[] = group.tabs.map((tab) => ({
-      item: {
-        id: `tab-${tab.id}`,
-        title: tab.title,
-        url: tab.url,
-        icon: tab.favIconUrl,
-        type: 'tab' as const,
-        depth: 1,
-        childCount: 0,
-        parentId: groupId,
-        tabId: tab.id,
-      },
-      children: [],
-    }));
+    // Exclude pinned tabs from groups — they're shown separately
+    const children: InternalNode[] = group.tabs
+      .filter((tab) => !tab.pinned)
+      .map((tab) => ({
+        item: {
+          id: `tab-${tab.id}`,
+          title: tab.title,
+          url: tab.url,
+          icon: tab.favIconUrl,
+          type: 'tab' as const,
+          depth: 1,
+          childCount: 0,
+          parentId: groupId,
+          tabId: tab.id,
+        },
+        children: [],
+      }));
     return {
       item: {
         id: groupId,
@@ -57,7 +86,7 @@ function buildTabNodes(groups: TabGroupInfo[]): InternalNode[] {
       },
       children,
     };
-  });
+  }).filter((group) => group.children.length > 0); // skip empty groups after filtering
 }
 
 function buildBookmarkNodes(
@@ -152,6 +181,7 @@ function buildParentMap(nodes: InternalNode[]): Map<string, string> {
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useTreeData(): {
+  pinnedTabs: TreeItem[];
   visibleItems: TreeItem[];
   allItems: TreeItem[];
   toggleExpand: (id: string) => void;
@@ -162,6 +192,7 @@ export function useTreeData(): {
   const [isLoading, setIsLoading] = useState(true);
   const treeRef = useRef<InternalNode[]>([]);
   const parentMapRef = useRef<Map<string, string>>(new Map());
+  const [pinnedTabs, setPinnedTabs] = useState<TreeItem[]>([]);
   const [visibleItems, setVisibleItems] = useState<TreeItem[]>([]);
   const [allItems, setAllItems] = useState<TreeItem[]>([]);
 
@@ -178,9 +209,12 @@ export function useTreeData(): {
       completed++;
       if (completed < 2 || cancelled) return;
 
+      const pinnedNodes = buildPinnedTabNodes(tabGroups);
       const tabNodes = buildTabNodes(tabGroups);
       const bookmarkNodes = buildBookmarkNodes(bookmarkTree, 0);
       const tree = [...tabNodes, ...bookmarkNodes];
+
+      setPinnedTabs(pinnedNodes.map((n) => ({ ...n.item, isExpanded: false })));
       treeRef.current = tree;
       parentMapRef.current = buildParentMap(tree);
 
@@ -235,5 +269,5 @@ export function useTreeData(): {
     return parentMapRef.current.get(id);
   }, []);
 
-  return { visibleItems, allItems, toggleExpand, getParentId, isLoading };
+  return { pinnedTabs, visibleItems, allItems, toggleExpand, getParentId, isLoading };
 }

@@ -389,6 +389,60 @@
   border-width: 0;
 }
 
+/* ─── Pinned Tabs Grid ───────────────────────────────────────────────────── */
+
+.smb-pinned-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 44px);
+  gap: 6px;
+  padding: var(--space-2) var(--space-4);
+}
+
+.smb-pinned-tab {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+
+.smb-pinned-tab:hover {
+  border-color: var(--color-accent);
+  background: var(--color-bg-hover);
+}
+
+.smb-pinned-number {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--color-accent);
+  line-height: 1;
+}
+
+.smb-pinned-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  border-radius: 2px;
+}
+
+.smb-pinned-letter {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  line-height: 1;
+}
+
 /* ─── Tree Item ─────────────────────────────────────────────────────────── */
 
 .smb-tree-item {
