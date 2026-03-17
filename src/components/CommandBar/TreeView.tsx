@@ -144,7 +144,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
                   role="option"
                   aria-label={tab.title}
                 >
-                  {label && <span className="smb-label-badge">{label}</span>}
+                  {label && <span className="smb-tab-col-label">{label}</span>}
                   {showFavicons && tab.icon && (
                     <img className="smb-favicon" src={tab.icon} alt="" width={14} height={14} />
                   )}
