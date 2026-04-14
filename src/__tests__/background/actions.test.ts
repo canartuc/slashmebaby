@@ -83,10 +83,10 @@ describe('ActionRegistry', () => {
   });
 
   describe('getItems', () => {
-    it('returns all 13 actions as SearchableItems', () => {
+    it('returns all 12 actions as SearchableItems', () => {
       const registry = new ActionRegistry();
       const items = registry.getItems();
-      expect(items).toHaveLength(13);
+      expect(items).toHaveLength(12);
     });
 
     it('includes Close Tab action', () => {
@@ -116,7 +116,6 @@ describe('ActionRegistry', () => {
         'action-move-to-window',
         'action-reload-tab',
         'action-new-tab',
-        'action-go-to-url',
         'action-recently-closed',
         'action-close-duplicates',
         'action-sort-by-domain',
@@ -179,12 +178,6 @@ describe('ActionRegistry', () => {
 
       expect(result.success).toBe(true);
       expect(chromeMock.tabs.create).toHaveBeenCalledWith({}, expect.any(Function));
-    });
-
-    it('executes go-to-url action (returns success, URL nav handled by UI)', async () => {
-      const registry = new ActionRegistry();
-      const result = await registry.execute('go-to-url', 1);
-      expect(result.success).toBe(true);
     });
 
     it('executes recently-closed action (returns success, triggers sub-list in UI)', async () => {
