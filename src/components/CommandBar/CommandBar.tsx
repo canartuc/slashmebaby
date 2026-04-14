@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import Fuse from 'fuse.js';
 import type { UserSettings } from '../../lib/messaging';
 import { DEFAULT_SETTINGS } from '../../lib/messaging';
 import { SearchInput } from './SearchInput';
@@ -9,6 +10,7 @@ import { useLabelAssignment } from '../../hooks/useLabelAssignment';
 import { useTheme } from '../../hooks/useTheme';
 import { isActionKey, getActionForKey } from '../../lib/labels';
 import { cleanUrl } from '../../lib/url-clean';
+import { foldDiacritics } from '../../lib/diacritics';
 
 function nextIndex(prev: number, len: number, dir: 1 | -1): number {
   if (len <= 0) return 0;
@@ -49,20 +51,35 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     setSelectedIndex(0);
   }, [visibleItems]);
 
-  // Filter items based on search query
-  // When searching, filter ALL items (not just visible/expanded ones)
+  // Search corpus: pinned tabs + open tabs + all bookmark leaves.
+  // Fuse is rebuilt whenever the corpus changes; it's cheap.
+  const searchCorpus = useMemo<TreeItem[]>(() => {
+    const bookmarkLeaves = (allItems.length > 0 ? allItems : visibleItems).filter(
+      (i) => i.type !== 'folder' && i.type !== 'group'
+    );
+    return [...pinnedTabs, ...allTabs, ...bookmarkLeaves];
+  }, [pinnedTabs, allTabs, allItems, visibleItems]);
+
+  const fuse = useMemo(
+    () =>
+      new Fuse(searchCorpus, {
+        keys: [
+          { name: 'title', getFn: (item) => foldDiacritics(item.title ?? '') },
+          { name: 'url', getFn: (item) => foldDiacritics(item.url ?? '') },
+        ],
+        threshold: 0.4,
+        ignoreLocation: true,
+        includeScore: false,
+      }),
+    [searchCorpus]
+  );
+
+  // When searching, run the query (folded) through Fuse so that fuzzy matches
+  // and diacritic-insensitive matches both work — "sozcu" finds "sözcü".
   const filteredItems = useMemo(() => {
     if (!query) return visibleItems;
-    const lowerQuery = query.toLowerCase();
-    const source = allItems.length > 0 ? allItems : visibleItems;
-    return source.filter((item) => {
-      // Skip folders/groups in search results — show only leaf items
-      if (item.type === 'folder' || item.type === 'group') return false;
-      const titleMatch = item.title.toLowerCase().includes(lowerQuery);
-      const urlMatch = item.url ? item.url.toLowerCase().includes(lowerQuery) : false;
-      return titleMatch || urlMatch;
-    });
-  }, [visibleItems, allItems, query]);
+    return fuse.search(foldDiacritics(query)).map((r) => r.item);
+  }, [query, visibleItems, fuse]);
 
   // Reset selected index when filtered items change
   useEffect(() => {
