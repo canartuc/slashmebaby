@@ -1,4 +1,4 @@
-const ACTION_KEYS = new Set('c x p m d w r t u z q s ,'.split(' '));
+const ACTION_KEYS = new Set('c x p m d w r t z q s ,'.split(' '));
 // Numbers reserved for pinned tabs — not in dynamic pool
 const LABEL_POOL = 'a b e f g h i j k l n o v y'.split(' ');
 
@@ -52,7 +52,6 @@ export function getActionForKey(key: string): string | null {
     'w': 'move-to-window',
     'r': 'reload-tab',
     't': 'new-tab',
-    'u': 'go-to-url',
     'z': 'recently-closed',
     'q': 'close-duplicates',
     's': 'sort-by-domain',

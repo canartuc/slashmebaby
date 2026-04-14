@@ -110,8 +110,8 @@ describe('isActionKey', () => {
     expect(isActionKey('t')).toBe(true);
   });
 
-  it('returns true for "u" (go-to-url)', () => {
-    expect(isActionKey('u')).toBe(true);
+  it('returns false for "u" (handled inline as URL mode, not an action key)', () => {
+    expect(isActionKey('u')).toBe(false);
   });
 
   it('returns true for "z" (recently-closed)', () => {
@@ -150,8 +150,8 @@ describe('isActionKey', () => {
     expect(isActionKey('ArrowUp')).toBe(false);
   });
 
-  it('contains exactly 13 action keys', () => {
-    expect(ACTION_KEYS.size).toBe(13);
+  it('contains exactly 12 action keys (u is handled inline as URL mode)', () => {
+    expect(ACTION_KEYS.size).toBe(12);
   });
 });
 
@@ -226,8 +226,8 @@ describe('getActionForKey', () => {
     expect(getActionForKey('t')).toBe('new-tab');
   });
 
-  it('returns "go-to-url" for "u"', () => {
-    expect(getActionForKey('u')).toBe('go-to-url');
+  it('returns null for "u" (URL mode is handled inline in CommandBar, not via action dispatch)', () => {
+    expect(getActionForKey('u')).toBeNull();
   });
 
   it('returns "recently-closed" for "z"', () => {

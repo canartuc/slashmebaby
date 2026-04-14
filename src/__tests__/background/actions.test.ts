@@ -83,10 +83,11 @@ describe('ActionRegistry', () => {
   });
 
   describe('getItems', () => {
-    it('returns all 13 actions as SearchableItems', () => {
+    it('returns all 12 searchable actions as SearchableItems', () => {
+      // 13 was the count before go-to-url moved to the CommandBar's url mode.
       const registry = new ActionRegistry();
       const items = registry.getItems();
-      expect(items).toHaveLength(13);
+      expect(items).toHaveLength(12);
     });
 
     it('includes Close Tab action', () => {
@@ -116,7 +117,6 @@ describe('ActionRegistry', () => {
         'action-move-to-window',
         'action-reload-tab',
         'action-new-tab',
-        'action-go-to-url',
         'action-recently-closed',
         'action-close-duplicates',
         'action-sort-by-domain',
@@ -181,10 +181,13 @@ describe('ActionRegistry', () => {
       expect(chromeMock.tabs.create).toHaveBeenCalledWith({}, expect.any(Function));
     });
 
-    it('executes go-to-url action (returns success, URL nav handled by UI)', async () => {
+    it('rejects the removed go-to-url action id as unknown', async () => {
+      // go-to-url is handled entirely client-side via the CommandBar's url mode.
+      // The background registry no longer advertises or dispatches it.
       const registry = new ActionRegistry();
       const result = await registry.execute('go-to-url', 1);
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Unknown action');
     });
 
     it('executes recently-closed action (returns success, triggers sub-list in UI)', async () => {

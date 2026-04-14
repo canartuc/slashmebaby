@@ -28,7 +28,7 @@ const TAB_ACTIONS: ActionDef[] = [
 const OTHER_ACTIONS: ActionDef[] = [
   { key: 'q', title: 'Dedup', id: 'close-duplicates' },
   { key: 's', title: 'Sort', id: 'sort-by-domain' },
-  { key: 'u', title: 'URL', id: 'go-to-url' },
+  { key: 'u', title: 'URL', id: 'url-mode' },
   { key: ',', title: 'Settings', id: 'settings' },
 ];
 
