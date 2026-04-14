@@ -1,36 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { chromium } from '@playwright/test';
-import path from 'path';
-
-const EXTENSION_PATH = path.resolve('.output/chrome-mv3');
-
-async function launchWithExtension() {
-  const context = await chromium.launchPersistentContext('', {
-    headless: false,
-    args: [
-      `--disable-extensions-except=${EXTENSION_PATH}`,
-      `--load-extension=${EXTENSION_PATH}`,
-      '--no-first-run',
-      '--disable-default-apps',
-    ],
-  });
-  await new Promise(r => setTimeout(r, 2000));
-  return context;
-}
-
-async function getExtensionId(context: Awaited<ReturnType<typeof launchWithExtension>>): Promise<string> {
-  let attempts = 0;
-  while (attempts < 10) {
-    const workers = context.serviceWorkers();
-    for (const w of workers) {
-      const match = w.url().match(/chrome-extension:\/\/([^/]+)/);
-      if (match) return match[1];
-    }
-    await new Promise(r => setTimeout(r, 500));
-    attempts++;
-  }
-  throw new Error('Could not find extension ID');
-}
+import { launchBrowserWithExtension as launchWithExtension, getExtensionId } from './helpers';
 
 // ─── Test 1: Popup page loads ─────────────────────────────────────────────────
 
