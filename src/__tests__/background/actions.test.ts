@@ -30,7 +30,12 @@ function makeChromeMock(overrides: Record<string, unknown> = {}) {
     create: vi.fn((_createProps: object, cb?: (tab: chrome.tabs.Tab) => void) => cb?.(makeFakeTab({ id: 99 }))),
     duplicate: vi.fn((_tabId: number, cb?: (tab: chrome.tabs.Tab) => void) => cb?.(makeFakeTab({ id: 100 }))),
     reload: vi.fn((_tabId: number, _reloadProps?: object, cb?: () => void) => cb?.()),
-    query: vi.fn((_queryInfo: object, cb: (tabs: chrome.tabs.Tab[]) => void) => cb([])),
+    query: vi.fn(
+      (_queryInfo: object, cb?: (tabs: chrome.tabs.Tab[]) => void): Promise<chrome.tabs.Tab[]> => {
+        cb?.([]);
+        return Promise.resolve([]);
+      }
+    ),
     move: vi.fn(
       (_tabId: number | number[], _moveProps: object, cb?: (tabs: chrome.tabs.Tab | chrome.tabs.Tab[]) => void) =>
         cb?.(makeFakeTab())
@@ -50,7 +55,9 @@ function makeChromeMock(overrides: Record<string, unknown> = {}) {
   };
 
   const sessions = {
-    getRecentlyClosed: vi.fn(() => Promise.resolve([])),
+    getRecentlyClosed: vi.fn(
+      (): Promise<chrome.sessions.Session[]> => Promise.resolve([])
+    ),
     restore: vi.fn(() => Promise.resolve({ lastModified: 0 })),
   };
 
@@ -246,7 +253,10 @@ describe('ActionRegistry', () => {
       ];
       const chromeMock = makeChromeMock();
       chromeMock.tabs.query = vi.fn(
-        (_queryInfo: object, cb: (tabs: chrome.tabs.Tab[]) => void) => cb(tabs)
+        (_queryInfo: object, cb?: (tabs: chrome.tabs.Tab[]) => void): Promise<chrome.tabs.Tab[]> => {
+          cb?.(tabs);
+          return Promise.resolve(tabs);
+        }
       );
       vi.stubGlobal('chrome', chromeMock);
 
@@ -266,7 +276,10 @@ describe('ActionRegistry', () => {
       ];
       const chromeMock = makeChromeMock();
       chromeMock.tabs.query = vi.fn(
-        (_queryInfo: object, cb: (tabs: chrome.tabs.Tab[]) => void) => cb(tabs)
+        (_queryInfo: object, cb?: (tabs: chrome.tabs.Tab[]) => void): Promise<chrome.tabs.Tab[]> => {
+          cb?.(tabs);
+          return Promise.resolve(tabs);
+        }
       );
       vi.stubGlobal('chrome', chromeMock);
 
@@ -290,7 +303,10 @@ describe('ActionRegistry', () => {
       ];
       const chromeMock = makeChromeMock();
       chromeMock.tabs.query = vi.fn(
-        (_queryInfo: object, cb: (tabs: chrome.tabs.Tab[]) => void) => cb(tabs)
+        (_queryInfo: object, cb?: (tabs: chrome.tabs.Tab[]) => void): Promise<chrome.tabs.Tab[]> => {
+          cb?.(tabs);
+          return Promise.resolve(tabs);
+        }
       );
       vi.stubGlobal('chrome', chromeMock);
 
@@ -335,7 +351,10 @@ describe('ActionRegistry', () => {
       const tabs = [makeFakeTab({ id: 1, active: true, pinned: false })];
       const chromeMock = makeChromeMock();
       chromeMock.tabs.query = vi.fn(
-        (_queryInfo: object, cb: (tabs: chrome.tabs.Tab[]) => void) => cb(tabs)
+        (_queryInfo: object, cb?: (tabs: chrome.tabs.Tab[]) => void): Promise<chrome.tabs.Tab[]> => {
+          cb?.(tabs);
+          return Promise.resolve(tabs);
+        }
       );
       vi.stubGlobal('chrome', chromeMock);
 
@@ -354,7 +373,10 @@ describe('ActionRegistry', () => {
       ];
       const chromeMock = makeChromeMock();
       chromeMock.tabs.query = vi.fn(
-        (_queryInfo: object, cb: (tabs: chrome.tabs.Tab[]) => void) => cb(tabs)
+        (_queryInfo: object, cb?: (tabs: chrome.tabs.Tab[]) => void): Promise<chrome.tabs.Tab[]> => {
+          cb?.(tabs);
+          return Promise.resolve(tabs);
+        }
       );
       vi.stubGlobal('chrome', chromeMock);
 
@@ -373,7 +395,10 @@ describe('ActionRegistry', () => {
       ];
       const chromeMock = makeChromeMock();
       chromeMock.tabs.query = vi.fn(
-        (_queryInfo: object, cb: (tabs: chrome.tabs.Tab[]) => void) => cb(tabs)
+        (_queryInfo: object, cb?: (tabs: chrome.tabs.Tab[]) => void): Promise<chrome.tabs.Tab[]> => {
+          cb?.(tabs);
+          return Promise.resolve(tabs);
+        }
       );
       vi.stubGlobal('chrome', chromeMock);
 
@@ -408,5 +433,99 @@ describe('ActionRegistry', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('Chrome API failure');
     });
+  });
+
+  describe('undo', () => {
+    it('falls back to restoring last closed session when no undo is recorded', async () => {
+      const fakeSession: chrome.sessions.Session = {
+        lastModified: 0,
+        tab: { sessionId: 'sess-1' } as chrome.tabs.Tab,
+      };
+      const chromeMock = makeChromeMock();
+      chromeMock.sessions.getRecentlyClosed = vi.fn(() => Promise.resolve([fakeSession]));
+      vi.stubGlobal('chrome', chromeMock);
+
+      const registry = new ActionRegistry();
+      const result = await registry.execute('recently-closed');
+      expect(result.success).toBe(true);
+      expect(chromeMock.sessions.restore).toHaveBeenCalledWith('sess-1');
+    });
+
+    it('handles undo fallback restoring a window session', async () => {
+      const fakeSession: chrome.sessions.Session = {
+        lastModified: 0,
+        window: { sessionId: 'win-9' } as chrome.windows.Window,
+      };
+      const chromeMock = makeChromeMock();
+      chromeMock.sessions.getRecentlyClosed = vi.fn(() => Promise.resolve([fakeSession]));
+      vi.stubGlobal('chrome', chromeMock);
+
+      const registry = new ActionRegistry();
+      const result = await registry.execute('recently-closed');
+      expect(result.success).toBe(true);
+      expect(chromeMock.sessions.restore).toHaveBeenCalledWith('win-9');
+    });
+
+    it('undo with no recorded entry and no closed sessions still returns success', async () => {
+      const chromeMock = makeChromeMock();
+      // sessions.getRecentlyClosed already returns [] in default mock.
+      vi.stubGlobal('chrome', chromeMock);
+
+      const registry = new ActionRegistry();
+      const result = await registry.execute('recently-closed');
+      expect(result.success).toBe(true);
+      expect(chromeMock.sessions.restore).not.toHaveBeenCalled();
+    });
+
+    it('after closing a tab, undo restores recently-closed sessions', async () => {
+      const chromeMock = makeChromeMock();
+      const tabsRemove = vi.fn((_tabIds: number | number[], cb?: () => void) => cb?.());
+      const fakeSession: chrome.sessions.Session = {
+        lastModified: 0,
+        tab: { sessionId: 'restored-1' } as chrome.tabs.Tab,
+      };
+      chromeMock.tabs.remove = tabsRemove;
+      chromeMock.tabs.query = vi.fn((_q: object, cb?: (t: chrome.tabs.Tab[]) => void) => {
+        const tabs = [makeFakeTab({ id: 5, active: true, windowId: 2 })];
+        if (cb) cb(tabs);
+        return Promise.resolve(tabs);
+      });
+      chromeMock.sessions.getRecentlyClosed = vi.fn(() => Promise.resolve([fakeSession]));
+      const winUpdate = vi.fn(() => Promise.resolve({} as chrome.windows.Window));
+      (chromeMock.windows as { update?: typeof winUpdate }).update = winUpdate;
+      vi.stubGlobal('chrome', chromeMock);
+
+      const registry = new ActionRegistry();
+      // Step 1: close-tab to record the restore-tabs undo entry.
+      const closed = await registry.execute('close-tab', 42);
+      expect(closed.success).toBe(true);
+
+      // Step 2: undo restores sessions and re-focuses the previously active tab/window.
+      const undone = await registry.execute('recently-closed');
+      expect(undone.success).toBe(true);
+      expect(chromeMock.sessions.restore).toHaveBeenCalledWith('restored-1');
+      expect(chromeMock.tabs.update).toHaveBeenCalledWith(5, { active: true });
+      expect(winUpdate).toHaveBeenCalledWith(2, { focused: true });
+    });
+  });
+
+  describe('execute requires-target guard', () => {
+    const targetActions = [
+      'close-tab',
+      'close-other-tabs',
+      'pin-tab',
+      'mute-tab',
+      'duplicate-tab',
+      'move-to-window',
+      'reload-tab',
+    ];
+    for (const actionId of targetActions) {
+      it(`returns failure when ${actionId} is invoked without a target tab`, async () => {
+        const registry = new ActionRegistry();
+        const result = await registry.execute(actionId);
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/requires a target tab/);
+      });
+    }
   });
 });

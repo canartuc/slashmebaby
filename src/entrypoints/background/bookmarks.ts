@@ -1,4 +1,5 @@
 import type { SearchableItem } from '../../lib/search';
+import { isNavigableUrl } from '../../lib/url-safety';
 
 function flattenBookmarkTree(
   nodes: chrome.bookmarks.BookmarkTreeNode[]
@@ -22,13 +23,19 @@ export class BookmarkCache {
     return new Promise((resolve) => {
       chrome.bookmarks.getTree((tree) => {
         const flat = flattenBookmarkTree(tree);
-        this.items = flat.map((node): SearchableItem => ({
-          id: `bookmark-${node.id}`,
-          title: node.title,
-          url: node.url,
-          category: 'bookmarks',
-          timestamp: node.dateAdded,
-        }));
+        const out: SearchableItem[] = [];
+        for (const node of flat) {
+          // Drop bookmarks pointing at javascript:, data:, chrome:, etc.
+          if (!isNavigableUrl(node.url)) continue;
+          out.push({
+            id: `bookmark-${node.id}`,
+            title: node.title,
+            url: node.url,
+            category: 'bookmarks',
+            timestamp: node.dateAdded,
+          });
+        }
+        this.items = out;
         resolve();
       });
     });

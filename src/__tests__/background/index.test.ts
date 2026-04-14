@@ -442,8 +442,8 @@ describe('createMessageRouter', () => {
     it('rejects non-string url in NAVIGATE payload', async () => {
       vi.stubGlobal('chrome', makeChromeMock());
       const router = await createMessageRouter();
-      const r = await router({ type: 'NAVIGATE', payload: { url: 42 } }) as { success: boolean };
-      expect(r.success).toBe(false);
+      const r = await router({ type: 'NAVIGATE', payload: { url: 42 } }) as { success?: boolean };
+      expect(r.success).not.toBe(true);
     });
   });
 
@@ -455,23 +455,23 @@ describe('createMessageRouter', () => {
       vi.stubGlobal('chrome', chromeMock);
 
       const router = await createMessageRouter();
-      const r = await router({ type: 'SWITCH_TAB', payload: { tabId: -1 } }) as { success: boolean; error?: string };
-      expect(r.success).toBe(false);
+      const r = await router({ type: 'SWITCH_TAB', payload: { tabId: -1 } }) as { success?: boolean };
+      expect(r.success).not.toBe(true);
       expect(updateMock).not.toHaveBeenCalled();
     });
 
     it('rejects a non-integer tabId', async () => {
       vi.stubGlobal('chrome', makeChromeMock());
       const router = await createMessageRouter();
-      const r = await router({ type: 'SWITCH_TAB', payload: { tabId: 1.5 } }) as { success: boolean };
-      expect(r.success).toBe(false);
+      const r = await router({ type: 'SWITCH_TAB', payload: { tabId: 1.5 } }) as { success?: boolean };
+      expect(r.success).not.toBe(true);
     });
 
     it('rejects a missing payload', async () => {
       vi.stubGlobal('chrome', makeChromeMock());
       const router = await createMessageRouter();
-      const r = await router({ type: 'SWITCH_TAB' }) as { success: boolean };
-      expect(r.success).toBe(false);
+      const r = await router({ type: 'SWITCH_TAB' }) as { success?: boolean };
+      expect(r.success).not.toBe(true);
     });
   });
 
@@ -935,6 +935,115 @@ describe('registerBackgroundListeners', () => {
     expect(kept).toBe(false);
     expect(responses).toHaveLength(1);
     expect(responses[0]).toEqual({ error: 'forbidden sender' });
+  });
+
+  it('toggle-command-bar command sends TOGGLE_OVERLAY to the active tab', async () => {
+    const commandListeners: Array<(cmd: string) => void> = [];
+    const tabsSendMessage = vi.fn();
+    const chromeMock = {
+      runtime: {
+        id: 'real-ext-id',
+        onMessage: { addListener: vi.fn() },
+        onInstalled: { addListener: vi.fn() },
+        getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
+        lastError: undefined,
+      },
+      commands: {
+        onCommand: { addListener: vi.fn((cb: (cmd: string) => void) => commandListeners.push(cb)) },
+      },
+      tabs: {
+        query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+          cb?.([{ id: 7 } as chrome.tabs.Tab]);
+          return Promise.resolve([{ id: 7 } as chrome.tabs.Tab]);
+        }),
+        sendMessage: tabsSendMessage,
+        onCreated: { addListener: vi.fn() },
+        onRemoved: { addListener: vi.fn() },
+        onUpdated: { addListener: vi.fn() },
+        onActivated: { addListener: vi.fn() },
+      },
+      bookmarks: {
+        getTree: vi.fn((cb: (r: chrome.bookmarks.BookmarkTreeNode[]) => void) => cb([])),
+        onCreated: { addListener: vi.fn() },
+        onRemoved: { addListener: vi.fn() },
+        onChanged: { addListener: vi.fn() },
+      },
+      history: { search: vi.fn((_: object, cb: (r: chrome.history.HistoryItem[]) => void) => cb([])) },
+      storage: {
+        sync: {
+          get: vi.fn((_: string, cb: (r: Record<string, unknown>) => void) => cb({})),
+          set: vi.fn(),
+        },
+      },
+      alarms: { create: vi.fn(), clear: vi.fn(), onAlarm: { addListener: vi.fn() } },
+    };
+    vi.stubGlobal('chrome', chromeMock);
+
+    registerBackgroundListeners();
+    expect(commandListeners).toHaveLength(1);
+
+    commandListeners[0]('toggle-command-bar');
+    expect(tabsSendMessage).toHaveBeenCalledWith(
+      7,
+      { type: 'TOGGLE_OVERLAY' },
+      expect.any(Function)
+    );
+
+    // Unknown command — should be a no-op.
+    commandListeners[0]('something-else');
+    expect(tabsSendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('onInstalled with reason "install" opens the onboarding tab', async () => {
+    const installListeners: Array<(d: chrome.runtime.InstalledDetails) => void> = [];
+    const tabsCreate = vi.fn();
+    const chromeMock = {
+      runtime: {
+        id: 'real-ext-id',
+        onMessage: { addListener: vi.fn() },
+        onInstalled: {
+          addListener: vi.fn((cb: (d: chrome.runtime.InstalledDetails) => void) => installListeners.push(cb)),
+        },
+        getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
+      },
+      commands: { onCommand: { addListener: vi.fn() } },
+      tabs: {
+        create: tabsCreate,
+        query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => { cb?.([]); return Promise.resolve([]); }),
+        onCreated: { addListener: vi.fn() },
+        onRemoved: { addListener: vi.fn() },
+        onUpdated: { addListener: vi.fn() },
+        onActivated: { addListener: vi.fn() },
+      },
+      bookmarks: {
+        getTree: vi.fn((cb: (r: chrome.bookmarks.BookmarkTreeNode[]) => void) => cb([])),
+        onCreated: { addListener: vi.fn() },
+        onRemoved: { addListener: vi.fn() },
+        onChanged: { addListener: vi.fn() },
+      },
+      history: { search: vi.fn((_: object, cb: (r: chrome.history.HistoryItem[]) => void) => cb([])) },
+      storage: {
+        sync: {
+          get: vi.fn((_: string, cb: (r: Record<string, unknown>) => void) => cb({})),
+          set: vi.fn(),
+        },
+      },
+      alarms: { create: vi.fn(), clear: vi.fn(), onAlarm: { addListener: vi.fn() } },
+    };
+    vi.stubGlobal('chrome', chromeMock);
+
+    registerBackgroundListeners();
+    expect(installListeners).toHaveLength(1);
+
+    installListeners[0]({ reason: 'install' } as chrome.runtime.InstalledDetails);
+    expect(tabsCreate).toHaveBeenCalledWith({
+      url: 'chrome-extension://fake//onboarding/index.html',
+    });
+
+    // Update reason should not open onboarding.
+    tabsCreate.mockClear();
+    installListeners[0]({ reason: 'update' } as chrome.runtime.InstalledDetails);
+    expect(tabsCreate).not.toHaveBeenCalled();
   });
 });
 

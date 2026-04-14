@@ -1,4 +1,5 @@
 import type { SearchableItem } from '../../lib/search';
+import { isNavigableUrl } from '../../lib/url-safety';
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const ALARM_NAME = 'slashmebaby-history-refresh';
@@ -11,15 +12,20 @@ export class HistoryCache {
   async refresh(): Promise<void> {
     return new Promise((resolve) => {
       chrome.history.search({ text: '', maxResults: 1000 }, (historyItems) => {
-        this.items = historyItems
-          .filter((item) => item.title && item.title.length > 0)
-          .map((item): SearchableItem => ({
+        const out: SearchableItem[] = [];
+        for (const item of historyItems) {
+          if (!item.title || item.title.length === 0) continue;
+          // Drop entries with javascript:, data:, chrome:, etc.
+          if (!isNavigableUrl(item.url)) continue;
+          out.push({
             id: `history-${item.id}`,
-            title: item.title!,
+            title: item.title,
             url: item.url,
             category: 'history',
             timestamp: item.lastVisitTime,
-          }));
+          });
+        }
+        this.items = out;
         resolve();
       });
     });

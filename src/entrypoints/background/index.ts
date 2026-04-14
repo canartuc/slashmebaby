@@ -11,10 +11,13 @@ import {
   isGetSettingsRequest,
   isGetAllTabsRequest,
   isGetBookmarkTreeRequest,
+  isSwitchTabRequest,
+  isOpenNewTabRequest,
+  isNavigateRequest,
 } from '../../lib/messaging';
 import type { TabWithGroup, TabGroupInfo, BookmarkNode } from '../../lib/messaging';
 import type { SearchableItem } from '../../lib/search';
-import { validateNavigationUrl } from '../../lib/url-safety';
+import { validateNavigationUrl, isNavigableUrl } from '../../lib/url-safety';
 
 // ─── Message Router Factory ───────────────────────────────────────────────
 
@@ -135,17 +138,8 @@ export async function createMessageRouter(): Promise<MessageRouter> {
       return { groups };
     }
 
-    // Switch to an existing tab
-    const msg = message as Record<string, unknown>;
-    if (msg.type === 'SWITCH_TAB') {
-      const payload = msg.payload;
-      if (!payload || typeof payload !== 'object') {
-        return { success: false, error: 'invalid payload' };
-      }
-      const { tabId } = payload as { tabId: unknown };
-      if (typeof tabId !== 'number' || !Number.isInteger(tabId) || tabId < 0) {
-        return { success: false, error: 'invalid tabId' };
-      }
+    if (isSwitchTabRequest(message)) {
+      const { tabId } = message.payload;
       try {
         await chrome.tabs.update(tabId, { active: true });
         const tab = await chrome.tabs.get(tabId);
@@ -158,29 +152,26 @@ export async function createMessageRouter(): Promise<MessageRouter> {
       }
     }
 
-    // Open URL in a new tab
-    if (msg.type === 'OPEN_NEW_TAB') {
-      const payload = msg.payload as { url?: unknown };
-      const check = validateNavigationUrl(payload?.url);
+    if (isOpenNewTabRequest(message)) {
+      const { url } = message.payload;
+      const check = validateNavigationUrl(url);
       if (!check.ok) {
         return { success: false, error: `unsafe url: ${check.reason}` };
       }
       try {
-        await chrome.tabs.create({ url: payload.url as string });
+        await chrome.tabs.create({ url });
         return { success: true };
       } catch (error) {
         return { success: false, error: String(error) };
       }
     }
 
-    // Navigate current tab to a URL
-    if (msg.type === 'NAVIGATE') {
-      const payload = msg.payload as { url?: unknown };
-      const check = validateNavigationUrl(payload?.url);
+    if (isNavigateRequest(message)) {
+      const { url } = message.payload;
+      const check = validateNavigationUrl(url);
       if (!check.ok) {
         return { success: false, error: `unsafe url: ${check.reason}` };
       }
-      const url = payload.url as string;
       try {
         // Prefer the sender's own tab when available. Falls back to the
         // active tab in the current window (used by the popup context,
@@ -205,9 +196,6 @@ export async function createMessageRouter(): Promise<MessageRouter> {
 
     if (isExecuteActionRequest(message)) {
       const { actionId, targetTabId } = message.payload;
-      if (typeof actionId !== 'string' || actionId.length === 0) {
-        return { success: false, error: 'invalid actionId' };
-      }
       const bareActionId = actionId.startsWith('action-')
         ? actionId.slice('action-'.length)
         : actionId;
@@ -263,8 +251,9 @@ export async function createMessageRouter(): Promise<MessageRouter> {
 
           for (const tab of windowTabs) {
             if (tab.groupId && tab.groupId !== -1) {
-              if (!grouped.has(tab.groupId)) grouped.set(tab.groupId, []);
-              grouped.get(tab.groupId)!.push(tab);
+              const list = grouped.get(tab.groupId);
+              if (list) list.push(tab);
+              else grouped.set(tab.groupId, [tab]);
             } else {
               ungrouped.push(tab);
             }
@@ -318,7 +307,10 @@ export async function createMessageRouter(): Promise<MessageRouter> {
     if (isGetBookmarkTreeRequest(message)) {
       const rawTree = await chrome.bookmarks.getTree();
 
-      function convertNode(node: chrome.bookmarks.BookmarkTreeNode): BookmarkNode {
+      function convertNode(node: chrome.bookmarks.BookmarkTreeNode): BookmarkNode | null {
+        // Folder (no url): keep but drop unsafe child leaves recursively.
+        // Leaf (has url): drop entirely if scheme isn't navigable.
+        if (node.url !== undefined && !isNavigableUrl(node.url)) return null;
         const result: BookmarkNode = {
           id: node.id,
           title: node.title,
@@ -326,17 +318,26 @@ export async function createMessageRouter(): Promise<MessageRouter> {
           dateAdded: node.dateAdded,
         };
         if (node.children) {
-          result.children = node.children.map(convertNode);
+          const safeChildren: BookmarkNode[] = [];
+          for (const child of node.children) {
+            const converted = convertNode(child);
+            if (converted) safeChildren.push(converted);
+          }
+          result.children = safeChildren;
         }
         return result;
       }
 
       // The root node has children that are the top-level folders
       const rootChildren = rawTree[0]?.children || [];
-      // Filter out empty root folders (like Mobile Bookmarks)
-      const tree = rootChildren
-        .map(convertNode)
-        .filter(node => node.children && node.children.length > 0);
+      const tree: BookmarkNode[] = [];
+      for (const child of rootChildren) {
+        const converted = convertNode(child);
+        // Filter out empty root folders (like Mobile Bookmarks)
+        if (converted && converted.children && converted.children.length > 0) {
+          tree.push(converted);
+        }
+      }
 
       return { tree };
     }
@@ -348,8 +349,12 @@ export async function createMessageRouter(): Promise<MessageRouter> {
 // ─── Helper Functions ─────────────────────────────────────────────────────
 
 function mapTab(tab: chrome.tabs.Tab): TabWithGroup {
+  // Tabs without an id can't be acted on; callers must filter beforehand.
+  if (tab.id === undefined) {
+    throw new Error('mapTab called with tab.id === undefined');
+  }
   return {
-    id: tab.id!,
+    id: tab.id,
     title: tab.title || 'Untitled',
     url: tab.url || '',
     favIconUrl: tab.favIconUrl,
