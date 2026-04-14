@@ -4,7 +4,7 @@ export interface SearchInputProps {
   query: string;
   onQueryChange: (q: string) => void;
   onKeyDown?: (e: KeyboardEvent) => void;
-  mode?: 'jump' | 'search';
+  mode?: 'jump' | 'search' | 'url';
 }
 
 const SearchIcon: React.FC = () => (
@@ -52,7 +52,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({ query, onQueryChange, 
     const el = inputRef.current;
     if (!el) return;
 
-    if (mode === 'search') {
+    if (mode === 'search' || mode === 'url') {
       el.focus();
     } else if (mode === 'jump') {
       el.blur();
@@ -61,15 +61,26 @@ export const SearchInput: React.FC<SearchInputProps> = ({ query, onQueryChange, 
 
   // Auto-focus on mount only — uses initial mode value, intentionally not tracking changes.
   useEffect(() => {
-    if (!mode || mode === 'search') {
+    if (!mode || mode === 'search' || mode === 'url') {
       inputRef.current?.focus();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Keep input text in sync when the query is reset externally (e.g. url mode entry).
+  useEffect(() => {
+    const el = inputRef.current;
+    if (el && el.value !== query) el.value = query;
+  }, [query]);
+
   const isJump = mode === 'jump';
   const wrapperClass = `smb-input-wrapper${isJump ? ' smb-input-wrapper--jump' : ''}`;
-  const placeholder = isJump ? 'Press / to search' : 'Search tabs, bookmarks, actions...';
+  const placeholder =
+    mode === 'url'
+      ? 'Enter a URL and press Enter'
+      : isJump
+        ? 'Press / to search'
+        : 'Search tabs, bookmarks, actions...';
 
   return (
     <div className={wrapperClass}>
@@ -85,11 +96,12 @@ export const SearchInput: React.FC<SearchInputProps> = ({ query, onQueryChange, 
         autoCorrect="off"
         autoCapitalize="off"
         role="combobox"
-        aria-label="Search tabs, bookmarks, and actions"
+        aria-label={mode === 'url' ? 'URL to open' : 'Search tabs, bookmarks, and actions'}
         aria-autocomplete="list"
         aria-controls="slashmebaby-results"
         aria-expanded="true"
         readOnly={isJump}
+        data-cb-mode={mode}
       />
     </div>
   );

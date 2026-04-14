@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { CommandBar } from '../../components/CommandBar/CommandBar';
 
 Object.defineProperty(window, 'matchMedia', {
@@ -406,6 +406,225 @@ describe('CommandBar', () => {
     expect(findCall('SWITCH_TAB')).toBeUndefined();
     expect(findCall('NAVIGATE')).toBeUndefined();
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  // ─── URL mode (`u`) ──────────────────────────────────────────────────────
+
+  it('`u` in jump mode switches to url mode and shows the URL placeholder', async () => {
+    render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('u');
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Enter a URL and press Enter')).toBeTruthy();
+    });
+    // The URL mode does NOT dispatch EXECUTE_ACTION (the old broken stub).
+    expect(findCall('EXECUTE_ACTION')).toBeUndefined();
+  });
+
+  it('Enter in url mode with a valid URL dispatches NAVIGATE', async () => {
+    const onDismiss = vi.fn();
+    const { container } = render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('u');
+    await waitFor(() => expect(screen.getByPlaceholderText('Enter a URL and press Enter')).toBeTruthy());
+
+    // Simulate the user typing into the now-writable input.
+    const input = container.querySelector('input[data-cb-mode="url"]') as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'https://example.com/path' } });
+    fireSmbKey('Enter');
+
+    await waitFor(() => {
+      const nav = findCall('NAVIGATE');
+      expect(nav).toBeTruthy();
+      expect((nav![0] as unknown as { payload: { url: string } }).payload.url).toBe('https://example.com/path');
+    });
+  });
+
+  it('Enter in url mode prepends https:// when the scheme is missing', async () => {
+    const onDismiss = vi.fn();
+    const { container } = render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('u');
+    await waitFor(() => expect(screen.getByPlaceholderText('Enter a URL and press Enter')).toBeTruthy());
+
+    const input = container.querySelector('input[data-cb-mode="url"]') as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'example.com' } });
+    fireSmbKey('Enter');
+
+    await waitFor(() => {
+      const nav = findCall('NAVIGATE');
+      expect(nav).toBeTruthy();
+      expect((nav![0] as unknown as { payload: { url: string } }).payload.url).toBe('https://example.com');
+    });
+  });
+
+  it('Shift+Enter in url mode dispatches OPEN_NEW_TAB instead of NAVIGATE', async () => {
+    const onDismiss = vi.fn();
+    const { container } = render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('u');
+    await waitFor(() => expect(screen.getByPlaceholderText('Enter a URL and press Enter')).toBeTruthy());
+
+    const input = container.querySelector('input[data-cb-mode="url"]') as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'example.com' } });
+    fireSmbKey('Enter', /* shift */ true);
+
+    await waitFor(() => {
+      const open = findCall('OPEN_NEW_TAB');
+      expect(open).toBeTruthy();
+      expect(findCall('NAVIGATE')).toBeUndefined();
+    });
+  });
+
+  it('Enter in url mode with an unparseable/blocked URL dismisses without navigating', async () => {
+    const onDismiss = vi.fn();
+    const { container } = render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('u');
+    await waitFor(() => expect(screen.getByPlaceholderText('Enter a URL and press Enter')).toBeTruthy());
+
+    const input = container.querySelector('input[data-cb-mode="url"]') as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'javascript:alert(1)' } });
+    fireSmbKey('Enter');
+
+    await waitFor(() => expect(onDismiss).toHaveBeenCalled());
+    expect(findCall('NAVIGATE')).toBeUndefined();
+    expect(findCall('OPEN_NEW_TAB')).toBeUndefined();
+  });
+});
+
+// ─── Search (fuzzy + diacritic folding, includes tabs) ───────────────────────
+
+describe('CommandBar — search mode filtering', () => {
+  beforeEach(() => {
+    vi.mocked(chrome.runtime.sendMessage).mockReset();
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
+      const message = msg as { type: string };
+      if (message.type === 'GET_SETTINGS' && callback) {
+        callback({
+          settings: {
+            shortcut: 'Ctrl+Shift+Space', position: 'center', theme: 'dark',
+            maxResultsPerGroup: 5, showFavicons: true,
+            searchSources: { tabs: true, bookmarks: true, history: true },
+          },
+        });
+      } else if (message.type === 'GET_ALL_TABS' && callback) {
+        callback({
+          groups: [
+            {
+              label: 'Window 1', type: 'window',
+              tabs: [
+                { id: 1, title: 'Gmail',       url: 'https://mail.google.com', favIconUrl: '', windowId: 1, pinned: false, audible: false },
+                { id: 2, title: 'Sözcü',       url: 'https://sozcu.com.tr',     favIconUrl: '', windowId: 1, pinned: false, audible: false },
+                { id: 3, title: 'GitHub Pull Requests', url: 'https://github.com/pulls', favIconUrl: '', windowId: 1, pinned: false, audible: false },
+              ],
+            },
+          ],
+        });
+      } else if (message.type === 'GET_BOOKMARK_TREE' && callback) {
+        callback({
+          tree: [
+            {
+              id: 'b0', title: 'Bookmarks Bar',
+              children: [
+                { id: 'b1', title: 'React Docs', url: 'https://react.dev' },
+                { id: 'b2', title: 'Café Reviews', url: 'https://cafes.example' },
+              ],
+            },
+          ],
+        });
+      } else if (callback) {
+        callback({ success: true });
+      }
+      return undefined as unknown as Promise<unknown>;
+    }) as unknown as typeof chrome.runtime.sendMessage);
+  });
+
+  function fireSmbKey(key: string, shiftKey = false) {
+    document.dispatchEvent(
+      new CustomEvent('smb-keydown', { detail: { key, shiftKey } })
+    );
+  }
+
+  function typeQuery(container: HTMLElement, value: string) {
+    const input = container.querySelector('input.smb-input') as HTMLInputElement;
+    fireEvent.input(input, { target: { value } });
+  }
+
+  it('searches open tabs by title (regression: tabs were previously skipped)', async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('/');
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Search tabs, bookmarks, actions...')).toBeTruthy()
+    );
+    typeQuery(container, 'github');
+
+    await waitFor(() => {
+      const selected = container.querySelector('.smb-tree-item');
+      expect(selected?.textContent).toContain('GitHub Pull Requests');
+    });
+  });
+
+  it('matches diacritics: "sozcu" finds "Sözcü" tab', async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('/');
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Search tabs, bookmarks, actions...')).toBeTruthy()
+    );
+    typeQuery(container, 'sozcu');
+
+    await waitFor(() => {
+      const matches = container.querySelectorAll('.smb-tree-item');
+      const titles = Array.from(matches).map((el) => el.textContent ?? '');
+      expect(titles.some((t) => t.includes('Sözcü'))).toBe(true);
+    });
+  });
+
+  it('matches diacritics: "cafe" finds "Café Reviews" bookmark', async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Bookmarks Bar')).toBeTruthy());
+
+    fireSmbKey('/');
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Search tabs, bookmarks, actions...')).toBeTruthy()
+    );
+    typeQuery(container, 'cafe');
+
+    await waitFor(() => {
+      const matches = container.querySelectorAll('.smb-tree-item');
+      const titles = Array.from(matches).map((el) => el.textContent ?? '');
+      expect(titles.some((t) => t.includes('Café Reviews'))).toBe(true);
+    });
+  });
+
+  it('fuzzy-matches typos: "gitub" still finds "GitHub Pull Requests"', async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('/');
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Search tabs, bookmarks, actions...')).toBeTruthy()
+    );
+    typeQuery(container, 'gitub');
+
+    await waitFor(() => {
+      const matches = container.querySelectorAll('.smb-tree-item');
+      const titles = Array.from(matches).map((el) => el.textContent ?? '');
+      expect(titles.some((t) => t.includes('GitHub Pull Requests'))).toBe(true);
+    });
   });
 });
 

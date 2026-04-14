@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import Fuse from 'fuse.js';
 import type { UserSettings } from '../../lib/messaging';
 import { DEFAULT_SETTINGS } from '../../lib/messaging';
 import { SearchInput } from './SearchInput';
@@ -8,6 +9,8 @@ import type { TreeItem } from '../../hooks/useTreeData';
 import { useLabelAssignment } from '../../hooks/useLabelAssignment';
 import { useTheme } from '../../hooks/useTheme';
 import { isActionKey, getActionForKey } from '../../lib/labels';
+import { isNavigableUrl } from '../../lib/url-safety';
+import { foldDiacritics } from '../../lib/diacritics';
 
 function nextIndex(prev: number, len: number, dir: 1 | -1): number {
   if (len <= 0) return 0;
@@ -15,12 +18,20 @@ function nextIndex(prev: number, len: number, dir: 1 | -1): number {
   return prev <= 0 ? len - 1 : prev - 1;
 }
 
+// Accept bare domains ("example.com") by prepending https:// when no scheme is present.
+function normalizeUrlInput(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const candidate = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  return isNavigableUrl(candidate) ? candidate : null;
+}
+
 export interface CommandBarProps {
   onDismiss: () => void;
 }
 
 export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
-  const [mode, setMode] = useState<'jump' | 'search'>('jump');
+  const [mode, setMode] = useState<'jump' | 'search' | 'url'>('jump');
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
@@ -48,20 +59,38 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     setSelectedIndex(0);
   }, [visibleItems]);
 
-  // Filter items based on search query
-  // When searching, filter ALL items (not just visible/expanded ones)
+  // When there is no query, render the tree as-is.
+  // When searching, fuzzy-match open tabs + bookmark leaves with diacritic
+  // folding so "sözcü" and "sozcu" (or "cafe" and "café") are equivalent.
+  const searchCorpus = useMemo(() => {
+    const bookmarkSource = allItems.length > 0 ? allItems : visibleItems;
+    return [...pinnedTabs, ...allTabs, ...bookmarkSource].filter(
+      (item) => item.type !== 'folder' && item.type !== 'group'
+    );
+  }, [pinnedTabs, allTabs, allItems, visibleItems]);
+
+  const fuse = useMemo(
+    () =>
+      new Fuse(searchCorpus, {
+        keys: ['title', 'url'],
+        threshold: 0.4,
+        distance: 100,
+        ignoreLocation: true,
+        getFn: (obj, path) => {
+          const key = Array.isArray(path) ? path[0] : path;
+          const value = (obj as unknown as Record<string, unknown>)[key];
+          return typeof value === 'string' ? foldDiacritics(value) : '';
+        },
+      }),
+    [searchCorpus]
+  );
+
   const filteredItems = useMemo(() => {
     if (!query) return visibleItems;
-    const lowerQuery = query.toLowerCase();
-    const source = allItems.length > 0 ? allItems : visibleItems;
-    return source.filter((item) => {
-      // Skip folders/groups in search results — show only leaf items
-      if (item.type === 'folder' || item.type === 'group') return false;
-      const titleMatch = item.title.toLowerCase().includes(lowerQuery);
-      const urlMatch = item.url ? item.url.toLowerCase().includes(lowerQuery) : false;
-      return titleMatch || urlMatch;
-    });
-  }, [visibleItems, allItems, query]);
+    const folded = foldDiacritics(query);
+    if (!folded) return visibleItems;
+    return fuse.search(folded).map((r) => r.item);
+  }, [visibleItems, query, fuse]);
 
   // Reset selected index when filtered items change
   useEffect(() => {
@@ -115,7 +144,17 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   }, [switchTab]);
 
   const handleKey = useCallback((key: string, shiftKey: boolean) => {
-    const { mode: currentMode, selectedIndex: idx, filteredItems: items, pinnedTabs: pinned } = stateRef.current;
+    const { mode: currentMode, selectedIndex: idx, filteredItems: items, pinnedTabs: pinned, query: currentQuery } = stateRef.current;
+
+    // URL mode: Enter navigates; other keys fall through (Tab/arrows no-op, Escape is host-handled).
+    if (currentMode === 'url') {
+      if (key === 'Enter') {
+        const url = normalizeUrlInput(currentQuery);
+        if (url) openUrl(url, shiftKey);
+        else onDismiss();
+      }
+      return;
+    }
 
     // Number keys (1-9, 0) switch to pinned tabs in jump mode
     if (currentMode === 'jump' && /^[0-9]$/.test(key) && pinned.length > 0) {
@@ -134,6 +173,13 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
         }
         return 'search';
       });
+      return;
+    }
+
+    // `u` enters URL-input mode from jump; pre-empts the EXECUTE_ACTION dispatch below.
+    if (currentMode === 'jump' && key === 'u') {
+      setQuery('');
+      setMode('url');
       return;
     }
 
@@ -199,7 +245,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
       : bkItems[result.targetIndex - tabs.length];
     if (!item) return;
     if (!activate(item, shiftKey)) setSelectedIndex(result.targetIndex);
-  }, [toggleExpand, onDismiss, handleKeyPress, activate, switchTab]);
+  }, [toggleExpand, onDismiss, handleKeyPress, activate, switchTab, openUrl]);
 
   // Listen for smb-keydown custom events from the content script
   useEffect(() => {

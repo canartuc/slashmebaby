@@ -121,12 +121,16 @@ export default defineContentScript({
         return;
       }
 
-      // Forward to the shadow root. Don't intercept if a writable input is focused (search mode).
+      // Forward to the shadow root. Don't intercept if a writable input is focused (search/url mode).
       const activeEl = shadow.activeElement as HTMLInputElement | null;
       const isSearchInputActive = activeEl?.tagName === 'INPUT' && !activeEl?.readOnly;
+      const isUrlMode = activeEl?.getAttribute('data-cb-mode') === 'url';
 
-      // Always forward special keys
-      const specialKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Tab', '/'];
+      // Special keys are always forwarded, *except* `/` in url mode where the
+      // user is typing a URL path and needs the character to reach the input.
+      const specialKeys = isUrlMode
+        ? ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Tab']
+        : ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Tab', '/'];
       const isSpecialKey = specialKeys.includes(e.key);
 
       if (isSpecialKey || !isSearchInputActive) {
