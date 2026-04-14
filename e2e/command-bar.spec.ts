@@ -6,6 +6,7 @@ import {
   isOverlayOpen,
   typeInCommandBar,
   getInputValue,
+  OPEN_SHORTCUT,
 } from './helpers';
 
 // ─── Test 1: Opens with shortcut ─────────────────────────────────────────────
@@ -29,7 +30,7 @@ test('Shortcut toggles close', async () => {
   await openCommandBar(page);
   expect(await isOverlayOpen(page)).toBe(true);
 
-  await page.keyboard.press('Meta+Shift+Space');
+  await page.keyboard.press(OPEN_SHORTCUT);
   await new Promise(r => setTimeout(r, 500));
   expect(await isOverlayOpen(page)).toBe(false);
 

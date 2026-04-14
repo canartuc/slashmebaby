@@ -1,5 +1,6 @@
 import { test, expect, chromium, type BrowserContext, type Page } from '@playwright/test';
 import path from 'path';
+import { OPEN_SHORTCUT } from './helpers';
 
 const EXT_PATH = path.resolve('.output/chrome-mv3');
 
@@ -21,7 +22,7 @@ async function openPageAndBar(ctx: BrowserContext, url = 'https://example.com'):
   await page.goto(url);
   await page.waitForLoadState('domcontentloaded');
   await new Promise(r => setTimeout(r, 1000));
-  await page.keyboard.press('Meta+Shift+Space');
+  await page.keyboard.press(OPEN_SHORTCUT);
   await new Promise(r => setTimeout(r, 800));
   return page;
 }
@@ -63,7 +64,7 @@ test('Action c: Close Tab', async () => {
   await new Promise(r => setTimeout(r, 1000));
 
   const before = ctx.pages().length;
-  await p2.keyboard.press('Meta+Shift+Space');
+  await p2.keyboard.press(OPEN_SHORTCUT);
   await new Promise(r => setTimeout(r, 800));
   await p2.keyboard.press('c');
   await new Promise(r => setTimeout(r, 1500));
@@ -86,7 +87,7 @@ test('Action x: Close Other Tabs', async () => {
   await p3.goto('https://example.net');
   await new Promise(r => setTimeout(r, 1000));
 
-  await p3.keyboard.press('Meta+Shift+Space');
+  await p3.keyboard.press(OPEN_SHORTCUT);
   await new Promise(r => setTimeout(r, 800));
   await p3.keyboard.press('x');
   await new Promise(r => setTimeout(r, 1500));
@@ -204,7 +205,7 @@ test('Action q: Close All Duplicates', async () => {
   await new Promise(r => setTimeout(r, 1000));
 
   const before = ctx.pages().length;
-  await p2.keyboard.press('Meta+Shift+Space');
+  await p2.keyboard.press(OPEN_SHORTCUT);
   await new Promise(r => setTimeout(r, 800));
   await p2.keyboard.press('q');
   await new Promise(r => setTimeout(r, 1500));

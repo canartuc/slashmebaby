@@ -25,8 +25,12 @@ export async function openPage(context: BrowserContext, url = 'https://example.c
   return page;
 }
 
+export const OPEN_SHORTCUT = process.platform === 'darwin'
+  ? 'Meta+Shift+Space'
+  : 'Control+Shift+Space';
+
 export async function openCommandBar(page: Page): Promise<void> {
-  await page.keyboard.press('Meta+Shift+Space');
+  await page.keyboard.press(OPEN_SHORTCUT);
   await new Promise(r => setTimeout(r, 800));
 }
 

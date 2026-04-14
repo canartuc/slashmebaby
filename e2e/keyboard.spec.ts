@@ -1,5 +1,6 @@
 import { test, expect, chromium } from '@playwright/test';
 import path from 'path';
+import { OPEN_SHORTCUT } from './helpers';
 
 async function launchWithExtension() {
   const extensionPath = path.resolve('.output/chrome-mv3');
@@ -17,7 +18,7 @@ async function launchWithExtension() {
 }
 
 async function openCommandBar(page: any) {
-  await page.keyboard.press('Meta+Shift+Space');
+  await page.keyboard.press(OPEN_SHORTCUT);
   await new Promise(r => setTimeout(r, 800));
 }
 
@@ -153,7 +154,7 @@ test('Shortcut toggles command bar open and closed', async () => {
   expect(await getOverlayState(page)).toBe('open');
 
   // Close with same shortcut
-  await page.keyboard.press('Meta+Shift+Space');
+  await page.keyboard.press(OPEN_SHORTCUT);
   await new Promise(r => setTimeout(r, 500));
   expect(await getOverlayState(page)).toBe('closed');
 
