@@ -407,6 +407,38 @@ describe('CommandBar', () => {
     expect(findCall('NAVIGATE')).toBeUndefined();
     expect(onDismiss).not.toHaveBeenCalled();
   });
+
+  it('"u" copies the cleaned page URL to the clipboard and dismisses', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    const originalHref = window.location.href;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, href: 'https://example.com/page?utm_source=x&id=42&gclid=abc' },
+    });
+
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('u');
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('https://example.com/page?id=42');
+      expect(onDismiss).toHaveBeenCalled();
+    });
+    // Copy-clean-link is handled inline — no EXECUTE_ACTION message is dispatched.
+    expect(findCall('EXECUTE_ACTION')).toBeUndefined();
+
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, href: originalHref },
+    });
+  });
 });
 
 // ─── Pinned-tab number shortcuts ────────────────────────────────────────────

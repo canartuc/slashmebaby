@@ -8,6 +8,7 @@ import type { TreeItem } from '../../hooks/useTreeData';
 import { useLabelAssignment } from '../../hooks/useLabelAssignment';
 import { useTheme } from '../../hooks/useTheme';
 import { isActionKey, getActionForKey } from '../../lib/labels';
+import { cleanUrl } from '../../lib/url-clean';
 
 function nextIndex(prev: number, len: number, dir: 1 | -1): number {
   if (len <= 0) return 0;
@@ -140,6 +141,15 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     // Action keys work in BOTH modes
     if (isActionKey(key)) {
       const actionId = getActionForKey(key);
+      // copy-clean-link writes the stripped URL to the clipboard from the
+      // content-script context; MV3 service workers have no clipboard access.
+      if (actionId === 'copy-clean-link') {
+        const cleaned = cleanUrl(window.location.href);
+        Promise.resolve(navigator.clipboard?.writeText(cleaned))
+          .catch(() => undefined)
+          .finally(() => onDismiss());
+        return;
+      }
       if (actionId) {
         chrome.runtime.sendMessage(
           { type: 'EXECUTE_ACTION', payload: { actionId: `action-${actionId}` } },
