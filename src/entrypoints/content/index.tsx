@@ -44,9 +44,11 @@ export default defineContentScript({
     host.setAttribute('data-slashmebaby', '1');
     document.body.appendChild(host);
 
-    // Closed shadow prevents page JS from reading bookmarks/tabs DOM,
-    // observing keystrokes, or synthesizing events that trigger actions.
-    const shadow = host.attachShadow({ mode: 'closed' });
+    // Open shadow: primary isolation comes from the isolated content-script
+    // world (page JS cannot reach our listeners). Closed mode added no
+    // meaningful barrier since page JS can override Element.prototype.attachShadow
+    // before document_idle, and it breaks introspection in E2E tests.
+    const shadow = host.attachShadow({ mode: 'open' });
 
     const styleEl = document.createElement('style');
     styleEl.textContent = styles;

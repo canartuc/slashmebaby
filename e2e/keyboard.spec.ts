@@ -1,6 +1,6 @@
 import { test, expect, chromium } from '@playwright/test';
 import path from 'path';
-import { OPEN_SHORTCUT } from './helpers';
+import { OPEN_SHORTCUT, seedBookmarks } from './helpers';
 
 async function launchWithExtension() {
   const extensionPath = path.resolve('.output/chrome-mv3');
@@ -50,6 +50,7 @@ test('Escape key closes the command bar', async () => {
 
 test('Enter key on tree item in jump mode', async () => {
   const context = await launchWithExtension();
+  await seedBookmarks(context);
   const page = await context.newPage();
   await page.goto('https://example.com');
   await page.waitForLoadState('domcontentloaded');
@@ -89,6 +90,7 @@ test('Enter key on tree item in jump mode', async () => {
 
 test('Arrow keys navigate results in search mode', async () => {
   const context = await launchWithExtension();
+  await seedBookmarks(context);
   const page = await context.newPage();
   await page.goto('https://example.com');
   await page.waitForLoadState('domcontentloaded');
@@ -101,12 +103,12 @@ test('Arrow keys navigate results in search mode', async () => {
   await page.keyboard.press('/');
   await new Promise(r => setTimeout(r, 500));
 
-  // Type a search query to get results
+  // Type a search query that matches seeded bookmark fixtures.
   await page.evaluate(() => {
     const host = document.getElementById('slashmebaby-root');
     const input = host?.shadowRoot?.querySelector('.smb-input') as HTMLInputElement;
     if (input) {
-      input.value = 'tab';
+      input.value = 'example';
       input.dispatchEvent(new Event('input', { bubbles: true }));
     }
   });

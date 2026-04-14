@@ -121,7 +121,12 @@ test('Shows tree items on open', async () => {
   await new Promise(r => setTimeout(r, 1000));
   const count = await page.evaluate(() => {
     const host = document.getElementById('slashmebaby-root');
-    return host?.shadowRoot?.querySelectorAll('.smb-tree-item')?.length || 0;
+    const sr = host?.shadowRoot;
+    if (!sr) return 0;
+    return (
+      sr.querySelectorAll('.smb-tab-col-item').length +
+      sr.querySelectorAll('.smb-tree-item').length
+    );
   });
   expect(count).toBeGreaterThan(0);
 

@@ -12,7 +12,14 @@ import type { Page } from '@playwright/test';
 async function hasTreeItems(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const host = document.getElementById('slashmebaby-root');
-    return (host?.shadowRoot?.querySelectorAll('.smb-tree-item')?.length || 0) > 0;
+    const sr = host?.shadowRoot;
+    if (!sr) return false;
+    // "Tree items" covers tab columns, bookmark tree, and legacy result rows.
+    return (
+      sr.querySelectorAll('.smb-tab-col-item').length +
+      sr.querySelectorAll('.smb-tree-item').length +
+      sr.querySelectorAll('.smb-result-item').length
+    ) > 0;
   });
 }
 

@@ -8,6 +8,7 @@ import {
   getInputValue,
   getResultCount,
   getSelectedItemTitle,
+  seedBookmarks,
 } from './helpers';
 
 // Helper: switch from jump mode to search mode by pressing /
@@ -20,6 +21,7 @@ async function enterSearchMode(page: import('@playwright/test').Page): Promise<v
 
 test('Typing filters results', async () => {
   const context = await launchBrowserWithExtension();
+  await seedBookmarks(context);
   const page = await openPage(context);
 
   await openCommandBar(page);
@@ -45,6 +47,7 @@ test('Typing filters results', async () => {
 
 test('Arrow down moves selection', async () => {
   const context = await launchBrowserWithExtension();
+  await seedBookmarks(context);
   const page = await openPage(context);
 
   await openCommandBar(page);
@@ -73,6 +76,7 @@ test('Arrow down moves selection', async () => {
 
 test('Arrow up moves selection', async () => {
   const context = await launchBrowserWithExtension();
+  await seedBookmarks(context);
   const page = await openPage(context);
 
   await openCommandBar(page);
@@ -105,6 +109,7 @@ test('Arrow up moves selection', async () => {
 
 test('Enter toggles folder expand', async () => {
   const context = await launchBrowserWithExtension();
+  await seedBookmarks(context);
   const page = await openPage(context);
 
   await openCommandBar(page);
@@ -131,6 +136,7 @@ test('Enter toggles folder expand', async () => {
 
 test('Search mode shows filtered results', async () => {
   const context = await launchBrowserWithExtension();
+  await seedBookmarks(context);
   const page = await openPage(context);
 
   await openCommandBar(page);
@@ -161,6 +167,7 @@ test('Search mode shows filtered results', async () => {
 
 test('Search input value updates', async () => {
   const context = await launchBrowserWithExtension();
+  await seedBookmarks(context);
   const page = await openPage(context);
 
   await openCommandBar(page);

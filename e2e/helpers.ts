@@ -54,10 +54,13 @@ export async function getSelectedItemTitle(page: Page): Promise<string> {
 export async function getResultCount(page: Page): Promise<number> {
   return page.evaluate(() => {
     const host = document.getElementById('slashmebaby-root');
-    // Count tree items (new UI) or result items (old UI)
-    const treeItems = host?.shadowRoot?.querySelectorAll('.smb-tree-item')?.length || 0;
-    const resultItems = host?.shadowRoot?.querySelectorAll('.smb-result-item')?.length || 0;
-    return treeItems || resultItems;
+    const sr = host?.shadowRoot;
+    if (!sr) return 0;
+    // Sum all user-facing result types: tab grid, bookmark tree, legacy results.
+    const tabs = sr.querySelectorAll('.smb-tab-col-item').length;
+    const tree = sr.querySelectorAll('.smb-tree-item').length;
+    const legacy = sr.querySelectorAll('.smb-result-item').length;
+    return tabs + tree + legacy;
   });
 }
 
@@ -105,4 +108,32 @@ export async function getExtensionId(context: BrowserContext): Promise<string> {
     if (match) return match[1];
   }
   return '';
+}
+
+/**
+ * Seed a handful of bookmarks into the fresh profile via the extension's
+ * service worker. Tests that exercise tree-view / search need real data,
+ * and launchPersistentContext('') starts from an empty profile.
+ */
+export async function seedBookmarks(context: BrowserContext): Promise<void> {
+  // Wait for at least one service worker to be registered.
+  const deadline = Date.now() + 5000;
+  let sw = context.serviceWorkers()[0];
+  while (!sw && Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 200));
+    sw = context.serviceWorkers()[0];
+  }
+  if (!sw) return;
+
+  await sw.evaluate(async () => {
+    type CreateArg = { parentId?: string; title?: string; url?: string; index?: number };
+    const create = (node: CreateArg): Promise<chrome.bookmarks.BookmarkTreeNode> =>
+      new Promise(r => chrome.bookmarks.create(node, r));
+
+    const bar = await create({ parentId: '1', title: 'E2E Seeds' });
+    await create({ parentId: bar.id, title: 'Example Site', url: 'https://example.com' });
+    await create({ parentId: bar.id, title: 'Example Org', url: 'https://example.org' });
+    await create({ parentId: bar.id, title: 'Mozilla Developer', url: 'https://developer.mozilla.org' });
+  });
+  await new Promise(r => setTimeout(r, 300));
 }
