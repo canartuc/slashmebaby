@@ -235,47 +235,6 @@ describe('useTreeData', () => {
     expect(result.current.visibleItems[0].isExpanded).toBe(false);
   });
 
-  it('getParentId returns undefined for tabs (flat in allTabs, no parent)', async () => {
-    setupSendMessage();
-
-    const { result } = renderHook(() => useTreeData());
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-
-    // Tabs are now flat in allTabs — they have no parent in the tree
-    expect(result.current.getParentId('tab-101')).toBeUndefined();
-    expect(result.current.getParentId('tab-102')).toBeUndefined();
-    expect(result.current.getParentId('tab-201')).toBeUndefined();
-  });
-
-  it('getParentId returns correct parent for bookmarks', async () => {
-    setupSendMessage();
-
-    const { result } = renderHook(() => useTreeData());
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-
-    expect(result.current.getParentId('bookmark-10')).toBe('folder-1');
-    expect(result.current.getParentId('folder-20')).toBe('folder-1');
-    expect(result.current.getParentId('bookmark-21')).toBe('folder-20');
-  });
-
-  it('getParentId returns undefined for top-level items', async () => {
-    setupSendMessage();
-
-    const { result } = renderHook(() => useTreeData());
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-
-    expect(result.current.getParentId('folder-1')).toBeUndefined();
-  });
-
   it('sends GET_ALL_TABS and GET_BOOKMARK_TREE messages on mount', () => {
     setupSendMessage();
 

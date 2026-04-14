@@ -110,8 +110,9 @@ export function createSearchEngine(
     const groups = new Map<Source, ScoredResult[]>();
     for (const result of scored) {
       const cat = result.item.category;
-      if (!groups.has(cat)) groups.set(cat, []);
-      groups.get(cat)!.push(result);
+      const list = groups.get(cat);
+      if (list) list.push(result);
+      else groups.set(cat, [result]);
     }
 
     // Sort within each group by finalScore descending and apply limit

@@ -121,9 +121,7 @@ export default defineContentScript({
         return;
       }
 
-      // Forward to the shadow root. We use the closed-over `shadow`
-      // reference here because mode:'closed' makes host.shadowRoot null.
-      // Don't intercept if a writable input is focused (search mode)
+      // Forward to the shadow root. Don't intercept if a writable input is focused (search mode).
       const activeEl = shadow.activeElement as HTMLInputElement | null;
       const isSearchInputActive = activeEl?.tagName === 'INPUT' && !activeEl?.readOnly;
 
