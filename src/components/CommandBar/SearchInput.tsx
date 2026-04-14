@@ -59,11 +59,12 @@ export const SearchInput: React.FC<SearchInputProps> = ({ query, onQueryChange, 
     }
   }, [mode]);
 
-  // Auto-focus on mount (only if mode is search or mode is not specified)
+  // Auto-focus on mount only — uses initial mode value, intentionally not tracking changes.
   useEffect(() => {
     if (!mode || mode === 'search') {
       inputRef.current?.focus();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isJump = mode === 'jump';

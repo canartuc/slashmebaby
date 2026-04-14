@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
 import { render, cleanup } from '@testing-library/react';
-import { axe } from 'vitest-axe';
+import axe from 'axe-core';
 import { Popup } from '../../entrypoints/popup/Popup';
 import { CommandBar } from '../../components/CommandBar/CommandBar';
+
+async function runAxe(container: HTMLElement) {
+  return axe.run(container, {
+    rules: { 'color-contrast': { enabled: false } },
+  });
+}
 
 function stubChrome() {
   vi.stubGlobal('chrome', {
@@ -50,11 +56,8 @@ describe('accessibility', () => {
   it('Popup renders with no detectable a11y violations', async () => {
     stubChrome();
     const { container } = render(<Popup />);
-    // axe on Popup root; color-contrast is skipped because the Shadow DOM
-    // stylesheet never loads under jsdom (colors collapse to browser defaults).
-    const results = await axe(container, {
-      rules: { 'color-contrast': { enabled: false } },
-    });
+    // color-contrast skipped: Shadow DOM stylesheet never loads under jsdom.
+    const results = await runAxe(container);
     expect(results.violations).toEqual([]);
     cleanup();
   });
@@ -62,9 +65,7 @@ describe('accessibility', () => {
   it('CommandBar renders with no detectable a11y violations', async () => {
     stubChrome();
     const { container } = render(<CommandBar onDismiss={() => {}} />);
-    const results = await axe(container, {
-      rules: { 'color-contrast': { enabled: false } },
-    });
+    const results = await runAxe(container);
     expect(results.violations).toEqual([]);
     cleanup();
   });

@@ -14,6 +14,7 @@
     "prepare": "wxt prepare",
     "postinstall": "wxt prepare",
     "compile": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
     "test": "vitest",
     "test:e2e": "playwright test",
     "test:firefox": "bash scripts/firefox-smoke-test.sh"
@@ -27,18 +28,19 @@
     "@playwright/test": "^1.59.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@types/chrome": "^0.1.40",
+    "@types/chrome": "0.1.40",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitest/coverage-v8": "^4.1.4",
     "@wxt-dev/module-react": "^1.2.2",
     "axe-core": "^4.11.3",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "jsdom": "^28.1.0",
     "playwright": "^1.58.2",
     "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.2",
     "vitest": "^4.1.4",
-    "vitest-axe": "^0.1.0",
-    "web-ext": "^10.1.0",
     "wxt": "^0.20.21"
   }
 }
