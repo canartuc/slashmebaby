@@ -301,9 +301,8 @@ describe('TreeView', () => {
         searchMode={true}
       />
     );
-    // When searchMode=true, label badges are hidden entirely
-    const badge = container.querySelector('.smb-label-badge');
-    // Only action badges in the actions grid should remain
+    // When searchMode=true, label badges are hidden entirely.
+    // Only action badges in the actions grid should remain.
     const treeBadges = container.querySelectorAll('.smb-tree-item .smb-label-badge');
     expect(treeBadges).toHaveLength(0);
   });
@@ -323,5 +322,113 @@ describe('TreeView', () => {
     expect(headers).toHaveLength(2);
     expect(headers[0].textContent).toBe('Open Tabs');
     expect(headers[1].textContent).toBe('Bookmarks');
+  });
+
+  // ─── Pinned tabs grid ─────────────────────────────────────────────────────
+
+  it('renders pinned tabs in the pinned grid', () => {
+    const pinned: TreeItemData[] = [
+      { ...tab1, id: 'tab-501', tabId: 501, title: 'Pinned-A', pinned: true, siteName: 'Slack' },
+      { ...tab2, id: 'tab-502', tabId: 502, title: 'Pinned-B', pinned: true, siteName: 'Linear' },
+    ];
+    const { container } = render(
+      <TreeView
+        {...defaultProps}
+        pinnedTabs={pinned}
+        visibleItems={[]}
+        labels={makeLabels(0)}
+      />
+    );
+    const cells = container.querySelectorAll('.smb-pinned-tab');
+    expect(cells).toHaveLength(2);
+    // Numbered 1, 2
+    expect(container.querySelectorAll('.smb-pinned-number')[0].textContent).toBe('1');
+    expect(container.querySelectorAll('.smb-pinned-number')[1].textContent).toBe('2');
+  });
+
+  it('calls onPinnedTabSelect with the tabId when a pinned cell is clicked', () => {
+    const onPinnedTabSelect = vi.fn();
+    const pinned: TreeItemData[] = [
+      { ...tab1, id: 'tab-701', tabId: 701, title: 'Pinned-X', pinned: true },
+    ];
+    const { container } = render(
+      <TreeView
+        {...defaultProps}
+        pinnedTabs={pinned}
+        visibleItems={[]}
+        labels={makeLabels(0)}
+        onPinnedTabSelect={onPinnedTabSelect}
+      />
+    );
+    (container.querySelector('.smb-pinned-tab') as HTMLElement).click();
+    expect(onPinnedTabSelect).toHaveBeenCalledWith(701);
+  });
+
+  it('hides the pinned grid in search mode', () => {
+    const pinned: TreeItemData[] = [
+      { ...tab1, id: 'tab-801', tabId: 801, title: 'Pinned-X', pinned: true },
+    ];
+    const { container } = render(
+      <TreeView
+        {...defaultProps}
+        pinnedTabs={pinned}
+        visibleItems={[]}
+        labels={makeLabels(0)}
+        searchMode={true}
+      />
+    );
+    expect(container.querySelectorAll('.smb-pinned-tab')).toHaveLength(0);
+  });
+
+  // ─── All-tabs grid ────────────────────────────────────────────────────────
+
+  it('renders the all-tabs grid with one cell per tab', () => {
+    const all: TreeItemData[] = [
+      { ...tab1, id: 'tab-901', tabId: 901, title: 'Tab-A' },
+      { ...tab2, id: 'tab-902', tabId: 902, title: 'Tab-B' },
+    ];
+    const { container } = render(
+      <TreeView
+        {...defaultProps}
+        allTabs={all}
+        visibleItems={[]}
+        labels={makeLabels(2)}
+      />
+    );
+    expect(container.querySelectorAll('.smb-tab-col-item')).toHaveLength(2);
+  });
+
+  it('calls onTabGridSelect with the tabId when an all-tabs cell is clicked', () => {
+    const onTabGridSelect = vi.fn();
+    const all: TreeItemData[] = [
+      { ...tab1, id: 'tab-1001', tabId: 1001, title: 'Tab-A' },
+    ];
+    const { container } = render(
+      <TreeView
+        {...defaultProps}
+        allTabs={all}
+        visibleItems={[]}
+        labels={makeLabels(1)}
+        onTabGridSelect={onTabGridSelect}
+      />
+    );
+    (container.querySelector('.smb-tab-col-item') as HTMLElement).click();
+    expect(onTabGridSelect).toHaveBeenCalledWith(1001);
+  });
+
+  it('hides the all-tabs grid in search mode', () => {
+    const all: TreeItemData[] = [
+      { ...tab1, id: 'tab-1101', tabId: 1101, title: 'Tab-A' },
+    ];
+    const { container } = render(
+      <TreeView
+        {...defaultProps}
+        allTabs={all}
+        visibleItems={[]}
+        labels={makeLabels(1)}
+        searchMode={true}
+      />
+    );
+    expect(container.querySelectorAll('.smb-tab-col-item')).toHaveLength(0);
   });
 });

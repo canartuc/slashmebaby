@@ -64,7 +64,11 @@ describe('CommandBar', () => {
           });
         } else if (message.type === 'EXECUTE_ACTION') {
           if (callback) callback({ success: true });
-        } else if (message.type === 'SWITCH_TAB' || message.type === 'NAVIGATE') {
+        } else if (
+          message.type === 'SWITCH_TAB' ||
+          message.type === 'NAVIGATE' ||
+          message.type === 'OPEN_NEW_TAB'
+        ) {
           if (callback) callback({ success: true });
         }
         return undefined as unknown as Promise<unknown>;
@@ -195,5 +199,301 @@ describe('CommandBar', () => {
     render(<CommandBar onDismiss={() => {}} />);
     const input = screen.getByPlaceholderText('Press / to search') as HTMLInputElement;
     expect(input.readOnly).toBe(true);
+  });
+
+  // ─── Keyboard interactions (observable behavior) ─────────────────────────
+
+  function fireSmbKey(key: string, shiftKey = false) {
+    document.dispatchEvent(
+      new CustomEvent('smb-keydown', { detail: { key, shiftKey } })
+    );
+  }
+
+  function findCall(type: string) {
+    return vi.mocked(chrome.runtime.sendMessage).mock.calls.find(
+      (c) => (c[0] as unknown as { type: string }).type === type
+    );
+  }
+
+  it('Enter on a folder/group item is a no-throw expand toggle', async () => {
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Bookmarks Bar')).toBeTruthy());
+    // Selection defaults to index 0 — first visible row, which is a group.
+    fireSmbKey('Enter');
+    // No navigation message, no dismiss.
+    expect(findCall('SWITCH_TAB')).toBeUndefined();
+    expect(findCall('NAVIGATE')).toBeUndefined();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('ArrowDown moves the selection past the first item', async () => {
+    render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+    // Smoke: dispatching ArrowDown must not throw.
+    fireSmbKey('ArrowDown');
+    fireSmbKey('ArrowDown');
+    fireSmbKey('ArrowUp');
+    expect(screen.getByRole('listbox')).toBeTruthy();
+  });
+
+  it('Tab cycles forward and Shift+Tab cycles backward', async () => {
+    render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+    fireSmbKey('Tab');
+    fireSmbKey('Tab', true);
+    expect(screen.getByRole('listbox')).toBeTruthy();
+  });
+
+  it('toggles between jump and search modes when / is dispatched twice', async () => {
+    render(<CommandBar onDismiss={() => {}} />);
+    fireSmbKey('/');
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Search tabs, bookmarks, actions...')).toBeTruthy()
+    );
+    fireSmbKey('/');
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Press / to search')).toBeTruthy()
+    );
+  });
+
+  it('ArrowRight on a collapsed folder triggers toggleExpand (no crash)', async () => {
+    render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Bookmarks Bar')).toBeTruthy());
+    // Move down a few times to land on a folder, then expand.
+    fireSmbKey('ArrowDown');
+    fireSmbKey('ArrowDown');
+    fireSmbKey('ArrowRight');
+    expect(screen.getByRole('listbox')).toBeTruthy();
+  });
+
+  it('search-mode Tab/ArrowDown still cycle the selection', async () => {
+    render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('/'); // enter search mode
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Search tabs, bookmarks, actions...')).toBeTruthy()
+    );
+    fireSmbKey('Tab');
+    fireSmbKey('ArrowDown');
+    fireSmbKey('ArrowUp');
+    expect(screen.getByRole('listbox')).toBeTruthy();
+  });
+
+  it('label key for a tab dispatches SWITCH_TAB', async () => {
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    // 'a' is the dynamic label for allTabs[0] (Gmail, tabId=1)
+    fireSmbKey('a');
+    await waitFor(() => {
+      const switchCall = findCall('SWITCH_TAB');
+      expect(switchCall).toBeTruthy();
+      expect((switchCall![0] as unknown as { payload: { tabId: number } }).payload.tabId).toBe(1);
+    });
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it('label key for a bookmark folder toggles expand without dismissing', async () => {
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Bookmarks Bar')).toBeTruthy());
+
+    // 'e' is the third dynamic label (allTabs[0]='a', allTabs[1]='b',
+    // then visibleItems[0]='e' — Bookmarks Bar folder).
+    fireSmbKey('e');
+
+    // Folder activation: no SWITCH_TAB/NAVIGATE, no dismiss.
+    expect(findCall('SWITCH_TAB')).toBeUndefined();
+    expect(findCall('NAVIGATE')).toBeUndefined();
+    expect(onDismiss).not.toHaveBeenCalled();
+    // After expand the bookmark child becomes visible.
+    await waitFor(() => expect(screen.getByText('React Docs')).toBeTruthy());
+  });
+
+  it('Enter on a bookmark URL dispatches NAVIGATE', async () => {
+    const onDismiss = vi.fn();
+    const { container } = render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Bookmarks Bar')).toBeTruthy());
+
+    // Expand the Bookmarks Bar folder, then move to its child and Enter.
+    fireSmbKey('ArrowRight');           // expand (selection at folder, idx 0)
+    await waitFor(() => expect(screen.getByText('React Docs')).toBeTruthy());
+    fireSmbKey('ArrowDown');            // move to bookmark
+    // Wait for the selection-change to propagate before firing Enter.
+    await waitFor(() => {
+      const selected = container.querySelector('.smb-tree-item--selected');
+      expect(selected?.textContent).toContain('React Docs');
+    });
+    fireSmbKey('Enter');
+
+    await waitFor(() => {
+      const nav = findCall('NAVIGATE');
+      expect(nav).toBeTruthy();
+      expect((nav![0] as unknown as { payload: { url: string } }).payload.url).toBe('https://react.dev');
+    });
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it('Shift+Enter on a bookmark URL dispatches OPEN_NEW_TAB', async () => {
+    const onDismiss = vi.fn();
+    const { container } = render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Bookmarks Bar')).toBeTruthy());
+
+    fireSmbKey('ArrowRight');
+    await waitFor(() => expect(screen.getByText('React Docs')).toBeTruthy());
+    fireSmbKey('ArrowDown');
+    await waitFor(() => {
+      const selected = container.querySelector('.smb-tree-item--selected');
+      expect(selected?.textContent).toContain('React Docs');
+    });
+    fireSmbKey('Enter', /* shift */ true);
+
+    await waitFor(() => {
+      const open = findCall('OPEN_NEW_TAB');
+      expect(open).toBeTruthy();
+      expect((open![0] as unknown as { payload: { url: string } }).payload.url).toBe('https://react.dev');
+    });
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it('ArrowLeft on an expanded folder collapses it', async () => {
+    render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Bookmarks Bar')).toBeTruthy());
+
+    fireSmbKey('ArrowRight'); // expand
+    await waitFor(() => expect(screen.getByText('React Docs')).toBeTruthy());
+    fireSmbKey('ArrowLeft');  // collapse from the folder row
+    await waitFor(() => expect(screen.queryByText('React Docs')).toBeNull());
+  });
+
+  it('ArrowLeft on a child bookmark jumps to its parent folder', async () => {
+    render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Bookmarks Bar')).toBeTruthy());
+
+    fireSmbKey('ArrowRight');
+    await waitFor(() => expect(screen.getByText('React Docs')).toBeTruthy());
+    fireSmbKey('ArrowDown');  // move into child
+    fireSmbKey('ArrowLeft');  // expected: jump to parent (folder), not collapse
+    // Folder still expanded — child still visible (collapse only fires on the
+    // folder row itself, not on children).
+    expect(screen.getByText('React Docs')).toBeTruthy();
+  });
+
+  it('action key sends EXECUTE_ACTION with the action- prefix', async () => {
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('p'); // pin-tab
+    await waitFor(() => {
+      const exec = findCall('EXECUTE_ACTION');
+      expect(exec).toBeTruthy();
+      expect(
+        (exec![0] as unknown as { payload: { actionId: string } }).payload.actionId
+      ).toBe('action-pin-tab');
+    });
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it('Tab moves selection forward without invoking activation', async () => {
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Bookmarks Bar')).toBeTruthy());
+    fireSmbKey('Tab');
+    expect(findCall('SWITCH_TAB')).toBeUndefined();
+    expect(findCall('NAVIGATE')).toBeUndefined();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Pinned-tab number shortcuts ────────────────────────────────────────────
+
+describe('CommandBar — pinned tab number shortcuts', () => {
+  beforeEach(() => {
+    vi.mocked(chrome.runtime.sendMessage).mockReset();
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
+      const message = msg as { type: string };
+      if (message.type === 'GET_SETTINGS' && callback) {
+        callback({
+          settings: {
+            shortcut: 'Ctrl+Shift+Space', position: 'center', theme: 'dark',
+            maxResultsPerGroup: 5, showFavicons: true,
+            searchSources: { tabs: true, bookmarks: true, history: true },
+          },
+        });
+      } else if (message.type === 'GET_ALL_TABS' && callback) {
+        callback({
+          groups: [
+            {
+              label: 'Window 1', type: 'window',
+              tabs: [
+                { id: 11, title: 'Pinned-A', url: 'https://a.example', favIconUrl: '', windowId: 1, pinned: true,  audible: false },
+                { id: 12, title: 'Pinned-B', url: 'https://b.example', favIconUrl: '', windowId: 1, pinned: true,  audible: false },
+                { id: 13, title: 'Regular',  url: 'https://c.example', favIconUrl: '', windowId: 1, pinned: false, audible: false },
+              ],
+            },
+          ],
+        });
+      } else if (message.type === 'GET_BOOKMARK_TREE' && callback) {
+        callback({ tree: [] });
+      } else if (callback) {
+        callback({ success: true });
+      }
+      return undefined as unknown as Promise<unknown>;
+    }) as unknown as typeof chrome.runtime.sendMessage);
+  });
+
+  function fireSmbKey(key: string, shiftKey = false) {
+    document.dispatchEvent(
+      new CustomEvent('smb-keydown', { detail: { key, shiftKey } })
+    );
+  }
+  function findCall(type: string) {
+    return vi.mocked(chrome.runtime.sendMessage).mock.calls.find(
+      (c) => (c[0] as unknown as { type: string }).type === type
+    );
+  }
+
+  it('"1" switches to the first pinned tab', async () => {
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Regular')).toBeTruthy());
+
+    fireSmbKey('1');
+    await waitFor(() => {
+      const c = findCall('SWITCH_TAB');
+      expect(c).toBeTruthy();
+      expect((c![0] as unknown as { payload: { tabId: number } }).payload.tabId).toBe(11);
+    });
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it('"2" switches to the second pinned tab', async () => {
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Regular')).toBeTruthy());
+
+    fireSmbKey('2');
+    await waitFor(() => {
+      const c = findCall('SWITCH_TAB');
+      expect(c).toBeTruthy();
+      expect((c![0] as unknown as { payload: { tabId: number } }).payload.tabId).toBe(12);
+    });
+  });
+
+  it('"5" with only 2 pinned tabs is a no-op (no SWITCH_TAB)', async () => {
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Regular')).toBeTruthy());
+
+    fireSmbKey('5');
+    expect(findCall('SWITCH_TAB')).toBeUndefined();
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 });

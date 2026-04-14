@@ -2,7 +2,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useKeyboard } from '../../hooks/useKeyboard';
-import { useRef } from 'react';
 import type { RefObject } from 'react';
 
 function fireKeyDown(el: HTMLElement, key: string, extra: Partial<KeyboardEvent> = {}) {
@@ -261,5 +260,67 @@ describe('useKeyboard', () => {
 
     fireKeyDown(containerRef.current!, 'ArrowDown');
     expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it('does nothing on ArrowUp when totalItems is 0', () => {
+    const onMove = vi.fn();
+    const containerRef = createContainerRef();
+
+    renderHook(() =>
+      useKeyboard(containerRef, {
+        totalItems: 0,
+        selectedIndex: 0,
+        onMove,
+        onExecute: vi.fn(),
+        onDismiss: vi.fn(),
+        groupBoundaries: [],
+        query: 'test',
+      })
+    );
+
+    fireKeyDown(containerRef.current!, 'ArrowUp');
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it('does nothing on Tab when groupBoundaries is empty', () => {
+    const onMove = vi.fn();
+    const containerRef = createContainerRef();
+
+    renderHook(() =>
+      useKeyboard(containerRef, {
+        totalItems: 5,
+        selectedIndex: 1,
+        onMove,
+        onExecute: vi.fn(),
+        onDismiss: vi.fn(),
+        groupBoundaries: [],
+        query: '',
+      })
+    );
+
+    fireKeyDown(containerRef.current!, 'Tab');
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it('Shift+Tab wraps to the last group boundary when no previous boundary exists', () => {
+    const onMove = vi.fn();
+    const containerRef = createContainerRef();
+
+    // selectedIndex=0 is the first/only boundary — Shift+Tab has no
+    // earlier boundary to find, so it wraps to the last one in the list.
+    renderHook(() =>
+      useKeyboard(containerRef, {
+        totalItems: 5,
+        selectedIndex: 0,
+        onMove,
+        onExecute: vi.fn(),
+        onDismiss: vi.fn(),
+        groupBoundaries: [0, 3],
+        query: '',
+      })
+    );
+
+    fireKeyDown(containerRef.current!, 'Tab', { shiftKey: true });
+    expect(onMove).toHaveBeenCalledWith(3);
   });
 });

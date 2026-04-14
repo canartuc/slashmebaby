@@ -88,4 +88,15 @@ describe('getSiteName', () => {
   it('returns Notion for notion.so', () => {
     expect(getSiteName('https://notion.so/page-123')).toBe('Notion');
   });
+
+  it('matches a known site after stripping the www. prefix', () => {
+    // www.discord.com is NOT in KNOWN_SITES directly, but discord.com is —
+    // the bare-hostname re-check should still resolve to Discord.
+    expect(getSiteName('https://www.discord.com/channels/123')).toBe('Discord');
+  });
+
+  it('handles single-segment hostnames (no TLD)', () => {
+    // Internal/intranet hosts have no dots — fall through to parts[0].
+    expect(getSiteName('http://intranet/dashboard')).toBe('Intranet');
+  });
 });

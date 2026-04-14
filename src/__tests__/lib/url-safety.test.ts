@@ -80,4 +80,19 @@ describe('isSafeFaviconUrl', () => {
     expect(isSafeFaviconUrl('')).toBe(false);
     expect(isSafeFaviconUrl('a'.repeat(5000))).toBe(false);
   });
+
+  it('rejects unparseable favicon strings', () => {
+    expect(isSafeFaviconUrl('not a url')).toBe(false);
+    expect(isSafeFaviconUrl('://bogus')).toBe(false);
+  });
+});
+
+describe('validateNavigationUrl — disallowed-but-not-blocked schemes', () => {
+  it('rejects schemes that are neither allowed nor explicitly blocked', () => {
+    // gopher, irc, sftp etc. are not in the blocked set but also not in
+    // the allowlist, so they should fall through with "disallowed scheme".
+    const r = validateNavigationUrl('gopher://example.com/');
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain('disallowed');
+  });
 });

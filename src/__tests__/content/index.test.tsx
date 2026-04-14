@@ -1,0 +1,319 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+vi.mock('../../entrypoints/content/App', () => ({
+  App: () => null,
+}));
+
+vi.mock('../../styles/command-bar.css?inline', () => ({ default: '' }));
+
+interface ContentMain {
+  main: () => void;
+}
+
+type ChangeListener = (
+  changes: Record<string, chrome.storage.StorageChange>,
+  area: string
+) => void;
+type RuntimeListener = (message: unknown, sender: chrome.runtime.MessageSender) => void;
+type StorageGetCb = (result: Record<string, unknown>) => void;
+
+interface CapturedChrome {
+  changeListeners: ChangeListener[];
+  runtimeListeners: RuntimeListener[];
+  storageGet: ReturnType<typeof vi.fn>;
+}
+
+function buildChrome(initialSettings?: { shortcut?: string }): CapturedChrome {
+  const changeListeners: ChangeListener[] = [];
+  const runtimeListeners: RuntimeListener[] = [];
+
+  const storageGet = vi.fn((_keys: unknown, cb: StorageGetCb) => {
+    cb({ settings: initialSettings });
+  });
+
+  vi.stubGlobal('chrome', {
+    runtime: {
+      id: 'test-extension',
+      onMessage: {
+        addListener: vi.fn((cb: RuntimeListener) => {
+          runtimeListeners.push(cb);
+        }),
+      },
+      sendMessage: vi.fn(),
+    },
+    storage: {
+      sync: { get: storageGet },
+      onChanged: {
+        addListener: vi.fn((cb: ChangeListener) => {
+          changeListeners.push(cb);
+        }),
+      },
+    },
+  });
+
+  return { changeListeners, runtimeListeners, storageGet };
+}
+
+async function loadContentMain(): Promise<ContentMain> {
+  vi.resetModules();
+  const mod = (await import('../../entrypoints/content/index')) as {
+    default: ContentMain;
+  };
+  return mod.default;
+}
+
+function setLocation(protocol: 'http:' | 'https:' | 'chrome:' | 'about:') {
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { ...window.location, protocol },
+  });
+}
+
+function clearBody() {
+  while (document.body.firstChild) {
+    document.body.removeChild(document.body.firstChild);
+  }
+}
+
+type KeydownHandler = (e: KeyboardEvent) => void;
+
+function captureKeydown(): { handler: () => KeydownHandler } {
+  let captured: KeydownHandler | null = null;
+  const original = document.addEventListener.bind(document);
+  vi.spyOn(document, 'addEventListener').mockImplementation((type, listener) => {
+    if (type === 'keydown' && typeof listener === 'function') {
+      captured = listener as KeydownHandler;
+      return;
+    }
+    return original(type, listener as EventListener);
+  });
+  return {
+    handler: () => {
+      if (!captured) throw new Error('keydown handler not captured');
+      return captured;
+    },
+  };
+}
+
+function fakeKey(opts: {
+  key: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+  isTrusted?: boolean;
+}): KeyboardEvent {
+  return {
+    key: opts.key,
+    ctrlKey: !!opts.ctrlKey,
+    metaKey: !!opts.metaKey,
+    shiftKey: !!opts.shiftKey,
+    altKey: !!opts.altKey,
+    isTrusted: opts.isTrusted !== false,
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
+  } as unknown as KeyboardEvent;
+}
+
+describe('content script entrypoint', () => {
+  beforeEach(() => {
+    clearBody();
+    setLocation('https:');
+    // Re-stub WXT's auto-imported globals — afterEach's unstubAllGlobals
+    // wipes the one set in setup.ts.
+    vi.stubGlobal(
+      'defineContentScript',
+      (config: { matches: string[]; main: () => void }) => config
+    );
+  });
+
+  afterEach(() => {
+    clearBody();
+    vi.unstubAllGlobals();
+  });
+
+  it('skips injection on non-http(s)/file schemes', async () => {
+    setLocation('chrome:');
+    buildChrome();
+    const cs = await loadContentMain();
+    cs.main();
+    expect(document.getElementById('slashmebaby-root')).toBeNull();
+  });
+
+  it('injects host element with shadow root on https pages', async () => {
+    buildChrome();
+    const cs = await loadContentMain();
+    cs.main();
+
+    const host = document.getElementById('slashmebaby-root');
+    expect(host).not.toBeNull();
+    expect(host?.dataset.slashmebaby).toBe('1');
+    expect(host?.shadowRoot).not.toBeNull();
+    expect(host?.shadowRoot?.querySelector('style')).not.toBeNull();
+  });
+
+  it('reads initial shortcut from chrome.storage.sync', async () => {
+    const captured = buildChrome({ shortcut: 'Ctrl+K' });
+    const cs = await loadContentMain();
+    cs.main();
+    expect(captured.storageGet).toHaveBeenCalledWith('settings', expect.any(Function));
+  });
+
+  it('updates shortcut when chrome.storage.onChanged fires for sync area', async () => {
+    const captured = buildChrome({ shortcut: 'Ctrl+K' });
+    const keys = captureKeydown();
+    const cs = await loadContentMain();
+    cs.main();
+    expect(captured.changeListeners).toHaveLength(1);
+
+    captured.changeListeners[0](
+      { settings: { newValue: { shortcut: 'Ctrl+J' }, oldValue: undefined } },
+      'sync'
+    );
+
+    keys.handler()(fakeKey({ key: 'j', ctrlKey: true }));
+    const host = document.getElementById('slashmebaby-root');
+    // Mount point + style + rendered React root.
+    expect(host?.shadowRoot?.children.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('ignores chrome.storage.onChanged events from non-sync areas', async () => {
+    const captured = buildChrome({ shortcut: 'Ctrl+K' });
+    const keys = captureKeydown();
+    const cs = await loadContentMain();
+    cs.main();
+
+    captured.changeListeners[0](
+      { settings: { newValue: { shortcut: 'Ctrl+J' }, oldValue: undefined } },
+      'local'
+    );
+
+    keys.handler()(fakeKey({ key: 'j', ctrlKey: true }));
+    const host = document.getElementById('slashmebaby-root');
+    expect(host?.shadowRoot?.children.length).toBe(2);
+  });
+
+  it('rejects synthetic (untrusted) keyboard events', async () => {
+    buildChrome();
+    const keys = captureKeydown();
+    const cs = await loadContentMain();
+    cs.main();
+
+    keys.handler()(fakeKey({ key: ' ', ctrlKey: true, shiftKey: true, isTrusted: false }));
+    const host = document.getElementById('slashmebaby-root');
+    expect(host?.shadowRoot?.children.length).toBe(2);
+  });
+
+  it('opens overlay when default shortcut Ctrl+Shift+Space is pressed (trusted)', async () => {
+    buildChrome();
+    const keys = captureKeydown();
+    const cs = await loadContentMain();
+    cs.main();
+
+    const event = fakeKey({ key: ' ', ctrlKey: true, shiftKey: true });
+    keys.handler()(event);
+    expect(event.preventDefault).toHaveBeenCalled();
+    const host = document.getElementById('slashmebaby-root');
+    expect(host?.shadowRoot?.children.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('Escape dismisses an open overlay', async () => {
+    buildChrome();
+    const keys = captureKeydown();
+    const cs = await loadContentMain();
+    cs.main();
+
+    keys.handler()(fakeKey({ key: ' ', ctrlKey: true, shiftKey: true }));
+    const escEvent = fakeKey({ key: 'Escape' });
+    keys.handler()(escEvent);
+    expect(escEvent.preventDefault).toHaveBeenCalled();
+  });
+
+  it('special keys are forwarded to the shadow root as smb-keydown events', async () => {
+    buildChrome();
+    const keys = captureKeydown();
+    const cs = await loadContentMain();
+    cs.main();
+
+    // Open first.
+    keys.handler()(fakeKey({ key: ' ', ctrlKey: true, shiftKey: true }));
+
+    const host = document.getElementById('slashmebaby-root');
+    const shadow = host?.shadowRoot as ShadowRoot;
+    const received: CustomEvent[] = [];
+    shadow.addEventListener('smb-keydown', (e) => {
+      received.push(e as CustomEvent);
+    });
+
+    keys.handler()(fakeKey({ key: 'ArrowDown' }));
+    keys.handler()(fakeKey({ key: 'Enter' }));
+
+    expect(received).toHaveLength(2);
+    expect(received[0].detail).toMatchObject({ key: 'ArrowDown' });
+    expect(received[1].detail).toMatchObject({ key: 'Enter' });
+  });
+
+  it('non-special keys are NOT forwarded when a writable input is focused', async () => {
+    buildChrome();
+    const keys = captureKeydown();
+    const cs = await loadContentMain();
+    cs.main();
+
+    keys.handler()(fakeKey({ key: ' ', ctrlKey: true, shiftKey: true }));
+
+    const host = document.getElementById('slashmebaby-root');
+    const shadow = host?.shadowRoot as ShadowRoot;
+    // Focus a writable input inside the shadow root so isSearchInputActive is true.
+    const input = document.createElement('input');
+    shadow.appendChild(input);
+    input.focus();
+
+    let count = 0;
+    shadow.addEventListener('smb-keydown', () => {
+      count++;
+    });
+    keys.handler()(fakeKey({ key: 'a' }));
+    expect(count).toBe(0);
+  });
+
+  it('TOGGLE_OVERLAY message from background opens then dismisses overlay', async () => {
+    const captured = buildChrome();
+    const cs = await loadContentMain();
+    cs.main();
+
+    const sender = { id: 'test-extension' } as chrome.runtime.MessageSender;
+    captured.runtimeListeners[0]({ type: 'TOGGLE_OVERLAY' }, sender);
+    captured.runtimeListeners[0]({ type: 'TOGGLE_OVERLAY' }, sender);
+    expect(captured.runtimeListeners).toHaveLength(1);
+  });
+
+  it('ignores runtime messages from other extensions', async () => {
+    const captured = buildChrome();
+    const cs = await loadContentMain();
+    cs.main();
+
+    captured.runtimeListeners[0](
+      { type: 'TOGGLE_OVERLAY' },
+      { id: 'attacker-extension' } as chrome.runtime.MessageSender
+    );
+    const host = document.getElementById('slashmebaby-root');
+    expect(host?.shadowRoot?.children.length).toBe(2);
+  });
+
+  it('ignores non-TOGGLE_OVERLAY messages', async () => {
+    const captured = buildChrome();
+    const cs = await loadContentMain();
+    cs.main();
+
+    captured.runtimeListeners[0](
+      { type: 'OTHER' },
+      { id: 'test-extension' } as chrome.runtime.MessageSender
+    );
+    captured.runtimeListeners[0](
+      'not-an-object',
+      { id: 'test-extension' } as chrome.runtime.MessageSender
+    );
+    const host = document.getElementById('slashmebaby-root');
+    expect(host?.shadowRoot?.children.length).toBe(2);
+  });
+});

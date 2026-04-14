@@ -206,4 +206,56 @@ describe('Popup', () => {
       expect(listbox).toBeTruthy();
     });
   });
+
+  it('Enter on the highlighted item routes through getItemAtIndex (group offset)', async () => {
+    render(<Popup />);
+    await waitFor(() => {
+      expect(screen.getByText('Gmail')).toBeTruthy();
+    });
+
+    // Selected index 0 = first tab. Move down 3 times to reach the action group.
+    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => {
+      const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
+      const exec = calls.find(
+        (c) => (c[0] as unknown as { type: string }).type === 'EXECUTE_ACTION'
+      );
+      expect(exec).toBeTruthy();
+    });
+  });
+
+  it('Escape closes the popup window', async () => {
+    render(<Popup />);
+    await waitFor(() => {
+      expect(screen.getByText('Gmail')).toBeTruthy();
+    });
+
+    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(mockClose).toHaveBeenCalled();
+  });
+
+  it('Enter with no results is a no-op (does not close)', async () => {
+    // Override the search mock to return empty groups
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      msg: unknown,
+      cb?: (response: unknown) => void
+    ) => {
+      const m = msg as { type: string };
+      if (m.type === 'SMART_SUGGESTIONS' || m.type === 'SEARCH') {
+        if (cb) cb({ groups: [] });
+      }
+      return undefined as unknown as Promise<unknown>;
+    }) as unknown as typeof chrome.runtime.sendMessage);
+
+    render(<Popup />);
+    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(mockClose).not.toHaveBeenCalled();
+  });
 });

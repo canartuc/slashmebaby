@@ -238,6 +238,113 @@ describe('isGetBookmarkTreeRequest', () => {
   });
 });
 
+// ─── Action-route guards (SWITCH_TAB / OPEN_NEW_TAB / NAVIGATE) ────────────
+
+import {
+  isSwitchTabRequest,
+  isOpenNewTabRequest,
+  isNavigateRequest,
+} from '../../lib/messaging';
+import type {
+  SwitchTabRequest,
+  OpenNewTabRequest,
+  NavigateRequest,
+} from '../../lib/messaging';
+
+describe('isSwitchTabRequest', () => {
+  it('returns true for a valid SwitchTabRequest', () => {
+    const msg: SwitchTabRequest = { type: 'SWITCH_TAB', payload: { tabId: 42 } };
+    expect(isSwitchTabRequest(msg)).toBe(true);
+  });
+
+  it('returns true for tabId 0', () => {
+    expect(isSwitchTabRequest({ type: 'SWITCH_TAB', payload: { tabId: 0 } })).toBe(true);
+  });
+
+  it('returns false for negative tabId', () => {
+    expect(isSwitchTabRequest({ type: 'SWITCH_TAB', payload: { tabId: -1 } })).toBe(false);
+  });
+
+  it('returns false for non-integer tabId', () => {
+    expect(isSwitchTabRequest({ type: 'SWITCH_TAB', payload: { tabId: 1.5 } })).toBe(false);
+  });
+
+  it('returns false for string tabId', () => {
+    expect(isSwitchTabRequest({ type: 'SWITCH_TAB', payload: { tabId: '5' } })).toBe(false);
+  });
+
+  it('returns false for missing payload', () => {
+    expect(isSwitchTabRequest({ type: 'SWITCH_TAB' })).toBe(false);
+  });
+
+  it('returns false for wrong type', () => {
+    expect(isSwitchTabRequest({ type: 'NAVIGATE', payload: { tabId: 1 } })).toBe(false);
+  });
+
+  it('returns false for null', () => {
+    expect(isSwitchTabRequest(null)).toBe(false);
+  });
+});
+
+describe('isOpenNewTabRequest', () => {
+  it('returns true for a valid OpenNewTabRequest', () => {
+    const msg: OpenNewTabRequest = { type: 'OPEN_NEW_TAB', payload: { url: 'https://example.com' } };
+    expect(isOpenNewTabRequest(msg)).toBe(true);
+  });
+
+  it('returns false for empty url', () => {
+    expect(isOpenNewTabRequest({ type: 'OPEN_NEW_TAB', payload: { url: '' } })).toBe(false);
+  });
+
+  it('returns false for non-string url', () => {
+    expect(isOpenNewTabRequest({ type: 'OPEN_NEW_TAB', payload: { url: 123 } })).toBe(false);
+  });
+
+  it('returns false for url longer than 4096 chars', () => {
+    const longUrl = 'https://example.com/' + 'a'.repeat(4100);
+    expect(isOpenNewTabRequest({ type: 'OPEN_NEW_TAB', payload: { url: longUrl } })).toBe(false);
+  });
+
+  it('returns false for missing payload', () => {
+    expect(isOpenNewTabRequest({ type: 'OPEN_NEW_TAB' })).toBe(false);
+  });
+
+  it('returns false for wrong type', () => {
+    expect(isOpenNewTabRequest({ type: 'NAVIGATE', payload: { url: 'https://example.com' } })).toBe(false);
+  });
+
+  it('returns false for null', () => {
+    expect(isOpenNewTabRequest(null)).toBe(false);
+  });
+});
+
+describe('isNavigateRequest', () => {
+  it('returns true for a valid NavigateRequest', () => {
+    const msg: NavigateRequest = { type: 'NAVIGATE', payload: { url: 'https://example.com' } };
+    expect(isNavigateRequest(msg)).toBe(true);
+  });
+
+  it('returns false for empty url', () => {
+    expect(isNavigateRequest({ type: 'NAVIGATE', payload: { url: '' } })).toBe(false);
+  });
+
+  it('returns false for non-string url', () => {
+    expect(isNavigateRequest({ type: 'NAVIGATE', payload: { url: null } })).toBe(false);
+  });
+
+  it('returns false for missing payload', () => {
+    expect(isNavigateRequest({ type: 'NAVIGATE' })).toBe(false);
+  });
+
+  it('returns false for wrong type', () => {
+    expect(isNavigateRequest({ type: 'OPEN_NEW_TAB', payload: { url: 'https://example.com' } })).toBe(false);
+  });
+
+  it('returns false for null', () => {
+    expect(isNavigateRequest(null)).toBe(false);
+  });
+});
+
 describe('Message union type with new types', () => {
   it('can assign GET_ALL_TABS to Message union', () => {
     const msg: GetAllTabsRequest = { type: 'GET_ALL_TABS' };
@@ -283,6 +390,83 @@ describe('Type guard edge cases', () => {
 
     it('returns false for undefined', () => {
       expect(isExecuteActionRequest(undefined)).toBe(false);
+    });
+
+    it('returns false for missing payload', () => {
+      expect(isExecuteActionRequest({ type: 'EXECUTE_ACTION' })).toBe(false);
+    });
+
+    it('returns false for empty actionId', () => {
+      expect(
+        isExecuteActionRequest({ type: 'EXECUTE_ACTION', payload: { actionId: '' } })
+      ).toBe(false);
+    });
+
+    it('returns false for actionId longer than 128 chars', () => {
+      expect(
+        isExecuteActionRequest({
+          type: 'EXECUTE_ACTION',
+          payload: { actionId: 'a'.repeat(129) },
+        })
+      ).toBe(false);
+    });
+
+    it('returns false for negative targetTabId', () => {
+      expect(
+        isExecuteActionRequest({
+          type: 'EXECUTE_ACTION',
+          payload: { actionId: 'x', targetTabId: -1 },
+        })
+      ).toBe(false);
+    });
+
+    it('returns false for non-integer targetTabId', () => {
+      expect(
+        isExecuteActionRequest({
+          type: 'EXECUTE_ACTION',
+          payload: { actionId: 'x', targetTabId: 1.5 },
+        })
+      ).toBe(false);
+    });
+  });
+
+  describe('isSearchRequest payload-shape edges', () => {
+    it('returns false for missing payload', () => {
+      expect(isSearchRequest({ type: 'SEARCH' })).toBe(false);
+    });
+
+    it('returns false for non-string query', () => {
+      expect(isSearchRequest({ type: 'SEARCH', payload: { query: 7, sources: [] } })).toBe(false);
+    });
+
+    it('returns false for query longer than 2048 chars', () => {
+      expect(
+        isSearchRequest({
+          type: 'SEARCH',
+          payload: { query: 'x'.repeat(2049), sources: [] },
+        })
+      ).toBe(false);
+    });
+
+    it('returns false for non-array sources', () => {
+      expect(
+        isSearchRequest({ type: 'SEARCH', payload: { query: 'q', sources: 'tabs' } })
+      ).toBe(false);
+    });
+
+    it('returns false for sources array longer than 16', () => {
+      expect(
+        isSearchRequest({
+          type: 'SEARCH',
+          payload: { query: 'q', sources: new Array(17).fill('tabs') },
+        })
+      ).toBe(false);
+    });
+
+    it('returns false for unknown source value', () => {
+      expect(
+        isSearchRequest({ type: 'SEARCH', payload: { query: 'q', sources: ['evil'] } })
+      ).toBe(false);
     });
   });
 
