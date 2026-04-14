@@ -3,6 +3,7 @@ import type {
   GetAllTabsResponse,
   GetBookmarkTreeResponse,
   TabGroupInfo,
+  TabWithGroup,
   BookmarkNode,
 } from '../lib/messaging';
 import { getSiteName } from '../lib/site-names';
@@ -33,64 +34,31 @@ interface InternalNode {
 
 // ─── Build internal tree from API responses ──────────────────────────────────
 
+function toTabItem(tab: TabWithGroup, pinned: boolean): Omit<TreeItem, 'isExpanded'> {
+  return {
+    id: `tab-${tab.id}`,
+    title: tab.title,
+    url: tab.url,
+    icon: tab.favIconUrl,
+    type: 'tab',
+    depth: 0,
+    childCount: 0,
+    tabId: tab.id,
+    pinned,
+    siteName: getSiteName(tab.url),
+  };
+}
+
 function buildPinnedTabNodes(groups: TabGroupInfo[]): InternalNode[] {
   const pinned: InternalNode[] = [];
   for (const group of groups) {
     for (const tab of group.tabs) {
       if (tab.pinned) {
-        pinned.push({
-          item: {
-            id: `tab-${tab.id}`,
-            title: tab.title,
-            url: tab.url,
-            icon: tab.favIconUrl,
-            type: 'tab' as const,
-            depth: 0,
-            childCount: 0,
-            tabId: tab.id,
-            pinned: true,
-            siteName: getSiteName(tab.url),
-          },
-          children: [],
-        });
+        pinned.push({ item: toTabItem(tab, true), children: [] });
       }
     }
   }
   return pinned;
-}
-
-function buildTabNodes(groups: TabGroupInfo[]): InternalNode[] {
-  return groups.map((group) => {
-    const groupId = `group-${group.label}`;
-    // Exclude pinned tabs from groups — they're shown separately
-    const children: InternalNode[] = group.tabs
-      .filter((tab) => !tab.pinned)
-      .map((tab) => ({
-        item: {
-          id: `tab-${tab.id}`,
-          title: tab.title,
-          url: tab.url,
-          icon: tab.favIconUrl,
-          type: 'tab' as const,
-          depth: 1,
-          childCount: 0,
-          parentId: groupId,
-          tabId: tab.id,
-          siteName: getSiteName(tab.url),
-        },
-        children: [],
-      }));
-    return {
-      item: {
-        id: groupId,
-        title: group.label,
-        type: 'group' as const,
-        depth: 0,
-        childCount: children.length,
-      },
-      children,
-    };
-  }).filter((group) => group.children.length > 0); // skip empty groups after filtering
 }
 
 function buildBookmarkNodes(
@@ -166,22 +134,6 @@ function flattenAll(nodes: InternalNode[]): TreeItem[] {
   return result;
 }
 
-// ─── Build parent map for ArrowLeft navigation ───────────────────────────────
-
-function buildParentMap(nodes: InternalNode[]): Map<string, string> {
-  const map = new Map<string, string>();
-  function walk(nodes: InternalNode[]) {
-    for (const node of nodes) {
-      if (node.item.parentId) {
-        map.set(node.item.id, node.item.parentId);
-      }
-      walk(node.children);
-    }
-  }
-  walk(nodes);
-  return map;
-}
-
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useTreeData(): {
@@ -190,13 +142,11 @@ export function useTreeData(): {
   visibleItems: TreeItem[];
   allItems: TreeItem[];
   toggleExpand: (id: string) => void;
-  getParentId: (id: string) => string | undefined;
   isLoading: boolean;
 } {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [, setExpandedIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const treeRef = useRef<InternalNode[]>([]);
-  const parentMapRef = useRef<Map<string, string>>(new Map());
   const [pinnedTabs, setPinnedTabs] = useState<TreeItem[]>([]);
   const [allTabs, setAllTabs] = useState<TreeItem[]>([]);
   const [visibleItems, setVisibleItems] = useState<TreeItem[]>([]);
@@ -216,7 +166,6 @@ export function useTreeData(): {
       if (completed < 2 || cancelled) return;
 
       const pinnedNodes = buildPinnedTabNodes(tabGroups);
-      const tabNodes = buildTabNodes(tabGroups);
       const bookmarkNodes = buildBookmarkNodes(bookmarkTree, 0);
       // Tree only contains bookmarks — tabs are in the grid
       const tree = [...bookmarkNodes];
@@ -228,24 +177,12 @@ export function useTreeData(): {
       for (const group of tabGroups) {
         for (const tab of group.tabs) {
           if (!tab.pinned) {
-            flatTabs.push({
-              id: `tab-${tab.id}`,
-              title: tab.title,
-              url: tab.url,
-              icon: tab.favIconUrl,
-              type: 'tab',
-              depth: 0,
-              isExpanded: false,
-              childCount: 0,
-              tabId: tab.id,
-              siteName: getSiteName(tab.url),
-            });
+            flatTabs.push({ ...toTabItem(tab, false), isExpanded: false });
           }
         }
       }
       setAllTabs(flatTabs);
       treeRef.current = tree;
-      parentMapRef.current = buildParentMap(tree);
 
       const initialExpanded = new Set<string>();
       setExpandedIds(initialExpanded);
@@ -294,9 +231,5 @@ export function useTreeData(): {
     });
   }, []);
 
-  const getParentId = useCallback((id: string): string | undefined => {
-    return parentMapRef.current.get(id);
-  }, []);
-
-  return { pinnedTabs, allTabs, visibleItems, allItems, toggleExpand, getParentId, isLoading };
+  return { pinnedTabs, allTabs, visibleItems, allItems, toggleExpand, isLoading };
 }

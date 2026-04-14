@@ -19,7 +19,6 @@ vi.stubGlobal(
 // Individual test files can override specific methods via vi.mocked().
 
 if (typeof globalThis.chrome === 'undefined') {
-  const noop = vi.fn();
   const noopListener = { addListener: vi.fn(), removeListener: vi.fn() };
 
   vi.stubGlobal('chrome', {

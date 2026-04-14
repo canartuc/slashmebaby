@@ -149,6 +149,36 @@ describe('BookmarkCache', () => {
     expect(bookmarksApi.onChanged.addListener).toHaveBeenCalledTimes(1);
   });
 
+  it('drops bookmarks with javascript: URLs', async () => {
+    const safe = makeBookmark('bm-safe', 'Safe', 'https://example.com');
+    const unsafe = makeBookmark('bm-xss', 'XSS Bookmark', 'javascript:alert(1)');
+    const tree = [makeFolder('root', 'Root', [safe, unsafe])];
+
+    const bookmarksApi = makeBookmarksApi(tree);
+    vi.stubGlobal('chrome', { bookmarks: bookmarksApi });
+
+    const cache = new BookmarkCache();
+    await cache.refresh();
+
+    const items = cache.getItems();
+    const ids = items.map((i) => i.id);
+    expect(ids).toContain('bookmark-bm-safe');
+    expect(ids).not.toContain('bookmark-bm-xss');
+  });
+
+  it('drops bookmarks with data: URLs', async () => {
+    const unsafe = makeBookmark('bm-data', 'Data', 'data:text/html,<script>alert(1)</script>');
+    const tree = [makeFolder('root', 'Root', [unsafe])];
+
+    const bookmarksApi = makeBookmarksApi(tree);
+    vi.stubGlobal('chrome', { bookmarks: bookmarksApi });
+
+    const cache = new BookmarkCache();
+    await cache.refresh();
+
+    expect(cache.getItems()).toHaveLength(0);
+  });
+
   it('calls refresh and onUpdate when bookmark event fires', async () => {
     let onCreatedCallback: (() => void) | null = null;
 

@@ -1,28 +1,7 @@
-import { test, expect, chromium } from '@playwright/test';
-import path from 'path';
-import { OPEN_SHORTCUT, seedBookmarks } from './helpers';
+import { test, expect, type Page } from '@playwright/test';
+import { OPEN_SHORTCUT, seedBookmarks, launchBrowserWithExtension as launchWithExtension, openCommandBar } from './helpers';
 
-async function launchWithExtension() {
-  const extensionPath = path.resolve('.output/chrome-mv3');
-  const context = await chromium.launchPersistentContext('', {
-    headless: false,
-    args: [
-      `--disable-extensions-except=${extensionPath}`,
-      `--load-extension=${extensionPath}`,
-      '--no-first-run',
-      '--disable-default-apps',
-    ],
-  });
-  await new Promise(r => setTimeout(r, 2000));
-  return context;
-}
-
-async function openCommandBar(page: any) {
-  await page.keyboard.press(OPEN_SHORTCUT);
-  await new Promise(r => setTimeout(r, 800));
-}
-
-async function getOverlayState(page: any): Promise<string> {
+async function getOverlayState(page: Page): Promise<string> {
   return page.evaluate(() => {
     const host = document.getElementById('slashmebaby-root');
     if (!host?.shadowRoot) return 'no shadow root';

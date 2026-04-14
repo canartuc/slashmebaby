@@ -1,21 +1,5 @@
-import { test, expect, chromium, type BrowserContext, type Page } from '@playwright/test';
-import path from 'path';
-import { OPEN_SHORTCUT } from './helpers';
-
-const EXT_PATH = path.resolve('.output/chrome-mv3');
-
-async function launch(): Promise<BrowserContext> {
-  const ctx = await chromium.launchPersistentContext('', {
-    headless: false,
-    args: [
-      `--disable-extensions-except=${EXT_PATH}`,
-      `--load-extension=${EXT_PATH}`,
-      '--no-first-run', '--disable-default-apps',
-    ],
-  });
-  await new Promise(r => setTimeout(r, 2000));
-  return ctx;
-}
+import { test, expect, type BrowserContext, type Page } from '@playwright/test';
+import { OPEN_SHORTCUT, launchBrowserWithExtension as launch } from './helpers';
 
 async function openPageAndBar(ctx: BrowserContext, url = 'https://example.com'): Promise<Page> {
   const page = await ctx.newPage();

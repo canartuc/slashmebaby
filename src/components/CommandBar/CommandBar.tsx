@@ -4,9 +4,16 @@ import { DEFAULT_SETTINGS } from '../../lib/messaging';
 import { SearchInput } from './SearchInput';
 import { TreeView } from './TreeView';
 import { useTreeData } from '../../hooks/useTreeData';
+import type { TreeItem } from '../../hooks/useTreeData';
 import { useLabelAssignment } from '../../hooks/useLabelAssignment';
 import { useTheme } from '../../hooks/useTheme';
 import { isActionKey, getActionForKey } from '../../lib/labels';
+
+function nextIndex(prev: number, len: number, dir: 1 | -1): number {
+  if (len <= 0) return 0;
+  if (dir === 1) return prev >= len - 1 ? 0 : prev + 1;
+  return prev <= 0 ? len - 1 : prev - 1;
+}
 
 export interface CommandBarProps {
   onDismiss: () => void;
@@ -18,10 +25,10 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
 
-  const { pinnedTabs, allTabs, visibleItems, allItems, toggleExpand, getParentId, isLoading } = useTreeData();
+  const { pinnedTabs, allTabs, visibleItems, allItems, toggleExpand } = useTreeData();
   // Labels assigned across tabs + bookmarks (continuous sequence)
   const totalLabelItems = allTabs.length + visibleItems.length;
-  const { labels, labelToIndex, handleKeyPress, pendingPrefix, clearPending } = useLabelAssignment(totalLabelItems);
+  const { labels, handleKeyPress } = useLabelAssignment(totalLabelItems);
   const theme = useTheme(settings.theme);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,47 +72,56 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   const stateRef = useRef({ mode, selectedIndex, filteredItems, visibleItems, query, pinnedTabs, allTabs });
   stateRef.current = { mode, selectedIndex, filteredItems, visibleItems, query, pinnedTabs, allTabs };
 
-  const handleItemSelect = useCallback((index: number) => {
-    const items = stateRef.current.filteredItems;
-    const item = items[index];
-    if (!item) return;
-
-    if (item.type === 'folder' || item.type === 'group') {
-      toggleExpand(item.id);
-      setSelectedIndex(index);
-    } else if (item.type === 'tab' && item.tabId) {
-      chrome.runtime.sendMessage(
-        { type: 'SWITCH_TAB', payload: { tabId: item.tabId } },
-        () => onDismiss()
-      );
-    } else if (item.url) {
-      chrome.runtime.sendMessage(
-        { type: 'NAVIGATE', payload: { url: item.url } },
-        () => onDismiss()
-      );
-    }
-  }, [toggleExpand, onDismiss]);
-
-  const handlePinnedTabSelect = useCallback((tabId: number) => {
+  const switchTab = useCallback((tabId: number) => {
     chrome.runtime.sendMessage(
       { type: 'SWITCH_TAB', payload: { tabId } },
       () => onDismiss()
     );
   }, [onDismiss]);
 
+  const openUrl = useCallback((url: string, newTab: boolean) => {
+    chrome.runtime.sendMessage(
+      { type: newTab ? 'OPEN_NEW_TAB' : 'NAVIGATE', payload: { url } },
+      () => onDismiss()
+    );
+  }, [onDismiss]);
+
+  // Activates an item; returns true if the item was a leaf (tab/url) so callers
+  // can skip selection updates that only matter for non-dismissing actions.
+  const activate = useCallback((item: TreeItem, openInNewTab: boolean): boolean => {
+    if (item.type === 'folder' || item.type === 'group') {
+      toggleExpand(item.id);
+      return false;
+    }
+    if (item.type === 'tab' && item.tabId) {
+      switchTab(item.tabId);
+      return true;
+    }
+    if (item.url) {
+      openUrl(item.url, openInNewTab);
+      return true;
+    }
+    return false;
+  }, [toggleExpand, switchTab, openUrl]);
+
+  const handleItemSelect = useCallback((index: number) => {
+    const item = stateRef.current.filteredItems[index];
+    if (!item) return;
+    if (!activate(item, false)) setSelectedIndex(index);
+  }, [activate]);
+
+  const handlePinnedTabSelect = useCallback((tabId: number) => {
+    switchTab(tabId);
+  }, [switchTab]);
+
   const handleKey = useCallback((key: string, shiftKey: boolean) => {
-    const { mode: currentMode, selectedIndex: idx, filteredItems: items, query: currentQuery, pinnedTabs: pinned } = stateRef.current;
+    const { mode: currentMode, selectedIndex: idx, filteredItems: items, pinnedTabs: pinned } = stateRef.current;
 
     // Number keys (1-9, 0) switch to pinned tabs in jump mode
     if (currentMode === 'jump' && /^[0-9]$/.test(key) && pinned.length > 0) {
       const num = key === '0' ? 10 : parseInt(key, 10);
       const pinnedTab = pinned[num - 1];
-      if (pinnedTab?.tabId) {
-        chrome.runtime.sendMessage(
-          { type: 'SWITCH_TAB', payload: { tabId: pinnedTab.tabId } },
-          () => onDismiss()
-        );
-      }
+      if (pinnedTab?.tabId) switchTab(pinnedTab.tabId);
       return;
     }
 
@@ -133,152 +149,57 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
       return;
     }
 
-    if (currentMode === 'jump') {
-      // Jump mode key handling
-      switch (key) {
-        case 'Tab': {
-          // Tab cycles forward through all items, Shift+Tab backward
-          if (shiftKey) {
-            setSelectedIndex(prev => prev <= 0 ? items.length - 1 : prev - 1);
-          } else {
-            setSelectedIndex(prev => prev >= items.length - 1 ? 0 : prev + 1);
-          }
-          break;
-        }
-        case 'ArrowDown':
-          setSelectedIndex(prev => prev >= items.length - 1 ? 0 : prev + 1);
-          break;
-        case 'ArrowUp':
-          setSelectedIndex(prev => prev <= 0 ? items.length - 1 : prev - 1);
-          break;
-        case 'ArrowRight': {
-          const item = items[idx];
-          if (item && (item.type === 'folder' || item.type === 'group') && !item.isExpanded) {
-            toggleExpand(item.id);
-          }
-          break;
-        }
-        case 'ArrowLeft': {
-          const item = items[idx];
-          if (item) {
-            if ((item.type === 'folder' || item.type === 'group') && item.isExpanded) {
-              toggleExpand(item.id);
-            } else if (item.parentId) {
-              const parentIdx = items.findIndex(i => i.id === item.parentId);
-              if (parentIdx >= 0) setSelectedIndex(parentIdx);
-            }
-          }
-          break;
-        }
-        case 'Enter': {
-          const item = items[idx];
-          if (!item) break;
-          if (item.type === 'folder' || item.type === 'group') {
-            toggleExpand(item.id);
-          } else if (item.type === 'tab' && item.tabId) {
-            chrome.runtime.sendMessage(
-              { type: 'SWITCH_TAB', payload: { tabId: item.tabId } },
-              () => onDismiss()
-            );
-          } else if (item.url) {
-            if (shiftKey) {
-              chrome.runtime.sendMessage(
-                { type: 'OPEN_NEW_TAB', payload: { url: item.url } },
-                () => onDismiss()
-              );
-            } else {
-              chrome.runtime.sendMessage(
-                { type: 'NAVIGATE', payload: { url: item.url } },
-                () => onDismiss()
-              );
-            }
-          }
-          break;
-        }
-        default: {
-          // Try label key — labels map to tab grid cards
-          const result = handleKeyPress(key);
-          if (result.consumed && result.targetIndex !== null) {
-            const { allTabs: tabs, filteredItems: bkItems } = stateRef.current;
-            // Labels 0..tabs.length-1 are tabs, tabs.length+ are bookmarks
-            const item = result.targetIndex < tabs.length
-              ? tabs[result.targetIndex]
-              : bkItems[result.targetIndex - tabs.length];
-            if (item) {
-              if (item.type === 'folder' || item.type === 'group') {
-                toggleExpand(item.id);
-                setSelectedIndex(result.targetIndex);
-              } else if (item.type === 'tab' && item.tabId) {
-                chrome.runtime.sendMessage(
-                  { type: 'SWITCH_TAB', payload: { tabId: item.tabId } },
-                  () => onDismiss()
-                );
-              } else if (item.url) {
-                if (shiftKey) {
-                  // Shift+label: open bookmark/history in NEW tab
-                  chrome.runtime.sendMessage(
-                    { type: 'OPEN_NEW_TAB', payload: { url: item.url } },
-                    () => onDismiss()
-                  );
-                } else {
-                  chrome.runtime.sendMessage(
-                    { type: 'NAVIGATE', payload: { url: item.url } },
-                    () => onDismiss()
-                  );
-                }
-              }
-            }
-          }
-          break;
-        }
+    // Navigation + activation — identical in jump and search modes
+    switch (key) {
+      case 'Tab':
+        setSelectedIndex(prev => nextIndex(prev, items.length, shiftKey ? -1 : 1));
+        return;
+      case 'ArrowDown':
+        setSelectedIndex(prev => nextIndex(prev, items.length, 1));
+        return;
+      case 'ArrowUp':
+        setSelectedIndex(prev => nextIndex(prev, items.length, -1));
+        return;
+      case 'Enter': {
+        const item = items[idx];
+        if (item) activate(item, shiftKey);
+        return;
       }
     }
-    // In search mode, regular keys go to the input naturally (it's focused)
-    // But special keys still work:
-    if (currentMode === 'search') {
-      switch (key) {
-        case 'Tab': {
-          if (shiftKey) {
-            setSelectedIndex(prev => prev <= 0 ? items.length - 1 : prev - 1);
-          } else {
-            setSelectedIndex(prev => prev >= items.length - 1 ? 0 : prev + 1);
-          }
-          break;
-        }
-        case 'ArrowDown':
-          setSelectedIndex(prev => prev >= items.length - 1 ? 0 : prev + 1);
-          break;
-        case 'ArrowUp':
-          setSelectedIndex(prev => prev <= 0 ? items.length - 1 : prev - 1);
-          break;
-        case 'Enter': {
-          const item = items[idx];
-          if (!item) break;
-          if (item.type === 'folder' || item.type === 'group') {
-            toggleExpand(item.id);
-          } else if (item.type === 'tab' && item.tabId) {
-            chrome.runtime.sendMessage(
-              { type: 'SWITCH_TAB', payload: { tabId: item.tabId } },
-              () => onDismiss()
-            );
-          } else if (item.url) {
-            if (shiftKey) {
-              chrome.runtime.sendMessage(
-                { type: 'OPEN_NEW_TAB', payload: { url: item.url } },
-                () => onDismiss()
-              );
-            } else {
-              chrome.runtime.sendMessage(
-                { type: 'NAVIGATE', payload: { url: item.url } },
-                () => onDismiss()
-              );
-            }
-          }
-          break;
-        }
+
+    // Jump-only handling: tree expand/collapse + label-key dispatch
+    if (currentMode !== 'jump') return;
+
+    if (key === 'ArrowRight') {
+      const item = items[idx];
+      if (item && (item.type === 'folder' || item.type === 'group') && !item.isExpanded) {
+        toggleExpand(item.id);
       }
+      return;
     }
-  }, [toggleExpand, onDismiss, handleKeyPress]);
+
+    if (key === 'ArrowLeft') {
+      const item = items[idx];
+      if (!item) return;
+      if ((item.type === 'folder' || item.type === 'group') && item.isExpanded) {
+        toggleExpand(item.id);
+      } else if (item.parentId) {
+        const parentIdx = items.findIndex(i => i.id === item.parentId);
+        if (parentIdx >= 0) setSelectedIndex(parentIdx);
+      }
+      return;
+    }
+
+    // Label key — labels map across tab grid + visible bookmark items
+    const result = handleKeyPress(key);
+    if (!result.consumed || result.targetIndex === null) return;
+    const { allTabs: tabs, filteredItems: bkItems } = stateRef.current;
+    const item = result.targetIndex < tabs.length
+      ? tabs[result.targetIndex]
+      : bkItems[result.targetIndex - tabs.length];
+    if (!item) return;
+    if (!activate(item, shiftKey)) setSelectedIndex(result.targetIndex);
+  }, [toggleExpand, onDismiss, handleKeyPress, activate, switchTab]);
 
   // Listen for smb-keydown custom events from the content script
   useEffect(() => {

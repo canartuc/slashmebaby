@@ -53,6 +53,11 @@ export interface SwitchTabRequest {
   payload: { tabId: number };
 }
 
+export interface OpenNewTabRequest {
+  type: 'OPEN_NEW_TAB';
+  payload: { url: string };
+}
+
 export interface NavigateRequest {
   type: 'NAVIGATE';
   payload: { url: string };
@@ -97,8 +102,6 @@ export interface TabWithGroup {
   favIconUrl?: string;
   windowId: number;
   groupId?: number;
-  groupName?: string;
-  groupColor?: string;
   pinned: boolean;
   audible: boolean;
   muted: boolean;
@@ -132,6 +135,9 @@ export type Message =
   | SmartSuggestionsRequest
   | ExecuteActionRequest
   | GetSettingsRequest
+  | SwitchTabRequest
+  | OpenNewTabRequest
+  | NavigateRequest
   | ToggleOverlayCommand
   | GetAllTabsRequest
   | GetBookmarkTreeRequest;
@@ -188,6 +194,31 @@ export function isGetSettingsRequest(
   value: unknown
 ): value is GetSettingsRequest {
   return isObject(value) && value['type'] === 'GET_SETTINGS';
+}
+
+export function isSwitchTabRequest(value: unknown): value is SwitchTabRequest {
+  if (!isObject(value) || value['type'] !== 'SWITCH_TAB') return false;
+  const payload = value['payload'];
+  if (!isObject(payload)) return false;
+  const tabId = payload['tabId'];
+  if (typeof tabId !== 'number' || !Number.isInteger(tabId) || tabId < 0) return false;
+  return true;
+}
+
+function isUrlPayload(value: unknown): value is { url: string } {
+  if (!isObject(value)) return false;
+  const url = value['url'];
+  // Scheme safety is enforced at the call site by validateNavigationUrl.
+  // The guard only checks shape and an upper length bound.
+  return typeof url === 'string' && url.length > 0 && url.length <= 4096;
+}
+
+export function isOpenNewTabRequest(value: unknown): value is OpenNewTabRequest {
+  return isObject(value) && value['type'] === 'OPEN_NEW_TAB' && isUrlPayload(value['payload']);
+}
+
+export function isNavigateRequest(value: unknown): value is NavigateRequest {
+  return isObject(value) && value['type'] === 'NAVIGATE' && isUrlPayload(value['payload']);
 }
 
 export function isGetAllTabsRequest(v: unknown): v is GetAllTabsRequest {

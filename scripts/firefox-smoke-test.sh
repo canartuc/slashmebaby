@@ -76,7 +76,7 @@ check "All required permissions present (tabs, bookmarks, history, storage, acti
 # 4. web-ext lint
 echo ""
 echo "Running web-ext lint..."
-npx web-ext lint --source-dir "$FIREFOX_BUILD" > /dev/null 2>&1
+npx --yes web-ext@10.1.0 lint --source-dir "$FIREFOX_BUILD" > /dev/null 2>&1
 check "web-ext lint passes" $?
 
 # 5. Bundle size

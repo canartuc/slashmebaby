@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { DEFAULT_SETTINGS } from '../../lib/messaging';
 import type { UserSettings } from '../../lib/messaging';
 import {

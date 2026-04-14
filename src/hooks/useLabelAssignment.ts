@@ -53,15 +53,17 @@ export function useLabelAssignment(visibleItemCount: number): {
 
       // No pending prefix
       // Check for an exact single-char label match
-      if (labelToIndex.has(key) && key.length === 1) {
-        // But only if this key can't also be a two-char prefix
-        // If it IS a two-char prefix, we need to wait for the second char
-        if (twoCharPrefixes.has(key)) {
-          setPendingPrefix(key);
-          return { targetIndex: null, consumed: true };
+      if (key.length === 1) {
+        const idx = labelToIndex.get(key);
+        if (idx !== undefined) {
+          // But only if this key can't also be a two-char prefix
+          // If it IS a two-char prefix, we need to wait for the second char
+          if (twoCharPrefixes.has(key)) {
+            setPendingPrefix(key);
+            return { targetIndex: null, consumed: true };
+          }
+          return { targetIndex: idx, consumed: true };
         }
-        const idx = labelToIndex.get(key)!;
-        return { targetIndex: idx, consumed: true };
       }
 
       // Check if this key could start a two-char label

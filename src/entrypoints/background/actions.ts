@@ -42,28 +42,48 @@ export class ActionRegistry {
   }
 
   async execute(actionId: string, targetTabId?: number): Promise<ExecuteActionResponse> {
+    const requireTab = (): ExecuteActionResponse | number => {
+      if (targetTabId === undefined) {
+        return { success: false, error: `Action ${actionId} requires a target tab` };
+      }
+      return targetTabId;
+    };
     try {
       switch (actionId) {
-        case 'close-tab':
-          return await this.closeTab(targetTabId!);
+        case 'close-tab': {
+          const t = requireTab();
+          return typeof t === 'number' ? await this.closeTab(t) : t;
+        }
 
-        case 'close-other-tabs':
-          return await this.closeOtherTabs(targetTabId!);
+        case 'close-other-tabs': {
+          const t = requireTab();
+          return typeof t === 'number' ? await this.closeOtherTabs(t) : t;
+        }
 
-        case 'pin-tab':
-          return await this.pinTab(targetTabId!);
+        case 'pin-tab': {
+          const t = requireTab();
+          return typeof t === 'number' ? await this.pinTab(t) : t;
+        }
 
-        case 'mute-tab':
-          return await this.muteTab(targetTabId!);
+        case 'mute-tab': {
+          const t = requireTab();
+          return typeof t === 'number' ? await this.muteTab(t) : t;
+        }
 
-        case 'duplicate-tab':
-          return await this.duplicateTab(targetTabId!);
+        case 'duplicate-tab': {
+          const t = requireTab();
+          return typeof t === 'number' ? await this.duplicateTab(t) : t;
+        }
 
-        case 'move-to-window':
-          return await this.moveToWindow(targetTabId!);
+        case 'move-to-window': {
+          const t = requireTab();
+          return typeof t === 'number' ? await this.moveToWindow(t) : t;
+        }
 
-        case 'reload-tab':
-          return await this.reloadTab(targetTabId!);
+        case 'reload-tab': {
+          const t = requireTab();
+          return typeof t === 'number' ? await this.reloadTab(t) : t;
+        }
 
         case 'new-tab':
           return await this.newTab();
@@ -104,9 +124,12 @@ export class ActionRegistry {
   private closeOtherTabs(targetTabId: number): Promise<ExecuteActionResponse> {
     return new Promise((resolve) => {
       chrome.tabs.query({ currentWindow: true }, (tabs) => {
-        const tabsToClose = tabs
-          .filter((tab) => tab.id !== targetTabId && !tab.pinned && tab.id !== undefined)
-          .map((tab) => tab.id!);
+        const tabsToClose: number[] = [];
+        for (const tab of tabs) {
+          if (tab.id !== undefined && tab.id !== targetTabId && !tab.pinned) {
+            tabsToClose.push(tab.id);
+          }
+        }
 
         this.lastUndo = { type: 'restore-tabs', count: tabsToClose.length };
 
@@ -230,13 +253,16 @@ export class ActionRegistry {
         });
 
         // Move each tab to its sorted position
-        const movePromises = sorted
-          .filter((tab) => tab.id !== undefined)
-          .map((tab, index) =>
-            new Promise<void>((res) => {
-              chrome.tabs.move(tab.id!, { index }, () => res());
-            })
-          );
+        const movePromises: Promise<void>[] = [];
+        let index = 0;
+        for (const tab of sorted) {
+          if (tab.id === undefined) continue;
+          const tabId = tab.id;
+          const targetIndex = index++;
+          movePromises.push(new Promise<void>((res) => {
+            chrome.tabs.move(tabId, { index: targetIndex }, () => res());
+          }));
+        }
 
         Promise.all(movePromises).then(() => resolve({ success: true }));
       });

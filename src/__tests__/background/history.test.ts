@@ -102,6 +102,34 @@ describe('HistoryCache', () => {
     expect(result[0].id).toBe('history-h1');
   });
 
+  it('drops history entries with javascript: URLs', async () => {
+    const items = [
+      makeFakeHistoryItem({ id: 'safe', title: 'Safe', url: 'https://example.com' }),
+      makeFakeHistoryItem({ id: 'xss', title: 'XSS', url: 'javascript:alert(1)' }),
+    ];
+    const historyApi = makeHistoryApi(items);
+    vi.stubGlobal('chrome', { history: historyApi });
+
+    const cache = new HistoryCache();
+    await cache.refresh();
+
+    const result = cache.getItems();
+    expect(result.map((i) => i.id)).toEqual(['history-safe']);
+  });
+
+  it('drops history entries with chrome: URLs', async () => {
+    const items = [
+      makeFakeHistoryItem({ id: 'internal', title: 'Settings', url: 'chrome://settings' }),
+    ];
+    const historyApi = makeHistoryApi(items);
+    vi.stubGlobal('chrome', { history: historyApi });
+
+    const cache = new HistoryCache();
+    await cache.refresh();
+
+    expect(cache.getItems()).toHaveLength(0);
+  });
+
   it('converts multiple history items to SearchableItem format', async () => {
     const items = [
       makeFakeHistoryItem({ id: 'h1', title: 'First', url: 'https://first.com', lastVisitTime: 1700000001000 }),
@@ -156,6 +184,75 @@ describe('HistoryCache', () => {
     await Promise.resolve();
 
     expect(historyApi.search.mock.calls.length).toBe(callCountAfterStop);
+  });
+
+  it('startPeriodicRefresh prefers chrome.alarms when available', async () => {
+    const historyApi = makeHistoryApi([]);
+    let registeredAlarm: { name: string; periodInMinutes: number } | null = null;
+    let alarmListener: ((alarm: chrome.alarms.Alarm) => void) | null = null;
+
+    vi.stubGlobal('chrome', {
+      history: historyApi,
+      alarms: {
+        create: vi.fn((name: string, opts: { periodInMinutes: number }) => {
+          registeredAlarm = { name, periodInMinutes: opts.periodInMinutes };
+        }),
+        clear: vi.fn(),
+        onAlarm: {
+          addListener: vi.fn((cb: (alarm: chrome.alarms.Alarm) => void) => {
+            alarmListener = cb;
+          }),
+          removeListener: vi.fn(),
+        },
+      },
+    });
+
+    const cache = new HistoryCache();
+    cache.startPeriodicRefresh(120000); // 2 min
+    await Promise.resolve();
+
+    expect(registeredAlarm).not.toBeNull();
+    expect(registeredAlarm!.periodInMinutes).toBe(2);
+    expect(alarmListener).not.toBeNull();
+
+    // Trigger the alarm and verify it triggers a refresh.
+    const initialCalls = historyApi.search.mock.calls.length;
+    alarmListener!({ name: 'slashmebaby-history-refresh' } as chrome.alarms.Alarm);
+    await Promise.resolve();
+    expect(historyApi.search.mock.calls.length).toBeGreaterThan(initialCalls);
+
+    // An alarm with a different name should NOT trigger a refresh.
+    const beforeOther = historyApi.search.mock.calls.length;
+    alarmListener!({ name: 'someone-else' } as chrome.alarms.Alarm);
+    await Promise.resolve();
+    expect(historyApi.search.mock.calls.length).toBe(beforeOther);
+
+    cache.stopPeriodicRefresh();
+  });
+
+  it('stopPeriodicRefresh clears the chrome.alarms listener and alarm', async () => {
+    const historyApi = makeHistoryApi([]);
+    const removeListener = vi.fn();
+    const clearAlarm = vi.fn();
+
+    vi.stubGlobal('chrome', {
+      history: historyApi,
+      alarms: {
+        create: vi.fn(),
+        clear: clearAlarm,
+        onAlarm: {
+          addListener: vi.fn(),
+          removeListener,
+        },
+      },
+    });
+
+    const cache = new HistoryCache();
+    cache.startPeriodicRefresh(60000);
+    cache.stopPeriodicRefresh();
+
+    expect(removeListener).toHaveBeenCalledTimes(1);
+    expect(clearAlarm).toHaveBeenCalledWith('slashmebaby-history-refresh');
   });
 
   it('default interval is 5 minutes', async () => {
