@@ -181,15 +181,17 @@ describe('createMessageRouter', () => {
     it('returns at most 3 tabs in smart suggestions', async () => {
       const chromeMock = makeChromeMock();
       // Mock 5 tabs
-      chromeMock.tabs.query = vi.fn((_: object, cb: (tabs: chrome.tabs.Tab[]) => void) =>
-        cb([
+      chromeMock.tabs.query = vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+        const tabs = [
           makeFakeTab({ id: 1, title: 'Tab 1', url: 'https://t1.com', lastAccessed: Date.now() }),
           makeFakeTab({ id: 2, title: 'Tab 2', url: 'https://t2.com', lastAccessed: Date.now() - 100 }),
           makeFakeTab({ id: 3, title: 'Tab 3', url: 'https://t3.com', lastAccessed: Date.now() - 200 }),
           makeFakeTab({ id: 4, title: 'Tab 4', url: 'https://t4.com', lastAccessed: Date.now() - 300 }),
           makeFakeTab({ id: 5, title: 'Tab 5', url: 'https://t5.com', lastAccessed: Date.now() - 400 }),
-        ])
-      );
+        ];
+        cb?.(tabs);
+        return Promise.resolve(tabs);
+      });
       vi.stubGlobal('chrome', chromeMock);
 
       const router = await createMessageRouter();
