@@ -151,16 +151,27 @@ test('Action r: Reload Tab', async () => {
   await ctx.close();
 });
 
-// ─── u: Go to URL ───────────────────────────────────────────────────────────
+// ─── u: Copy Clean Link ─────────────────────────────────────────────────────
 
-test('Action u: Go to URL', async () => {
+test('Action u: Copy Clean Link strips tracking params and dismisses', async ({ browserName }) => {
   const ctx = await launch();
-  const page = await openPageAndBar(ctx);
+  // Clipboard access in a headless-ish persistent context needs an explicit
+  // grant; Firefox builds don't support this Playwright call.
+  if (browserName === 'chromium') {
+    await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
+  }
+
+  const dirtyUrl = 'https://example.com/?id=42&utm_source=x&gclid=abc';
+  const page = await openPageAndBar(ctx, dirtyUrl);
 
   await page.keyboard.press('u');
   await new Promise(r => setTimeout(r, 1000));
 
   expect(await isOverlayClosed(page)).toBe(true);
+
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toBe('https://example.com/?id=42');
+
   await ctx.close();
 });
 
