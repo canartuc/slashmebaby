@@ -110,7 +110,7 @@ describe('isActionKey', () => {
     expect(isActionKey('t')).toBe(true);
   });
 
-  it('returns true for "u" (go-to-url)', () => {
+  it('returns true for "u" (copy-clean-link)', () => {
     expect(isActionKey('u')).toBe(true);
   });
 
@@ -226,8 +226,8 @@ describe('getActionForKey', () => {
     expect(getActionForKey('t')).toBe('new-tab');
   });
 
-  it('returns "go-to-url" for "u"', () => {
-    expect(getActionForKey('u')).toBe('go-to-url');
+  it('returns "copy-clean-link" for "u"', () => {
+    expect(getActionForKey('u')).toBe('copy-clean-link');
   });
 
   it('returns "recently-closed" for "z"', () => {

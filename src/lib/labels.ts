@@ -52,7 +52,7 @@ export function getActionForKey(key: string): string | null {
     'w': 'move-to-window',
     'r': 'reload-tab',
     't': 'new-tab',
-    'u': 'go-to-url',
+    'u': 'copy-clean-link',
     'z': 'recently-closed',
     'q': 'close-duplicates',
     's': 'sort-by-domain',

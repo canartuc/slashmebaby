@@ -407,6 +407,73 @@ describe('CommandBar', () => {
     expect(findCall('NAVIGATE')).toBeUndefined();
     expect(onDismiss).not.toHaveBeenCalled();
   });
+
+  async function enterSearchMode(query: string) {
+    fireSmbKey('/');
+    const input = (await waitFor(() =>
+      screen.getByPlaceholderText('Search tabs, bookmarks, actions...')
+    )) as HTMLInputElement;
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.input(input, { target: { value: query } });
+    return input;
+  }
+
+  it('search includes open tabs, not just bookmarks', async () => {
+    render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    await enterSearchMode('github');
+
+    // In search mode, the tab grid is hidden — GitHub must show up as a
+    // search result row (via the listbox).
+    await waitFor(() => {
+      const listbox = screen.getByRole('listbox');
+      expect(listbox.textContent).toContain('GitHub');
+    });
+  });
+
+  it('fuzzy search tolerates a typo in a tab title', async () => {
+    render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    // "githb" (missing u) should still match GitHub thanks to Fuse fuzziness.
+    await enterSearchMode('githb');
+    await waitFor(() => {
+      expect(screen.getByRole('listbox').textContent).toContain('GitHub');
+    });
+  });
+
+  it('"u" copies the cleaned page URL to the clipboard and dismisses', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    const originalHref = window.location.href;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, href: 'https://example.com/page?utm_source=x&id=42&gclid=abc' },
+    });
+
+    const onDismiss = vi.fn();
+    render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('u');
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('https://example.com/page?id=42');
+      expect(onDismiss).toHaveBeenCalled();
+    });
+    // Copy-clean-link is handled inline — no EXECUTE_ACTION message is dispatched.
+    expect(findCall('EXECUTE_ACTION')).toBeUndefined();
+
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, href: originalHref },
+    });
+  });
 });
 
 // ─── Pinned-tab number shortcuts ────────────────────────────────────────────
@@ -495,5 +562,61 @@ describe('CommandBar — pinned tab number shortcuts', () => {
     fireSmbKey('5');
     expect(findCall('SWITCH_TAB')).toBeUndefined();
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Diacritic-insensitive search ───────────────────────────────────────────
+
+describe('CommandBar — diacritic-insensitive search', () => {
+  beforeEach(() => {
+    vi.mocked(chrome.runtime.sendMessage).mockReset();
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
+      const message = msg as { type: string };
+      if (message.type === 'GET_SETTINGS' && callback) {
+        callback({
+          settings: {
+            shortcut: 'Ctrl+Shift+Space', position: 'center', theme: 'dark',
+            maxResultsPerGroup: 5, showFavicons: true,
+            searchSources: { tabs: true, bookmarks: true, history: true },
+          },
+        });
+      } else if (message.type === 'GET_ALL_TABS' && callback) {
+        callback({
+          groups: [
+            {
+              label: 'Window 1', type: 'window',
+              tabs: [
+                { id: 21, title: 'Sözcü Gazetesi', url: 'https://www.sozcu.com.tr', favIconUrl: '', windowId: 1, pinned: false, audible: false },
+                { id: 22, title: 'Başka Site', url: 'https://baska.com', favIconUrl: '', windowId: 1, pinned: false, audible: false },
+              ],
+            },
+          ],
+        });
+      } else if (message.type === 'GET_BOOKMARK_TREE' && callback) {
+        callback({ tree: [] });
+      } else if (callback) {
+        callback({ success: true });
+      }
+      return undefined as unknown as Promise<unknown>;
+    }) as unknown as typeof chrome.runtime.sendMessage);
+  });
+
+  it('"sozcu" matches "Sözcü" after diacritic folding', async () => {
+    render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Sözcü Gazetesi')).toBeTruthy());
+
+    const { fireEvent } = await import('@testing-library/react');
+    document.dispatchEvent(new CustomEvent('smb-keydown', { detail: { key: '/', shiftKey: false } }));
+    const input = (await waitFor(() =>
+      screen.getByPlaceholderText('Search tabs, bookmarks, actions...')
+    )) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'sozcu' } });
+
+    await waitFor(() => {
+      expect(screen.getByRole('listbox').textContent).toContain('Sözcü Gazetesi');
+    });
   });
 });

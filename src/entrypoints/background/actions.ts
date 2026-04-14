@@ -16,7 +16,6 @@ const ACTION_DEFINITIONS: ActionDefinition[] = [
   { id: 'move-to-window', title: 'Move to New Window', description: 'Move the current tab to a new window' },
   { id: 'reload-tab', title: 'Reload Tab', description: 'Reload the current tab' },
   { id: 'new-tab', title: 'New Tab', description: 'Open a new tab' },
-  { id: 'go-to-url', title: 'Go to URL', description: 'Navigate to a specific URL' },
   { id: 'recently-closed', title: 'Recently Closed', description: 'Show recently closed tabs' },
   { id: 'close-duplicates', title: 'Close Duplicate Tabs', description: 'Close duplicate tabs with the same URL' },
   { id: 'sort-by-domain', title: 'Sort Tabs by Domain', description: 'Sort all tabs alphabetically by domain' },
@@ -87,10 +86,6 @@ export class ActionRegistry {
 
         case 'new-tab':
           return await this.newTab();
-
-        case 'go-to-url':
-          // URL navigation is handled by the UI
-          return { success: true };
 
         case 'recently-closed':
           return await this.undo();
