@@ -151,16 +151,41 @@ test('Action r: Reload Tab', async () => {
   await ctx.close();
 });
 
-// ─── u: Go to URL ───────────────────────────────────────────────────────────
+// ─── u: URL mode (opens dedicated URL input, not an action dispatch) ────────
 
-test('Action u: Go to URL', async () => {
+test('Action u: opens URL mode and keeps overlay open', async () => {
   const ctx = await launch();
   const page = await openPageAndBar(ctx);
 
   await page.keyboard.press('u');
-  await new Promise(r => setTimeout(r, 1000));
+  await new Promise(r => setTimeout(r, 500));
 
-  expect(await isOverlayClosed(page)).toBe(true);
+  // Overlay stays open in URL mode
+  expect(await isOverlayClosed(page)).toBe(false);
+
+  // Input switches to URL mode (data-cb-mode="url") and becomes writable
+  const inUrlMode = await page.evaluate(() => {
+    const host = document.getElementById('slashmebaby-root');
+    const input = host?.shadowRoot?.querySelector(
+      'input[data-cb-mode="url"]'
+    ) as HTMLInputElement | null;
+    return !!input && !input.readOnly;
+  });
+  expect(inUrlMode).toBe(true);
+  await ctx.close();
+});
+
+test('URL mode: typing a URL and pressing Enter navigates', async () => {
+  const ctx = await launch();
+  const page = await openPageAndBar(ctx);
+
+  await page.keyboard.press('u');
+  await new Promise(r => setTimeout(r, 500));
+  await page.keyboard.type('example.org');
+  await page.keyboard.press('Enter');
+  await page.waitForURL(/example\.org/, { timeout: 10_000 });
+
+  expect(page.url()).toContain('example.org');
   await ctx.close();
 });
 
