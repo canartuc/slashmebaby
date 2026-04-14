@@ -79,8 +79,10 @@ function setupSendMessage(
   tabsResp: GetAllTabsResponse = mockTabsResponse,
   bookmarkResp: GetBookmarkTreeResponse = mockBookmarkResponse
 ) {
-  vi.mocked(chrome.runtime.sendMessage).mockImplementation(
-    (msg: unknown, callback?: (response: unknown) => void) => {
+  vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+    msg: unknown,
+    callback?: (response: unknown) => void
+  ) => {
       const m = msg as { type: string };
       if (m.type === 'GET_ALL_TABS' && callback) {
         callback(tabsResp);
@@ -88,7 +90,7 @@ function setupSendMessage(
         callback(bookmarkResp);
       }
       return undefined as unknown as Promise<unknown>;
-    }
+    }) as unknown as typeof chrome.runtime.sendMessage
   );
 }
 
@@ -102,7 +104,7 @@ describe('useTreeData', () => {
   it('starts in a loading state', () => {
     // Never resolve the callbacks
     vi.mocked(chrome.runtime.sendMessage).mockImplementation(
-      () => undefined as unknown as Promise<unknown>
+      (() => undefined as unknown as Promise<unknown>) as unknown as typeof chrome.runtime.sendMessage
     );
 
     const { result } = renderHook(() => useTreeData());

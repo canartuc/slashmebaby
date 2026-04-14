@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import type { TreeItem as TreeItemData } from '../../hooks/useTreeData';
 import { LabelBadge } from './LabelBadge';
+import { Favicon } from './Favicon';
 
 export interface TreeItemProps {
   item: TreeItemData;
@@ -64,15 +65,7 @@ export const TreeItem: React.FC<TreeItemProps> = ({
         </span>
       )}
 
-      {showFavicons && item.icon && (
-        <img
-          className="smb-favicon"
-          src={item.icon}
-          alt=""
-          width={16}
-          height={16}
-        />
-      )}
+      {showFavicons && <Favicon src={item.icon} size={16} />}
 
       <span className="smb-title">{item.title}</span>
 

@@ -84,6 +84,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({ query, onQueryChange, 
         autoCorrect="off"
         autoCapitalize="off"
         role="combobox"
+        aria-label="Search tabs, bookmarks, and actions"
         aria-autocomplete="list"
         aria-controls="slashmebaby-results"
         aria-expanded="true"

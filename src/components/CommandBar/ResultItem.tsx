@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import type { SearchResultItem } from '../../lib/messaging';
+import { Favicon } from './Favicon';
 
 export interface ResultItemProps {
   item: SearchResultItem;
@@ -50,15 +51,7 @@ export const ResultItem: React.FC<ResultItemProps> = ({
       aria-selected={isSelected}
       aria-label={item.url ? `${item.title} — ${item.url}` : item.title}
     >
-      {showFavicons && item.icon && (
-        <img
-          className="smb-favicon"
-          src={item.icon}
-          alt=""
-          width={16}
-          height={16}
-        />
-      )}
+      {showFavicons && <Favicon src={item.icon} size={16} />}
       <div className="smb-item-text">
         <span className="smb-title">{item.title}</span>
         {hostname && <span className="smb-url">{hostname}</span>}

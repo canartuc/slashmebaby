@@ -21,8 +21,10 @@ describe('CommandBar', () => {
   beforeEach(() => {
     vi.mocked(chrome.runtime.sendMessage).mockReset();
 
-    vi.mocked(chrome.runtime.sendMessage).mockImplementation(
-      (msg: unknown, callback?: (response: unknown) => void) => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
         const message = msg as { type: string };
         if (message.type === 'GET_SETTINGS' && callback) {
           callback({
@@ -66,7 +68,7 @@ describe('CommandBar', () => {
           if (callback) callback({ success: true });
         }
         return undefined as unknown as Promise<unknown>;
-      }
+      }) as unknown as typeof chrome.runtime.sendMessage
     );
   });
 
@@ -141,7 +143,7 @@ describe('CommandBar', () => {
     render(<CommandBar onDismiss={() => {}} />);
     const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
     const settingsCall = calls.find(
-      (c) => (c[0] as { type: string }).type === 'GET_SETTINGS'
+      (c) => (c[0] as unknown as { type: string }).type === 'GET_SETTINGS'
     );
     expect(settingsCall).toBeTruthy();
   });
@@ -174,7 +176,7 @@ describe('CommandBar', () => {
     await waitFor(() => {
       const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
       const actionCall = calls.find(
-        (c) => (c[0] as { type: string }).type === 'EXECUTE_ACTION'
+        (c) => (c[0] as unknown as { type: string }).type === 'EXECUTE_ACTION'
       );
       expect(actionCall).toBeTruthy();
       expect(onDismiss).toHaveBeenCalled();

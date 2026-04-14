@@ -62,7 +62,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   }, [filteredItems]);
 
   // Use a ref to always have access to latest state in the handler
-  const stateRef = useRef({ mode, selectedIndex, filteredItems, visibleItems, query });
+  const stateRef = useRef({ mode, selectedIndex, filteredItems, visibleItems, query, pinnedTabs, allTabs });
   stateRef.current = { mode, selectedIndex, filteredItems, visibleItems, query, pinnedTabs, allTabs };
 
   const handleItemSelect = useCallback((index: number) => {

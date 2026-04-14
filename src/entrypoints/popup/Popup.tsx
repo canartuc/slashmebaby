@@ -68,10 +68,22 @@ export const Popup: React.FC = () => {
 
   const handleSelectItem = useCallback(
     (item: SearchResultItem) => {
-      chrome.runtime.sendMessage({
-        type: 'EXECUTE_ACTION',
-        payload: { actionId: item.id },
-      });
+      // Route by item kind: actions execute, tabs switch, anything with
+      // a URL navigates. Previously every selection was sent as
+      // EXECUTE_ACTION, which silently failed for non-action items.
+      if (item.id.startsWith('action-')) {
+        chrome.runtime.sendMessage({
+          type: 'EXECUTE_ACTION',
+          payload: { actionId: item.id },
+        });
+      } else if (item.id.startsWith('tab-')) {
+        const tabId = Number(item.id.slice('tab-'.length));
+        if (Number.isFinite(tabId)) {
+          chrome.runtime.sendMessage({ type: 'SWITCH_TAB', payload: { tabId } });
+        }
+      } else if (item.url) {
+        chrome.runtime.sendMessage({ type: 'NAVIGATE', payload: { url: item.url } });
+      }
       window.close();
     },
     []

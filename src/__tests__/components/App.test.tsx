@@ -21,8 +21,10 @@ Object.defineProperty(window, 'matchMedia', {
 describe('App', () => {
   beforeEach(() => {
     vi.mocked(chrome.runtime.sendMessage).mockReset();
-    vi.mocked(chrome.runtime.sendMessage).mockImplementation(
-      (msg: unknown, callback?: (response: unknown) => void) => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
         const message = msg as { type: string };
         if (message.type === 'GET_SETTINGS' && callback) {
           callback({
@@ -41,7 +43,7 @@ describe('App', () => {
           callback({ tree: [] });
         }
         return undefined as unknown as Promise<unknown>;
-      }
+      }) as unknown as typeof chrome.runtime.sendMessage
     );
   });
 

@@ -18,6 +18,12 @@ const mockGroups: ResultGroup[] = [
       { id: 'bm-1', title: 'React Docs', url: 'https://react.dev', score: 0.85 },
     ],
   },
+  {
+    category: 'actions',
+    items: [
+      { id: 'action-close-tab', title: 'Close Tab', score: 0.7 },
+    ],
+  },
 ];
 
 // Mock matchMedia
@@ -60,8 +66,10 @@ describe('Popup', () => {
     );
 
     // Mock runtime.sendMessage for search
-    vi.mocked(chrome.runtime.sendMessage).mockImplementation(
-      (msg: unknown, callback?: (response: unknown) => void) => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
         const message = msg as { type: string };
         if (
           message.type === 'SMART_SUGGESTIONS' ||
@@ -72,7 +80,7 @@ describe('Popup', () => {
           if (callback) callback({ success: true });
         }
         return undefined as unknown as Promise<unknown>;
-      }
+      }) as unknown as typeof chrome.runtime.sendMessage
     );
   });
 
@@ -101,7 +109,7 @@ describe('Popup', () => {
     });
   });
 
-  it('sends EXECUTE_ACTION and closes when selecting an item', async () => {
+  it('sends SWITCH_TAB with numeric tabId when selecting a tab result', async () => {
     render(<Popup />);
 
     await waitFor(() => {
@@ -111,13 +119,53 @@ describe('Popup', () => {
     fireEvent.click(screen.getByText('Gmail'));
 
     const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
+    const switchCall = calls.find(
+      (c) => (c[0] as unknown as { type: string }).type === 'SWITCH_TAB'
+    );
+    expect(switchCall).toBeTruthy();
+    expect(
+      (switchCall![0] as unknown as { payload: { tabId: number } }).payload.tabId
+    ).toBe(1);
+    expect(mockClose).toHaveBeenCalled();
+  });
+
+  it('sends NAVIGATE with the item URL when selecting a bookmark', async () => {
+    render(<Popup />);
+
+    await waitFor(() => {
+      expect(screen.getByText('React Docs')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('React Docs'));
+
+    const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
+    const navCall = calls.find(
+      (c) => (c[0] as unknown as { type: string }).type === 'NAVIGATE'
+    );
+    expect(navCall).toBeTruthy();
+    expect(
+      (navCall![0] as unknown as { payload: { url: string } }).payload.url
+    ).toBe('https://react.dev');
+    expect(mockClose).toHaveBeenCalled();
+  });
+
+  it('sends EXECUTE_ACTION when selecting an action result', async () => {
+    render(<Popup />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Close Tab')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('Close Tab'));
+
+    const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
     const executeCall = calls.find(
-      (c) => (c[0] as { type: string }).type === 'EXECUTE_ACTION'
+      (c) => (c[0] as unknown as { type: string }).type === 'EXECUTE_ACTION'
     );
     expect(executeCall).toBeTruthy();
     expect(
-      (executeCall![0] as { payload: { actionId: string } }).payload.actionId
-    ).toBe('tab-1');
+      (executeCall![0] as unknown as { payload: { actionId: string } }).payload.actionId
+    ).toBe('action-close-tab');
     expect(mockClose).toHaveBeenCalled();
   });
 
@@ -144,7 +192,7 @@ describe('Popup', () => {
     await waitFor(() => {
       const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
       const searchCall = calls.find(
-        (c) => (c[0] as { type: string }).type === 'SEARCH'
+        (c) => (c[0] as unknown as { type: string }).type === 'SEARCH'
       );
       expect(searchCall).toBeTruthy();
     });

@@ -27,6 +27,7 @@ function makeFakeTab(overrides: Partial<chrome.tabs.Tab> = {}): chrome.tabs.Tab 
     selected: false,
     discarded: false,
     autoDiscardable: true,
+    frozen: false,
     groupId: -1,
     title: 'Test Tab',
     url: 'https://example.com',

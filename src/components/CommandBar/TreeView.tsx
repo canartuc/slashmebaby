@@ -1,6 +1,7 @@
 import React from 'react';
 import type { TreeItem as TreeItemData } from '../../hooks/useTreeData';
 import { TreeItem } from './TreeItem';
+import { Favicon } from './Favicon';
 
 // ─── Action definitions ─────────────────────────────────────────────────────
 
@@ -101,7 +102,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
   });
 
   return (
-    <div className="smb-results" role="listbox">
+    <div className="smb-results" role="listbox" id="slashmebaby-results">
       {/* Pinned tabs as numbered squares */}
       {pinnedTabs.length > 0 && !searchMode && (
         <>
@@ -118,7 +119,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
               >
                 <span className="smb-pinned-number">{i + 1}</span>
                 {showFavicons && tab.icon ? (
-                  <img className="smb-pinned-icon" src={tab.icon} alt="" width={16} height={16} />
+                  <Favicon src={tab.icon} size={16} className="smb-pinned-icon" />
                 ) : (
                   <span className="smb-pinned-letter">{(tab.siteName || tab.title.charAt(0)).charAt(0).toUpperCase()}</span>
                 )}
@@ -145,9 +146,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
                   aria-label={tab.title}
                 >
                   {label && <span className="smb-tab-col-label">{label}</span>}
-                  {showFavicons && tab.icon && (
-                    <img className="smb-favicon" src={tab.icon} alt="" width={14} height={14} />
-                  )}
+                  {showFavicons && <Favicon src={tab.icon} size={14} />}
                   <span className="smb-tab-col-title">{tab.title}</span>
                 </div>
               );

@@ -142,14 +142,34 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && value !== undefined && typeof value === 'object';
 }
 
+const VALID_SOURCES: ReadonlySet<Source> = new Set(['tabs', 'bookmarks', 'history', 'actions']);
+
 export function isSearchRequest(value: unknown): value is SearchRequest {
-  return isObject(value) && value['type'] === 'SEARCH';
+  if (!isObject(value) || value['type'] !== 'SEARCH') return false;
+  const payload = value['payload'];
+  if (!isObject(payload)) return false;
+  if (typeof payload['query'] !== 'string') return false;
+  if (payload['query'].length > 2048) return false;
+  const sources = payload['sources'];
+  if (!Array.isArray(sources)) return false;
+  if (sources.length > 16) return false;
+  for (const s of sources) {
+    if (typeof s !== 'string' || !VALID_SOURCES.has(s as Source)) return false;
+  }
+  return true;
 }
 
 export function isExecuteActionRequest(
   value: unknown
 ): value is ExecuteActionRequest {
-  return isObject(value) && value['type'] === 'EXECUTE_ACTION';
+  if (!isObject(value) || value['type'] !== 'EXECUTE_ACTION') return false;
+  const payload = value['payload'];
+  if (!isObject(payload)) return false;
+  if (typeof payload['actionId'] !== 'string' || payload['actionId'].length === 0) return false;
+  if (payload['actionId'].length > 128) return false;
+  const t = payload['targetTabId'];
+  if (t !== undefined && (typeof t !== 'number' || !Number.isInteger(t) || t < 0)) return false;
+  return true;
 }
 
 export function isToggleOverlayCommand(

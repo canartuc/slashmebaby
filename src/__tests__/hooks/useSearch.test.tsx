@@ -18,11 +18,13 @@ describe('useSearch', () => {
   });
 
   it('sends SMART_SUGGESTIONS when query is empty', () => {
-    vi.mocked(chrome.runtime.sendMessage).mockImplementation(
-      (_msg: unknown, callback?: (response: unknown) => void) => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      _msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
         if (callback) callback({ groups: mockGroups });
         return undefined as unknown as Promise<unknown>;
-      }
+      }) as unknown as typeof chrome.runtime.sendMessage
     );
 
     renderHook(() => useSearch(''));
@@ -34,11 +36,13 @@ describe('useSearch', () => {
   });
 
   it('sends SEARCH with query and all sources when query is not empty', () => {
-    vi.mocked(chrome.runtime.sendMessage).mockImplementation(
-      (_msg: unknown, callback?: (response: unknown) => void) => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      _msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
         if (callback) callback({ groups: mockGroups });
         return undefined as unknown as Promise<unknown>;
-      }
+      }) as unknown as typeof chrome.runtime.sendMessage
     );
 
     renderHook(() => useSearch('react'));
@@ -53,11 +57,13 @@ describe('useSearch', () => {
   });
 
   it('returns groups from the response', async () => {
-    vi.mocked(chrome.runtime.sendMessage).mockImplementation(
-      (_msg: unknown, callback?: (response: unknown) => void) => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      _msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
         if (callback) callback({ groups: mockGroups });
         return undefined as unknown as Promise<unknown>;
-      }
+      }) as unknown as typeof chrome.runtime.sendMessage
     );
 
     const { result } = renderHook(() => useSearch('gmail'));
@@ -68,11 +74,13 @@ describe('useSearch', () => {
   });
 
   it('returns empty groups when response has no groups', async () => {
-    vi.mocked(chrome.runtime.sendMessage).mockImplementation(
-      (_msg: unknown, callback?: (response: unknown) => void) => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      _msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
         if (callback) callback({});
         return undefined as unknown as Promise<unknown>;
-      }
+      }) as unknown as typeof chrome.runtime.sendMessage
     );
 
     const { result } = renderHook(() => useSearch('xyz'));
@@ -86,11 +94,13 @@ describe('useSearch', () => {
   it('sets isLoading to true during request and false after', async () => {
     let resolveCallback: ((response: unknown) => void) | undefined;
 
-    vi.mocked(chrome.runtime.sendMessage).mockImplementation(
-      (_msg: unknown, callback?: (response: unknown) => void) => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      _msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
         resolveCallback = callback;
         return undefined as unknown as Promise<unknown>;
-      }
+      }) as unknown as typeof chrome.runtime.sendMessage
     );
 
     const { result } = renderHook(() => useSearch('test'));
@@ -110,8 +120,10 @@ describe('useSearch', () => {
 
   it('cancels stale requests when query changes', async () => {
     let callCount = 0;
-    vi.mocked(chrome.runtime.sendMessage).mockImplementation(
-      (_msg: unknown, callback?: (response: unknown) => void) => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      _msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
         callCount++;
         if (callCount === 1) {
           // Don't call callback for the first (stale) request
@@ -120,7 +132,7 @@ describe('useSearch', () => {
           if (callback) callback({ groups: mockGroups });
         }
         return undefined as unknown as Promise<unknown>;
-      }
+      }) as unknown as typeof chrome.runtime.sendMessage
     );
 
     const { result, rerender } = renderHook(

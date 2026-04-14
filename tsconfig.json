@@ -25,5 +25,5 @@
     "**/*",
     ".wxt/wxt.d.ts"
   ],
-  "exclude": [".output", "node_modules"]
+  "exclude": [".output", "node_modules", "entrypoints"]
 }

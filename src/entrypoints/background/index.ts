@@ -14,10 +14,13 @@ import {
 } from '../../lib/messaging';
 import type { TabWithGroup, TabGroupInfo, BookmarkNode } from '../../lib/messaging';
 import type { SearchableItem } from '../../lib/search';
+import { validateNavigationUrl } from '../../lib/url-safety';
 
 // ─── Message Router Factory ───────────────────────────────────────────────
 
-export async function createMessageRouter() {
+type MessageRouter = (message: unknown, sender?: chrome.runtime.MessageSender) => Promise<unknown>;
+
+export async function createMessageRouter(): Promise<MessageRouter> {
   const tabCache = new TabCache();
   const bookmarkCache = new BookmarkCache();
   const historyCache = new HistoryCache();
@@ -43,7 +46,7 @@ export async function createMessageRouter() {
 
   // ─── Message Handler ────────────────────────────────────────────────────
 
-  return async function router(message: unknown): Promise<unknown> {
+  return async function router(message: unknown, sender?: chrome.runtime.MessageSender): Promise<unknown> {
     if (isSearchRequest(message)) {
       const { query, sources } = message.payload;
 
@@ -135,10 +138,17 @@ export async function createMessageRouter() {
     // Switch to an existing tab
     const msg = message as Record<string, unknown>;
     if (msg.type === 'SWITCH_TAB') {
-      const payload = msg.payload as { tabId: number };
+      const payload = msg.payload;
+      if (!payload || typeof payload !== 'object') {
+        return { success: false, error: 'invalid payload' };
+      }
+      const { tabId } = payload as { tabId: unknown };
+      if (typeof tabId !== 'number' || !Number.isInteger(tabId) || tabId < 0) {
+        return { success: false, error: 'invalid tabId' };
+      }
       try {
-        await chrome.tabs.update(payload.tabId, { active: true });
-        const tab = await chrome.tabs.get(payload.tabId);
+        await chrome.tabs.update(tabId, { active: true });
+        const tab = await chrome.tabs.get(tabId);
         if (tab.windowId) {
           await chrome.windows.update(tab.windowId, { focused: true });
         }
@@ -150,9 +160,13 @@ export async function createMessageRouter() {
 
     // Open URL in a new tab
     if (msg.type === 'OPEN_NEW_TAB') {
-      const payload = msg.payload as { url: string };
+      const payload = msg.payload as { url?: unknown };
+      const check = validateNavigationUrl(payload?.url);
+      if (!check.ok) {
+        return { success: false, error: `unsafe url: ${check.reason}` };
+      }
       try {
-        await chrome.tabs.create({ url: payload.url });
+        await chrome.tabs.create({ url: payload.url as string });
         return { success: true };
       } catch (error) {
         return { success: false, error: String(error) };
@@ -161,13 +175,27 @@ export async function createMessageRouter() {
 
     // Navigate current tab to a URL
     if (msg.type === 'NAVIGATE') {
-      const payload = msg.payload as { url: string };
+      const payload = msg.payload as { url?: unknown };
+      const check = validateNavigationUrl(payload?.url);
+      if (!check.ok) {
+        return { success: false, error: `unsafe url: ${check.reason}` };
+      }
+      const url = payload.url as string;
       try {
-        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (activeTab?.id) {
-          await chrome.tabs.update(activeTab.id, { url: payload.url });
+        // Prefer the sender's own tab when available. Falls back to the
+        // active tab in the current window (used by the popup context,
+        // which has no sender.tab).
+        let targetId: number | undefined;
+        if (sender?.tab?.id !== undefined) {
+          targetId = sender.tab.id;
         } else {
-          await chrome.tabs.create({ url: payload.url });
+          const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          targetId = activeTab?.id;
+        }
+        if (targetId !== undefined) {
+          await chrome.tabs.update(targetId, { url });
+        } else {
+          await chrome.tabs.create({ url });
         }
         return { success: true };
       } catch (error) {
@@ -177,12 +205,20 @@ export async function createMessageRouter() {
 
     if (isExecuteActionRequest(message)) {
       const { actionId, targetTabId } = message.payload;
+      if (typeof actionId !== 'string' || actionId.length === 0) {
+        return { success: false, error: 'invalid actionId' };
+      }
       const bareActionId = actionId.startsWith('action-')
         ? actionId.slice('action-'.length)
         : actionId;
 
-      // If no targetTabId provided, use the active tab
+      // Resolve target tab: explicit → sender's tab → active tab. Using the
+      // sender's tab avoids closing the wrong tab if focus changed since
+      // the palette was opened.
       let resolvedTabId = targetTabId;
+      if (resolvedTabId === undefined && sender?.tab?.id !== undefined) {
+        resolvedTabId = sender.tab.id;
+      }
       if (resolvedTabId === undefined) {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         resolvedTabId = activeTab?.id;
@@ -328,28 +364,67 @@ function mapTab(tab: chrome.tabs.Tab): TabWithGroup {
 
 // ─── WXT Entrypoint ──────────────────────────────────────────────────────
 
+/**
+ * Registers background listeners synchronously so MV3 service-worker
+ * wake-up events are never missed, and lazily initializes the router
+ * the first time a message arrives.
+ *
+ * The async `createMessageRouter` init returns a promise; the first
+ * message handler awaits it before routing. Subsequent messages reuse
+ * the same cached router instance.
+ */
+export function registerBackgroundListeners(): void {
+  let routerPromise: Promise<MessageRouter> | null = null;
+  const getRouter = (): Promise<MessageRouter> => {
+    if (!routerPromise) routerPromise = createMessageRouter();
+    return routerPromise;
+  };
+
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // Only accept messages that originate from our own extension. MV3 rejects
+    // external messages by default, but this is defense-in-depth in case
+    // externally_connectable is ever added.
+    if (sender && sender.id && sender.id !== chrome.runtime.id) {
+      sendResponse({ error: 'forbidden sender' });
+      return false;
+    }
+    getRouter()
+      .then((router) => router(message, sender))
+      .then(sendResponse)
+      .catch((err) => sendResponse({ error: String(err) }));
+    // Return true to keep the message channel open for async sendResponse.
+    return true;
+  });
+
+  chrome.commands.onCommand.addListener((command) => {
+    if (command === 'toggle-command-bar') {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tabId = tabs[0]?.id;
+        if (typeof tabId === 'number') {
+          chrome.tabs.sendMessage(tabId, { type: 'TOGGLE_OVERLAY' }, () => {
+            // Swallow lastError — expected on chrome:// pages where the
+            // content script cannot run. The popup is the fallback there.
+            void chrome.runtime.lastError;
+          });
+        }
+      });
+    }
+  });
+
+  chrome.runtime.onInstalled.addListener((details) => {
+    if (details.reason === 'install') {
+      chrome.tabs.create({ url: chrome.runtime.getURL('/onboarding/index.html') });
+    }
+  });
+
+  // Warm the router on startup so the first user interaction isn't delayed.
+  // Failures here are non-fatal; the next message will retry.
+  getRouter().catch(() => {
+    routerPromise = null;
+  });
+}
+
 // defineBackground is auto-imported by WXT
 export default defineBackground(() => {
-  createMessageRouter().then((router) => {
-    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-      router(message).then(sendResponse);
-      return true;
-    });
-
-    chrome.commands.onCommand.addListener((command) => {
-      if (command === 'toggle-command-bar') {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          if (tabs[0]?.id) {
-            chrome.tabs.sendMessage(tabs[0].id, { type: 'TOGGLE_OVERLAY' });
-          }
-        });
-      }
-    });
-
-    chrome.runtime.onInstalled.addListener((details) => {
-      if (details.reason === 'install') {
-        chrome.tabs.create({ url: chrome.runtime.getURL('/onboarding/index.html') });
-      }
-    });
-  });
+  registerBackgroundListeners();
 });

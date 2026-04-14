@@ -19,7 +19,7 @@ function makeFolder(
   title: string,
   children: chrome.bookmarks.BookmarkTreeNode[] = []
 ): chrome.bookmarks.BookmarkTreeNode {
-  return { id, title, children, index: 0, parentId: '0', dateAdded: 0 };
+  return { id, title, children, index: 0, parentId: '0', dateAdded: 0, syncing: false };
 }
 
 function makeBookmark(
@@ -28,7 +28,7 @@ function makeBookmark(
   url: string,
   dateAdded = 1700000000000
 ): chrome.bookmarks.BookmarkTreeNode {
-  return { id, title, url, index: 0, parentId: '1', dateAdded };
+  return { id, title, url, index: 0, parentId: '1', dateAdded, syncing: false };
 }
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
