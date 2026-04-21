@@ -35,12 +35,12 @@
     "@wxt-dev/module-react": "^1.2.2",
     "axe-core": "^4.11.3",
     "eslint": "^9.39.4",
-    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^28.1.0",
     "playwright": "^1.58.2",
-    "typescript": "^6.0.2",
-    "typescript-eslint": "^8.58.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.0",
     "vitest": "^4.1.4",
-    "wxt": "^0.20.21"
+    "wxt": "^0.20.25"
   }
 }
