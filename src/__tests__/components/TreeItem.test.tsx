@@ -57,6 +57,16 @@ const defaultProps = {
   searchMode: false,
 };
 
+// Arrow-key performance depends on TreeItem skipping re-renders when its
+// props are unchanged; lock the memo wrapper so it can't be dropped silently.
+describe('TreeItem memoization contract', () => {
+  it('is wrapped in React.memo', () => {
+    expect((TreeItem as unknown as { $$typeof: symbol }).$$typeof).toBe(
+      Symbol.for('react.memo')
+    );
+  });
+});
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('TreeItem', () => {

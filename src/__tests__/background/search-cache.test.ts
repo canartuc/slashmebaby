@@ -122,6 +122,20 @@ describe('SEARCH engine caching', () => {
     expect(searchLib.createSearchEngine).toHaveBeenCalledTimes(2);
   });
 
+  it('rebuilds the engine after a tab update refreshes the cache', async () => {
+    const router = await createMessageRouter();
+
+    await router({ type: 'SEARCH', payload: { query: 'one', sources: ALL_SOURCES } });
+    expect(searchLib.createSearchEngine).toHaveBeenCalledTimes(1);
+
+    const tabListener = chromeMock.tabs.onUpdated.addListener.mock.calls[0][0] as () => void;
+    tabListener();
+    await new Promise((r) => setTimeout(r, 0));
+
+    await router({ type: 'SEARCH', payload: { query: 'one', sources: ALL_SOURCES } });
+    expect(searchLib.createSearchEngine).toHaveBeenCalledTimes(2);
+  });
+
   it('rebuilds the engine when the requested sources change', async () => {
     const router = await createMessageRouter();
 
