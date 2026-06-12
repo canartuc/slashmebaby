@@ -49,6 +49,7 @@ const bookmarkItem: TreeItemData = {
 };
 
 const defaultProps = {
+  index: 0,
   label: 'a',
   isSelected: false,
   showFavicons: true,

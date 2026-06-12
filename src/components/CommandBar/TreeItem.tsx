@@ -5,15 +5,20 @@ import { Favicon } from './Favicon';
 
 export interface TreeItemProps {
   item: TreeItemData;
+  /** Index of this item in the visible list, passed back to onSelect. */
+  index: number;
   label: string;
   isSelected: boolean;
   showFavicons: boolean;
-  onSelect: () => void;
+  onSelect: (index: number) => void;
   searchMode: boolean;
 }
 
-export const TreeItem: React.FC<TreeItemProps> = ({
+// Memoized so that arrow-key navigation (which only changes `isSelected` on
+// two items) re-renders two rows instead of the whole list.
+export const TreeItem: React.FC<TreeItemProps> = React.memo(({
   item,
+  index,
   label,
   isSelected,
   showFavicons,
@@ -35,11 +40,12 @@ export const TreeItem: React.FC<TreeItemProps> = ({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.addEventListener('click', onSelect);
+    const handleClick = () => onSelect(index);
+    el.addEventListener('click', handleClick);
     return () => {
-      el.removeEventListener('click', onSelect);
+      el.removeEventListener('click', handleClick);
     };
-  }, [onSelect]);
+  }, [onSelect, index]);
 
   // Scroll into view when selected
   useEffect(() => {
@@ -76,4 +82,6 @@ export const TreeItem: React.FC<TreeItemProps> = ({
       {isSelected && <span className="smb-kbd">&#9166;</span>}
     </div>
   );
-};
+});
+
+TreeItem.displayName = 'TreeItem';
