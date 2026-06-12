@@ -100,11 +100,18 @@ describe('SEARCH engine caching', () => {
   it('returns identical results whether or not the engine was cached', async () => {
     const router = await createMessageRouter();
 
-    const first = await router({ type: 'SEARCH', payload: { query: 'one', sources: ALL_SOURCES } });
-    const second = await router({ type: 'SEARCH', payload: { query: 'one', sources: ALL_SOURCES } });
+    // Recency scores derive from Date.now() at search time; freeze it so a
+    // millisecond elapsing between the two calls can't drift the scores.
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_750_000_000_000);
+    try {
+      const first = await router({ type: 'SEARCH', payload: { query: 'one', sources: ALL_SOURCES } });
+      const second = await router({ type: 'SEARCH', payload: { query: 'one', sources: ALL_SOURCES } });
 
-    expect(second).toEqual(first);
-    expect(first).toHaveProperty('groups');
+      expect(second).toEqual(first);
+      expect(first).toHaveProperty('groups');
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it('rebuilds the engine after a bookmark change refreshes the cache', async () => {

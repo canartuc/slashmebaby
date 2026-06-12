@@ -3,6 +3,9 @@
   "description": "Arc & Zen-style command palette for any browser.",
   "private": true,
   "version": "1.0.0",
+  "engines": {
+    "node": ">=24"
+  },
   "type": "module",
   "scripts": {
     "dev": "wxt",
@@ -20,27 +23,31 @@
     "test:firefox": "bash scripts/firefox-smoke-test.sh"
   },
   "dependencies": {
-    "fuse.js": "^7.3.0",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "fuse.js": "^7.4.2",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@types/chrome": "0.1.40",
-    "@types/react": "^19.2.14",
+    "@types/chrome": "0.1.43",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitest/coverage-v8": "^4.1.4",
+    "@vitest/coverage-v8": "^4.1.8",
     "@wxt-dev/module-react": "^1.2.2",
-    "axe-core": "^4.11.3",
-    "eslint": "^9.39.4",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "jsdom": "^28.1.0",
-    "playwright": "^1.58.2",
-    "typescript": "^6.0.2",
-    "typescript-eslint": "^8.58.2",
-    "vitest": "^4.1.4",
-    "wxt": "^0.20.21"
+    "axe-core": "^4.12.1",
+    "eslint": "^10.4.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "jsdom": "^29.1.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.0",
+    "vitest": "^4.1.8",
+    "wxt": "^0.20.26"
+  },
+  "overrides": {
+    "tmp": "^0.2.6",
+    "shell-quote": "^1.8.4",
+    "uuid": "^11.1.1"
   }
 }
