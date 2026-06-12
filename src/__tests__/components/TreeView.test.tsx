@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { TreeView } from '../../components/CommandBar/TreeView';
 import type { TreeItem as TreeItemData } from '../../hooks/useTreeData';
@@ -196,6 +196,53 @@ describe('TreeView', () => {
     const treeItems = container.querySelectorAll('.smb-tree-item:not(.smb-tree-item--action)');
     (treeItems[1] as HTMLElement).click();
     expect(onSelectItem).toHaveBeenCalledWith(1);
+  });
+
+  // ─── Render stability on selection change ─────────────────────────────────
+
+  describe('selection-change render stability', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('does not reattach item click listeners when only selectedIndex changes', () => {
+      const items = [groupItem, tab1, tab2, folderItem, bookmarkItem];
+      const stableOnSelect = vi.fn();
+      const props = {
+        ...defaultProps,
+        visibleItems: items,
+        labels: makeLabels(items.length),
+        onSelectItem: stableOnSelect,
+      };
+
+      const { rerender } = render(<TreeView {...props} selectedIndex={0} />);
+
+      // Arrow-key navigation only changes selectedIndex. Memoized items with
+      // stable callbacks must not re-run their listener effects.
+      const addSpy = vi.spyOn(Element.prototype, 'addEventListener');
+      rerender(<TreeView {...props} selectedIndex={1} />);
+
+      const clickAttachments = addSpy.mock.calls.filter(([type]) => type === 'click');
+      expect(clickAttachments).toHaveLength(0);
+    });
+
+    it('still calls onSelectItem with the correct index after selection changes', () => {
+      const items = [groupItem, tab1, tab2];
+      const onSelectItem = vi.fn();
+      const props = {
+        ...defaultProps,
+        visibleItems: items,
+        labels: makeLabels(items.length),
+        onSelectItem,
+      };
+
+      const { rerender, container } = render(<TreeView {...props} selectedIndex={0} />);
+      rerender(<TreeView {...props} selectedIndex={2} />);
+
+      const treeItems = container.querySelectorAll('.smb-tree-item:not(.smb-tree-item--action)');
+      (treeItems[1] as HTMLElement).click();
+      expect(onSelectItem).toHaveBeenCalledWith(1);
+    });
   });
 
   // ─── Action divider ──────────────────────────────────────────────────────

@@ -21,6 +21,10 @@ export class TabCache {
     });
   }
 
+  // Contract: refresh() always replaces this.items wholesale and getItems()
+  // returns the live array. The background router's search-engine cache keys
+  // on this array's identity to detect staleness — patching items in place or
+  // returning a copy here would silently break that invalidation.
   getItems(): SearchableItem[] {
     return this.items;
   }

@@ -16,7 +16,7 @@ import {
   isNavigateRequest,
 } from '../../lib/messaging';
 import type { TabWithGroup, TabGroupInfo, BookmarkNode } from '../../lib/messaging';
-import type { SearchableItem } from '../../lib/search';
+import type { SearchableItem, SearchEngine } from '../../lib/search';
 import { validateNavigationUrl, isNavigableUrl } from '../../lib/url-safety';
 
 // ─── Message Router Factory ───────────────────────────────────────────────
@@ -47,34 +47,57 @@ export async function createMessageRouter(): Promise<MessageRouter> {
   // Periodic history refresh (default 5 min)
   historyCache.startPeriodicRefresh();
 
+  // Cached search engine, keyed by the identity of each source's item array.
+  // Every cache refresh swaps in a new array, so reference equality detects
+  // staleness for all refresh paths (events, alarms) without extra plumbing.
+  // Excluded sources are keyed as null; actions are static and need no key.
+  let engineCache: {
+    engine: SearchEngine;
+    tabs: SearchableItem[] | null;
+    bookmarks: SearchableItem[] | null;
+    history: SearchableItem[] | null;
+    maxResultsPerGroup: number;
+  } | null = null;
+
   // ─── Message Handler ────────────────────────────────────────────────────
 
   return async function router(message: unknown, sender?: chrome.runtime.MessageSender): Promise<unknown> {
     if (isSearchRequest(message)) {
       const { query, sources } = message.payload;
 
-      const items: SearchableItem[] = [];
-
-      // Collect items from each requested source
-      if (sources.includes('tabs')) {
-        items.push(...tabCache.getItems());
-      }
-      if (sources.includes('bookmarks')) {
-        items.push(...bookmarkCache.getItems());
-      }
-      if (sources.includes('history')) {
-        items.push(...historyCache.getItems());
-      }
-
-      // Actions are always included
-      items.push(...actionRegistry.getItems());
+      const tabItems = sources.includes('tabs') ? tabCache.getItems() : null;
+      const bookmarkItems = sources.includes('bookmarks') ? bookmarkCache.getItems() : null;
+      const historyItems = sources.includes('history') ? historyCache.getItems() : null;
 
       const settings = await getSettings();
-      const engine = createSearchEngine(items, {
-        maxResultsPerGroup: settings.maxResultsPerGroup,
-      });
 
-      return { groups: engine.search(query) };
+      if (
+        !engineCache ||
+        engineCache.tabs !== tabItems ||
+        engineCache.bookmarks !== bookmarkItems ||
+        engineCache.history !== historyItems ||
+        engineCache.maxResultsPerGroup !== settings.maxResultsPerGroup
+      ) {
+        const items: SearchableItem[] = [];
+        if (tabItems) items.push(...tabItems);
+        if (bookmarkItems) items.push(...bookmarkItems);
+        if (historyItems) items.push(...historyItems);
+
+        // Actions are always included
+        items.push(...actionRegistry.getItems());
+
+        engineCache = {
+          engine: createSearchEngine(items, {
+            maxResultsPerGroup: settings.maxResultsPerGroup,
+          }),
+          tabs: tabItems,
+          bookmarks: bookmarkItems,
+          history: historyItems,
+          maxResultsPerGroup: settings.maxResultsPerGroup,
+        };
+      }
+
+      return { groups: engineCache.engine.search(query) };
     }
 
     if (isSmartSuggestionsRequest(message)) {

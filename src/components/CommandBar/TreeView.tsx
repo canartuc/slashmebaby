@@ -166,10 +166,11 @@ export const TreeView: React.FC<TreeViewProps> = ({
             )}
             <TreeItem
               item={item}
+              index={index}
               label={label}
               isSelected={selectedIndex === index}
               showFavicons={showFavicons}
-              onSelect={() => onSelectItem(index)}
+              onSelect={onSelectItem}
               searchMode={searchMode}
             />
           </React.Fragment>

@@ -31,6 +31,8 @@ export class HistoryCache {
     });
   }
 
+  // Contract: refresh() always replaces this.items wholesale and getItems()
+  // returns the live array — the router's engine cache keys on its identity.
   getItems(): SearchableItem[] {
     return this.items;
   }

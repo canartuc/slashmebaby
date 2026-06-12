@@ -13,7 +13,17 @@ export async function launchBrowserWithExtension(): Promise<BrowserContext> {
       '--disable-default-apps',
     ],
   });
-  await new Promise(r => setTimeout(r, 2000));
+  // Wait until the extension's MV3 service worker is registered instead of
+  // sleeping a fixed amount — its message listeners attach synchronously.
+  // The catch covers the race where the worker registers between the length
+  // check and waitForEvent; the recheck below turns a genuine failure into
+  // an immediate, accurate error instead of downstream timeouts.
+  if (context.serviceWorkers().length === 0) {
+    await context.waitForEvent('serviceworker', { timeout: 10000 }).catch(() => {});
+  }
+  if (context.serviceWorkers().length === 0) {
+    throw new Error('Extension service worker did not register — is .output/chrome-mv3 built?');
+  }
   return context;
 }
 
@@ -21,7 +31,20 @@ export async function openPage(context: BrowserContext, url = 'https://example.c
   const page = await context.newPage();
   await page.goto(url);
   await page.waitForLoadState('domcontentloaded');
-  await new Promise(r => setTimeout(r, 1000));
+  // The content script appends #slashmebaby-root and attaches its keydown
+  // listener in the same synchronous block at document_idle, so the host's
+  // presence means the palette is ready. Extension/chrome pages never get
+  // the content script — skip the wait there.
+  if (/^(https?|file):/.test(url)) {
+    // Let a timeout propagate: a missing host means the content script did
+    // not inject, and every palette interaction after this would fail with
+    // misleading errors.
+    await page.waitForFunction(
+      () => !!document.getElementById('slashmebaby-root'),
+      undefined,
+      { timeout: 10000 },
+    );
+  }
   return page;
 }
 
@@ -31,7 +54,18 @@ export const OPEN_SHORTCUT = process.platform === 'darwin'
 
 export async function openCommandBar(page: Page): Promise<void> {
   await page.keyboard.press(OPEN_SHORTCUT);
-  await new Promise(r => setTimeout(r, 800));
+  // Poll until the overlay backdrop exists instead of a fixed 800ms sleep.
+  // A timeout propagates: it means the palette never opened (or the shortcut
+  // toggled an already-open palette closed), which the caller should see as
+  // the root cause rather than a later assertion mismatch.
+  await page.waitForFunction(
+    () => {
+      const host = document.getElementById('slashmebaby-root');
+      return !!host?.shadowRoot?.querySelector('.smb-backdrop');
+    },
+    undefined,
+    { timeout: 5000 },
+  );
 }
 
 export async function isOverlayOpen(page: Page): Promise<boolean> {
@@ -82,7 +116,17 @@ export async function typeInCommandBar(page: Page, text: string): Promise<void> 
       input.dispatchEvent(new Event('input', { bubbles: true }));
     }
   }, text);
-  await new Promise(r => setTimeout(r, 500));
+  // Let React commit and the browser paint the filtered results: two animation
+  // frames flush the update scheduled by the input event, plus a short settle.
+  // Bounded by a race because rAF never fires on hidden/occluded pages, which
+  // would otherwise hang this evaluate until the overall test timeout.
+  await Promise.race([
+    page.evaluate(
+      () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+    ),
+    new Promise(r => setTimeout(r, 250)),
+  ]);
+  await new Promise(r => setTimeout(r, 100));
 }
 
 export async function getInputValue(page: Page): Promise<string> {
