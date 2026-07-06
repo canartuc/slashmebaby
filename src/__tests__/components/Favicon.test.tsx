@@ -55,17 +55,16 @@ describe('Favicon', () => {
   });
 });
 
-// chrome.runtime.sendMessage's last overload (the callback-based form) is
-// what `Parameters`/`ReturnType` resolve to for an overloaded function type,
-// so `vi.spyOn(...).mockResolvedValue(...)` type-checks against `void`
-// instead of the `Promise<R>` overload actually used at the call site here.
-// This helper pins the mock to the Promise-returning overload explicitly,
-// with a type assertion (not `any`) — no unsafe widening.
+// The component uses the callback form `sendMessage(msg, cb)`, so the mock
+// invokes the callback synchronously with the canned response. The assertion
+// (not `any`) pins the overloaded signature without unsafe widening.
 function mockSendMessage(response: { dataUrl: string | null }) {
   return vi
     .spyOn(chrome.runtime, 'sendMessage')
     .mockImplementation(
-      (() => Promise.resolve(response)) as typeof chrome.runtime.sendMessage
+      ((_msg: unknown, cb?: (res: { dataUrl: string | null }) => void) => {
+        cb?.(response);
+      }) as typeof chrome.runtime.sendMessage
     );
 }
 
@@ -121,34 +120,46 @@ describe('Favicon fallback chain', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it('goes straight to the globe (no background round-trip) when a data: icon fails', () => {
+    // A data: URL that fails to load can't be recovered by re-fetching it, so
+    // the machine must skip the proxy and show the globe — otherwise React
+    // would see an unchanged src, never reload, and stick on the broken image.
+    const spy = mockSendMessage({ dataUrl: 'data:image/png;base64,AP8=' });
+    const { container } = render(<Favicon src="data:image/png;base64,BROKEN=" />);
+    fireEvent.error(container.querySelector('img')!);
+    expect(spy).not.toHaveBeenCalled();
+    expect(container.querySelector('svg')).toBeTruthy();
+    expect(container.querySelector('img')).toBeNull();
+  });
+
   it('discards a stale proxied result if the row is recycled to a new src first', async () => {
     // The row's direct load fails, kicking off a background proxy fetch for
     // the *old* src — but before that fetch resolves, the row is recycled
     // (re-rendered) to point at a different favicon entirely, as happens
     // when virtualised list rows are reused during scrolling/navigation.
-    let resolveFetch: (res: { dataUrl: string | null }) => void = () => {};
-    const pending = new Promise<{ dataUrl: string | null }>((resolve) => {
-      resolveFetch = resolve;
-    });
+    let savedCb: ((res: { dataUrl: string | null }) => void) | undefined;
     const spy = vi
       .spyOn(chrome.runtime, 'sendMessage')
-      .mockImplementation((() => pending) as typeof chrome.runtime.sendMessage);
+      .mockImplementation(
+        ((_msg: unknown, cb?: (res: { dataUrl: string | null }) => void) => {
+          savedCb = cb;
+        }) as typeof chrome.runtime.sendMessage
+      );
 
     const { container, rerender } = render(<Favicon src="https://a.com/old.ico" />);
     fireEvent.error(container.querySelector('img')!);
-    expect(spy).toHaveBeenCalledWith({
-      type: 'GET_FAVICON',
-      payload: { url: 'https://a.com/old.ico' },
-    });
+    expect(spy).toHaveBeenCalledWith(
+      { type: 'GET_FAVICON', payload: { url: 'https://a.com/old.ico' } },
+      expect.any(Function)
+    );
 
     // Recycle the row to a brand-new src before the background responds.
     rerender(<Favicon src="https://b.com/new.ico" />);
     expect(container.querySelector('img')!.getAttribute('src')).toBe('https://b.com/new.ico');
 
     // The stale fetch for the old src now resolves.
-    await act(async () => {
-      resolveFetch({ dataUrl: 'data:image/png;base64,STALE=' });
-      await pending;
+    act(() => {
+      savedCb?.({ dataUrl: 'data:image/png;base64,STALE=' });
     });
 
     // The stale result must be discarded: the row still reflects the new

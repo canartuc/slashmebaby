@@ -30,8 +30,17 @@ export async function getFaviconDataUrl(
   }
 
   try {
-    const resp = await fetch(url);
+    // credentials: 'omit' — never send cookies, so a page-controlled favicon
+    // URL pointing at an authenticated cross-origin/internal endpoint can't
+    // exfiltrate a logged-in response through the proxy.
+    const resp = await fetch(url, { credentials: 'omit' });
     if (!resp.ok) return null;
+
+    // Reject an over-large favicon before buffering it, when the server
+    // declares its size. (Chunked / no-length responses are still bounded by
+    // the post-read check below.)
+    const declaredLength = Number(resp.headers.get('content-length'));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_FAVICON_BYTES) return null;
 
     // Lowercase so a server sending "IMAGE/PNG" is still recognised as an image.
     const contentType = (resp.headers.get('content-type') ?? '').toLowerCase();

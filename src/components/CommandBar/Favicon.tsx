@@ -62,26 +62,34 @@ export const Favicon: React.FC<FaviconProps> = ({ src, size = 16, className }) =
   if (stage === 2) return <GlobeGlyph size={size} className={className} />;
 
   const handleError = () => {
-    if (stage === 0) {
-      const requestedUrl = src;
-      chrome.runtime
-        .sendMessage({ type: 'GET_FAVICON', payload: { url: requestedUrl } })
-        .then((res: { dataUrl?: string | null } | undefined) => {
-          if (currentSrcRef.current !== requestedUrl) return;
-          if (res && typeof res.dataUrl === 'string') {
-            setProxied(res.dataUrl);
-            setStage(1);
-          } else {
-            setStage(2);
-          }
-        })
-        .catch(() => {
-          if (currentSrcRef.current !== requestedUrl) return;
-          setStage(2);
-        });
-    } else {
+    if (stage !== 0) {
       setStage(2);
+      return;
     }
+    // A data: URL that failed to load can't be recovered by re-fetching it —
+    // the background would echo the same bytes back, React would see an
+    // unchanged src and never reload, and the machine would stick on the
+    // broken image. Skip the round-trip and go straight to the globe.
+    if (src.startsWith('data:')) {
+      setStage(2);
+      return;
+    }
+    // Callback form (not the promise form) to match every other sendMessage
+    // call site and guarantee Chrome + Firefox parity.
+    const requestedUrl = src;
+    chrome.runtime.sendMessage(
+      { type: 'GET_FAVICON', payload: { url: requestedUrl } },
+      (res?: { dataUrl?: string | null }) => {
+        // Row may have been recycled to a different src while in flight.
+        if (currentSrcRef.current !== requestedUrl) return;
+        if (res && typeof res.dataUrl === 'string') {
+          setProxied(res.dataUrl);
+          setStage(1);
+        } else {
+          setStage(2);
+        }
+      }
+    );
   };
 
   const imgSrc = stage === 1 && proxied ? proxied : src;

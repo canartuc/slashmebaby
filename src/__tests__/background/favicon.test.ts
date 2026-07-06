@@ -42,6 +42,27 @@ describe('getFaviconDataUrl', () => {
     expect(result).toBe('data:image/png;base64,AP8=');
   });
 
+  it('rejects an oversize favicon by declared content-length without buffering', async () => {
+    const arrayBufferSpy = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        headers: {
+          get: (k: string) => {
+            const key = k.toLowerCase();
+            if (key === 'content-type') return 'image/png';
+            if (key === 'content-length') return String(256 * 1024 + 1);
+            return null;
+          },
+        },
+        arrayBuffer: arrayBufferSpy,
+      })
+    );
+    expect(await getFaviconDataUrl('https://a.com/big.png', new Map())).toBeNull();
+    expect(arrayBufferSpy).not.toHaveBeenCalled();
+  });
+
   it('accepts an uppercase image content-type', async () => {
     vi.stubGlobal('fetch', mockFetchOnce({ contentType: 'IMAGE/PNG', bytes: new Uint8Array([0, 255]) }));
     const result = await getFaviconDataUrl('https://a.com/f.png', new Map());
