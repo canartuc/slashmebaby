@@ -152,6 +152,31 @@ describe('content script entrypoint', () => {
     expect(host?.shadowRoot?.querySelector('style')).not.toBeNull();
   });
 
+  it('contains key events inside the shadow root while letting other events pass', async () => {
+    buildChrome();
+    const cs = await loadContentMain();
+    cs.main();
+    const shadow = document.getElementById('slashmebaby-root')!.shadowRoot!;
+    const inner = shadow.querySelector('div')!; // mount point
+
+    const keySpy = vi.fn();
+    const clickSpy = vi.fn();
+    document.addEventListener('keydown', keySpy);
+    document.addEventListener('click', clickSpy);
+
+    inner.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', bubbles: true, composed: true }));
+    inner.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+
+    document.removeEventListener('keydown', keySpy);
+    document.removeEventListener('click', clickSpy);
+
+    // The click proves composed events DO reach the page document in this env,
+    // so the keydown NOT reaching it proves the containment actually works
+    // (rather than the event simply never propagating).
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(keySpy).not.toHaveBeenCalled();
+  });
+
   it('reads initial shortcut from chrome.storage.sync', async () => {
     const captured = buildChrome({ shortcut: 'Ctrl+K' });
     const cs = await loadContentMain();
