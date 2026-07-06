@@ -57,6 +57,19 @@ export default defineContentScript({
     const mountPoint = document.createElement('div');
     shadow.appendChild(mountPoint);
 
+    // Contain keyboard events inside the palette. The search box is a native
+    // <input>, so its keystrokes would otherwise bubble out of the shadow tree
+    // to the host page — where many sites focus their own search field on
+    // keypress (type-to-focus) and steal focus mid-search, breaking input.
+    // Stopping propagation at the shadow boundary keeps native typing (and
+    // paste/IME/cursor) working while the page's key listeners never fire.
+    // Navigation keys are already blocked at the document-capture listener
+    // below and never reach here.
+    const containKeyEvent = (e: Event) => e.stopPropagation();
+    for (const type of ['keydown', 'keypress', 'keyup']) {
+      shadow.addEventListener(type, containKeyEvent);
+    }
+
     let root: ReturnType<typeof createRoot> | null = null;
     let currentShortcut = DEFAULT_SETTINGS.shortcut;
 
