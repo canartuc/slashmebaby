@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, fireEvent, waitFor } from '@testing-library/react';
+import { vi, beforeEach } from 'vitest';
 import { Favicon } from '../../components/CommandBar/Favicon';
 
 describe('Favicon', () => {
@@ -51,5 +52,62 @@ describe('Favicon', () => {
     const img = container.querySelector('img');
     expect(img!.getAttribute('width')).toBe('32');
     expect(img!.getAttribute('height')).toBe('32');
+  });
+});
+
+describe('Favicon fallback chain', () => {
+  beforeEach(() => {
+    // The `chrome` global (src/__tests__/setup.ts) is a bare `vi.fn()`, not a
+    // spy on a real method, so `restoreAllMocks()` alone leaves its recorded
+    // `.mock.calls` intact across tests — `clearAllMocks()` resets them too.
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  it('renders a globe svg (not an img) after the proxied load also fails', async () => {
+    // Direct load fails → ask background → returns null → globe.
+    vi.spyOn(chrome.runtime, 'sendMessage').mockResolvedValue({ dataUrl: null });
+    const { container } = render(<Favicon src="https://a.com/f.ico" />);
+    const img = container.querySelector('img')!;
+    fireEvent.error(img);
+    await waitFor(() => {
+      expect(container.querySelector('svg')).toBeTruthy();
+      expect(container.querySelector('img')).toBeNull();
+    });
+  });
+
+  it('swaps to the proxied data: url when the direct load fails', async () => {
+    vi.spyOn(chrome.runtime, 'sendMessage').mockResolvedValue({
+      dataUrl: 'data:image/png;base64,AP8=',
+    });
+    const { container } = render(<Favicon src="https://a.com/f.ico" />);
+    fireEvent.error(container.querySelector('img')!);
+    await waitFor(() => {
+      expect(container.querySelector('img')!.getAttribute('src')).toBe(
+        'data:image/png;base64,AP8='
+      );
+    });
+  });
+
+  it('shows the globe if the proxied data: url also errors', async () => {
+    vi.spyOn(chrome.runtime, 'sendMessage').mockResolvedValue({
+      dataUrl: 'data:image/png;base64,AP8=',
+    });
+    const { container } = render(<Favicon src="https://a.com/f.ico" />);
+    fireEvent.error(container.querySelector('img')!); // stage 0 → 1
+    await waitFor(() =>
+      expect(container.querySelector('img')!.getAttribute('src')).toContain('data:')
+    );
+    fireEvent.error(container.querySelector('img')!); // stage 1 → 2
+    await waitFor(() => {
+      expect(container.querySelector('svg')).toBeTruthy();
+      expect(container.querySelector('img')).toBeNull();
+    });
+  });
+
+  it('does not message the background on a successful direct load', () => {
+    const spy = vi.spyOn(chrome.runtime, 'sendMessage').mockResolvedValue({ dataUrl: null });
+    render(<Favicon src="https://a.com/f.ico" />);
+    expect(spy).not.toHaveBeenCalled();
   });
 });
