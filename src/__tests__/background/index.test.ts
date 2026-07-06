@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createMessageRouter, registerBackgroundListeners } from '../../entrypoints/background/index';
 import type { SearchRequest, SmartSuggestionsRequest, ExecuteActionRequest, GetSettingsRequest } from '../../lib/messaging';
 
@@ -875,6 +875,31 @@ describe('createMessageRouter', () => {
       expect(response.tree).toHaveLength(0);
     });
 
+  });
+
+  describe('GET_FAVICON message', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.stubGlobal('chrome', makeChromeMock()); // restore chrome for other tests
+    });
+
+    it('returns a data: url for a fetchable favicon', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: (k: string) => (k.toLowerCase() === 'content-type' ? 'image/png' : null) },
+        arrayBuffer: async () => new Uint8Array([0, 255]).buffer,
+      }));
+      const router = await createMessageRouter();
+      const res = await router({ type: 'GET_FAVICON', payload: { url: 'https://a.com/f.png' } });
+      expect(res).toEqual({ dataUrl: 'data:image/png;base64,AP8=' });
+    });
+
+    it('returns { dataUrl: null } when the fetch fails', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')));
+      const router = await createMessageRouter();
+      const res = await router({ type: 'GET_FAVICON', payload: { url: 'https://a.com/f.png' } });
+      expect(res).toEqual({ dataUrl: null });
+    });
   });
 });
 

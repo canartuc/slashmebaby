@@ -4,6 +4,7 @@ import { HistoryCache } from './history';
 import { ActionRegistry } from './actions';
 import { createSearchEngine } from '../../lib/search';
 import { getSettings } from '../../lib/storage';
+import { getFaviconDataUrl } from './favicon';
 import {
   isSearchRequest,
   isSmartSuggestionsRequest,
@@ -14,6 +15,7 @@ import {
   isSwitchTabRequest,
   isOpenNewTabRequest,
   isNavigateRequest,
+  isGetFaviconRequest,
 } from '../../lib/messaging';
 import type { TabWithGroup, TabGroupInfo, BookmarkNode } from '../../lib/messaging';
 import type { SearchableItem, SearchEngine } from '../../lib/search';
@@ -28,6 +30,7 @@ export async function createMessageRouter(): Promise<MessageRouter> {
   const bookmarkCache = new BookmarkCache();
   const historyCache = new HistoryCache();
   const actionRegistry = new ActionRegistry();
+  const faviconCache = new Map<string, string>();
 
   // Load initial data
   await Promise.all([
@@ -363,6 +366,11 @@ export async function createMessageRouter(): Promise<MessageRouter> {
       }
 
       return { tree };
+    }
+
+    if (isGetFaviconRequest(message)) {
+      const dataUrl = await getFaviconDataUrl(message.payload.url, faviconCache);
+      return { dataUrl };
     }
 
     return { error: 'Unknown message type' };
