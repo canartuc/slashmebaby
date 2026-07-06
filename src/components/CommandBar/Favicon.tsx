@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { isSafeFaviconUrl } from '../../lib/url-safety';
 
 export interface FaviconProps {
@@ -51,14 +51,23 @@ export const Favicon: React.FC<FaviconProps> = ({ src, size = 16, className }) =
     setProxied(null);
   }, [src]);
 
+  // Tracks the src prop currently in effect so an in-flight proxy fetch can
+  // detect, on resolution, whether the row has since been recycled to a
+  // different URL — and if so, discard its (now stale) result instead of
+  // painting the previous page's fallback icon under the new URL.
+  const currentSrcRef = useRef(src);
+  currentSrcRef.current = src;
+
   if (!isSafeFaviconUrl(src)) return null;
   if (stage === 2) return <GlobeGlyph size={size} className={className} />;
 
   const handleError = () => {
     if (stage === 0) {
+      const requestedUrl = src;
       chrome.runtime
-        .sendMessage({ type: 'GET_FAVICON', payload: { url: src } })
+        .sendMessage({ type: 'GET_FAVICON', payload: { url: requestedUrl } })
         .then((res: { dataUrl?: string | null } | undefined) => {
+          if (currentSrcRef.current !== requestedUrl) return;
           if (res && typeof res.dataUrl === 'string') {
             setProxied(res.dataUrl);
             setStage(1);
@@ -66,7 +75,10 @@ export const Favicon: React.FC<FaviconProps> = ({ src, size = 16, className }) =
             setStage(2);
           }
         })
-        .catch(() => setStage(2));
+        .catch(() => {
+          if (currentSrcRef.current !== requestedUrl) return;
+          setStage(2);
+        });
     } else {
       setStage(2);
     }

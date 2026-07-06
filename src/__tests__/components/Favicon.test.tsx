@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { render, fireEvent, waitFor } from '@testing-library/react';
+import { render, fireEvent, waitFor, act } from '@testing-library/react';
 import { vi, beforeEach } from 'vitest';
 import { Favicon } from '../../components/CommandBar/Favicon';
 
@@ -119,5 +119,41 @@ describe('Favicon fallback chain', () => {
     const spy = mockSendMessage({ dataUrl: null });
     render(<Favicon src="https://a.com/f.ico" />);
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('discards a stale proxied result if the row is recycled to a new src first', async () => {
+    // The row's direct load fails, kicking off a background proxy fetch for
+    // the *old* src — but before that fetch resolves, the row is recycled
+    // (re-rendered) to point at a different favicon entirely, as happens
+    // when virtualised list rows are reused during scrolling/navigation.
+    let resolveFetch: (res: { dataUrl: string | null }) => void = () => {};
+    const pending = new Promise<{ dataUrl: string | null }>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const spy = vi
+      .spyOn(chrome.runtime, 'sendMessage')
+      .mockImplementation((() => pending) as typeof chrome.runtime.sendMessage);
+
+    const { container, rerender } = render(<Favicon src="https://a.com/old.ico" />);
+    fireEvent.error(container.querySelector('img')!);
+    expect(spy).toHaveBeenCalledWith({
+      type: 'GET_FAVICON',
+      payload: { url: 'https://a.com/old.ico' },
+    });
+
+    // Recycle the row to a brand-new src before the background responds.
+    rerender(<Favicon src="https://b.com/new.ico" />);
+    expect(container.querySelector('img')!.getAttribute('src')).toBe('https://b.com/new.ico');
+
+    // The stale fetch for the old src now resolves.
+    await act(async () => {
+      resolveFetch({ dataUrl: 'data:image/png;base64,STALE=' });
+      await pending;
+    });
+
+    // The stale result must be discarded: the row still reflects the new
+    // src, not the old row's proxied fallback image.
+    expect(container.querySelector('img')!.getAttribute('src')).toBe('https://b.com/new.ico');
+    expect(container.querySelector('svg')).toBeNull();
   });
 });
