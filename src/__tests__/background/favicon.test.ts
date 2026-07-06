@@ -42,6 +42,12 @@ describe('getFaviconDataUrl', () => {
     expect(result).toBe('data:image/png;base64,AP8=');
   });
 
+  it('accepts an uppercase image content-type', async () => {
+    vi.stubGlobal('fetch', mockFetchOnce({ contentType: 'IMAGE/PNG', bytes: new Uint8Array([0, 255]) }));
+    const result = await getFaviconDataUrl('https://a.com/f.png', new Map());
+    expect(result).toBe('data:image/png;base64,AP8=');
+  });
+
   it('caches the result and does not re-fetch on the second call', async () => {
     const fetchSpy = mockFetchOnce({ contentType: 'image/png', bytes: new Uint8Array([1]) });
     vi.stubGlobal('fetch', fetchSpy);

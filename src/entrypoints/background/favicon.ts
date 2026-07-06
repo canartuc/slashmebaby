@@ -33,7 +33,8 @@ export async function getFaviconDataUrl(
     const resp = await fetch(url);
     if (!resp.ok) return null;
 
-    const contentType = resp.headers.get('content-type') ?? '';
+    // Lowercase so a server sending "IMAGE/PNG" is still recognised as an image.
+    const contentType = (resp.headers.get('content-type') ?? '').toLowerCase();
     if (!contentType.startsWith('image/')) return null;
 
     const buffer = await resp.arrayBuffer();
