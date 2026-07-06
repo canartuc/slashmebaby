@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, fireEvent, waitFor, act } from '@testing-library/react';
+import { vi, beforeEach } from 'vitest';
 import { Favicon } from '../../components/CommandBar/Favicon';
 
 describe('Favicon', () => {
@@ -51,5 +52,119 @@ describe('Favicon', () => {
     const img = container.querySelector('img');
     expect(img!.getAttribute('width')).toBe('32');
     expect(img!.getAttribute('height')).toBe('32');
+  });
+});
+
+// The component uses the callback form `sendMessage(msg, cb)`, so the mock
+// invokes the callback synchronously with the canned response. The assertion
+// (not `any`) pins the overloaded signature without unsafe widening.
+function mockSendMessage(response: { dataUrl: string | null }) {
+  return vi
+    .spyOn(chrome.runtime, 'sendMessage')
+    .mockImplementation(
+      ((_msg: unknown, cb?: (res: { dataUrl: string | null }) => void) => {
+        cb?.(response);
+      }) as typeof chrome.runtime.sendMessage
+    );
+}
+
+describe('Favicon fallback chain', () => {
+  beforeEach(() => {
+    // The `chrome` global (src/__tests__/setup.ts) is a bare `vi.fn()`, not a
+    // spy on a real method, so `restoreAllMocks()` alone leaves its recorded
+    // `.mock.calls` intact across tests — `clearAllMocks()` resets them too.
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  it('renders a globe svg (not an img) after the proxied load also fails', async () => {
+    // Direct load fails → ask background → returns null → globe.
+    mockSendMessage({ dataUrl: null });
+    const { container } = render(<Favicon src="https://a.com/f.ico" />);
+    const img = container.querySelector('img')!;
+    fireEvent.error(img);
+    await waitFor(() => {
+      expect(container.querySelector('svg')).toBeTruthy();
+      expect(container.querySelector('img')).toBeNull();
+    });
+  });
+
+  it('swaps to the proxied data: url when the direct load fails', async () => {
+    mockSendMessage({ dataUrl: 'data:image/png;base64,AP8=' });
+    const { container } = render(<Favicon src="https://a.com/f.ico" />);
+    fireEvent.error(container.querySelector('img')!);
+    await waitFor(() => {
+      expect(container.querySelector('img')!.getAttribute('src')).toBe(
+        'data:image/png;base64,AP8='
+      );
+    });
+  });
+
+  it('shows the globe if the proxied data: url also errors', async () => {
+    mockSendMessage({ dataUrl: 'data:image/png;base64,AP8=' });
+    const { container } = render(<Favicon src="https://a.com/f.ico" />);
+    fireEvent.error(container.querySelector('img')!); // stage 0 → 1
+    await waitFor(() =>
+      expect(container.querySelector('img')!.getAttribute('src')).toContain('data:')
+    );
+    fireEvent.error(container.querySelector('img')!); // stage 1 → 2
+    await waitFor(() => {
+      expect(container.querySelector('svg')).toBeTruthy();
+      expect(container.querySelector('img')).toBeNull();
+    });
+  });
+
+  it('does not message the background on a successful direct load', () => {
+    const spy = mockSendMessage({ dataUrl: null });
+    render(<Favicon src="https://a.com/f.ico" />);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('goes straight to the globe (no background round-trip) when a data: icon fails', () => {
+    // A data: URL that fails to load can't be recovered by re-fetching it, so
+    // the machine must skip the proxy and show the globe — otherwise React
+    // would see an unchanged src, never reload, and stick on the broken image.
+    const spy = mockSendMessage({ dataUrl: 'data:image/png;base64,AP8=' });
+    const { container } = render(<Favicon src="data:image/png;base64,BROKEN=" />);
+    fireEvent.error(container.querySelector('img')!);
+    expect(spy).not.toHaveBeenCalled();
+    expect(container.querySelector('svg')).toBeTruthy();
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('discards a stale proxied result if the row is recycled to a new src first', async () => {
+    // The row's direct load fails, kicking off a background proxy fetch for
+    // the *old* src — but before that fetch resolves, the row is recycled
+    // (re-rendered) to point at a different favicon entirely, as happens
+    // when virtualised list rows are reused during scrolling/navigation.
+    let savedCb: ((res: { dataUrl: string | null }) => void) | undefined;
+    const spy = vi
+      .spyOn(chrome.runtime, 'sendMessage')
+      .mockImplementation(
+        ((_msg: unknown, cb?: (res: { dataUrl: string | null }) => void) => {
+          savedCb = cb;
+        }) as typeof chrome.runtime.sendMessage
+      );
+
+    const { container, rerender } = render(<Favicon src="https://a.com/old.ico" />);
+    fireEvent.error(container.querySelector('img')!);
+    expect(spy).toHaveBeenCalledWith(
+      { type: 'GET_FAVICON', payload: { url: 'https://a.com/old.ico' } },
+      expect.any(Function)
+    );
+
+    // Recycle the row to a brand-new src before the background responds.
+    rerender(<Favicon src="https://b.com/new.ico" />);
+    expect(container.querySelector('img')!.getAttribute('src')).toBe('https://b.com/new.ico');
+
+    // The stale fetch for the old src now resolves.
+    act(() => {
+      savedCb?.({ dataUrl: 'data:image/png;base64,STALE=' });
+    });
+
+    // The stale result must be discarded: the row still reflects the new
+    // src, not the old row's proxied fallback image.
+    expect(container.querySelector('img')!.getAttribute('src')).toBe('https://b.com/new.ico');
+    expect(container.querySelector('svg')).toBeNull();
   });
 });

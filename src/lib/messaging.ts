@@ -128,6 +128,15 @@ export interface BookmarkNode {
 
 export interface GetBookmarkTreeResponse { tree: BookmarkNode[]; }
 
+export interface GetFaviconRequest {
+  type: 'GET_FAVICON';
+  payload: { url: string };
+}
+
+export interface GetFaviconResponse {
+  dataUrl: string | null;
+}
+
 // ─── Union Type ───────────────────────────────────────────────────────────────
 
 export type Message =
@@ -140,7 +149,8 @@ export type Message =
   | NavigateRequest
   | ToggleOverlayCommand
   | GetAllTabsRequest
-  | GetBookmarkTreeRequest;
+  | GetBookmarkTreeRequest
+  | GetFaviconRequest;
 
 // ─── Type Guards ──────────────────────────────────────────────────────────────
 
@@ -227,4 +237,18 @@ export function isGetAllTabsRequest(v: unknown): v is GetAllTabsRequest {
 
 export function isGetBookmarkTreeRequest(v: unknown): v is GetBookmarkTreeRequest {
   return isObject(v) && v['type'] === 'GET_BOOKMARK_TREE';
+}
+
+export function isGetFaviconRequest(value: unknown): value is GetFaviconRequest {
+  if (!isObject(value) || value['type'] !== 'GET_FAVICON') return false;
+  const payload = value['payload'];
+  if (!isObject(payload)) return false;
+  const url = payload['url'];
+  if (typeof url !== 'string' || url.length === 0 || url.length > 4096) return false;
+  try {
+    const scheme = new URL(url).protocol.toLowerCase();
+    return scheme === 'http:' || scheme === 'https:' || scheme === 'data:';
+  } catch {
+    return false;
+  }
 }
