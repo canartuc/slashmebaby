@@ -55,6 +55,20 @@ describe('Favicon', () => {
   });
 });
 
+// chrome.runtime.sendMessage's last overload (the callback-based form) is
+// what `Parameters`/`ReturnType` resolve to for an overloaded function type,
+// so `vi.spyOn(...).mockResolvedValue(...)` type-checks against `void`
+// instead of the `Promise<R>` overload actually used at the call site here.
+// This helper pins the mock to the Promise-returning overload explicitly,
+// with a type assertion (not `any`) — no unsafe widening.
+function mockSendMessage(response: { dataUrl: string | null }) {
+  return vi
+    .spyOn(chrome.runtime, 'sendMessage')
+    .mockImplementation(
+      (() => Promise.resolve(response)) as typeof chrome.runtime.sendMessage
+    );
+}
+
 describe('Favicon fallback chain', () => {
   beforeEach(() => {
     // The `chrome` global (src/__tests__/setup.ts) is a bare `vi.fn()`, not a
@@ -66,7 +80,7 @@ describe('Favicon fallback chain', () => {
 
   it('renders a globe svg (not an img) after the proxied load also fails', async () => {
     // Direct load fails → ask background → returns null → globe.
-    vi.spyOn(chrome.runtime, 'sendMessage').mockResolvedValue({ dataUrl: null });
+    mockSendMessage({ dataUrl: null });
     const { container } = render(<Favicon src="https://a.com/f.ico" />);
     const img = container.querySelector('img')!;
     fireEvent.error(img);
@@ -77,9 +91,7 @@ describe('Favicon fallback chain', () => {
   });
 
   it('swaps to the proxied data: url when the direct load fails', async () => {
-    vi.spyOn(chrome.runtime, 'sendMessage').mockResolvedValue({
-      dataUrl: 'data:image/png;base64,AP8=',
-    });
+    mockSendMessage({ dataUrl: 'data:image/png;base64,AP8=' });
     const { container } = render(<Favicon src="https://a.com/f.ico" />);
     fireEvent.error(container.querySelector('img')!);
     await waitFor(() => {
@@ -90,9 +102,7 @@ describe('Favicon fallback chain', () => {
   });
 
   it('shows the globe if the proxied data: url also errors', async () => {
-    vi.spyOn(chrome.runtime, 'sendMessage').mockResolvedValue({
-      dataUrl: 'data:image/png;base64,AP8=',
-    });
+    mockSendMessage({ dataUrl: 'data:image/png;base64,AP8=' });
     const { container } = render(<Favicon src="https://a.com/f.ico" />);
     fireEvent.error(container.querySelector('img')!); // stage 0 → 1
     await waitFor(() =>
@@ -106,7 +116,7 @@ describe('Favicon fallback chain', () => {
   });
 
   it('does not message the background on a successful direct load', () => {
-    const spy = vi.spyOn(chrome.runtime, 'sendMessage').mockResolvedValue({ dataUrl: null });
+    const spy = mockSendMessage({ dataUrl: null });
     render(<Favicon src="https://a.com/f.ico" />);
     expect(spy).not.toHaveBeenCalled();
   });
