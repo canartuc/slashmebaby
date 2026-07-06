@@ -244,6 +244,7 @@ import {
   isSwitchTabRequest,
   isOpenNewTabRequest,
   isNavigateRequest,
+  isGetFaviconRequest,
 } from '../../lib/messaging';
 import type {
   SwitchTabRequest,
@@ -502,5 +503,47 @@ describe('Type guard edge cases', () => {
     it('returns false for object with wrong type field', () => {
       expect(isGetSettingsRequest({ type: 'WRONG' })).toBe(false);
     });
+  });
+});
+
+describe('isGetFaviconRequest', () => {
+  it('returns true for a valid http GET_FAVICON request', () => {
+    expect(
+      isGetFaviconRequest({ type: 'GET_FAVICON', payload: { url: 'https://a.com/f.ico' } })
+    ).toBe(true);
+  });
+
+  it('returns true for a data: url', () => {
+    expect(
+      isGetFaviconRequest({ type: 'GET_FAVICON', payload: { url: 'data:image/png;base64,AAAA' } })
+    ).toBe(true);
+  });
+
+  it('returns false for the wrong type', () => {
+    expect(isGetFaviconRequest({ type: 'SEARCH', payload: { url: 'https://a.com' } })).toBe(false);
+  });
+
+  it('returns false when url is missing', () => {
+    expect(isGetFaviconRequest({ type: 'GET_FAVICON', payload: {} })).toBe(false);
+  });
+
+  it('returns false for a non-string url', () => {
+    expect(isGetFaviconRequest({ type: 'GET_FAVICON', payload: { url: 123 } })).toBe(false);
+  });
+
+  it('returns false for a disallowed scheme', () => {
+    expect(
+      isGetFaviconRequest({ type: 'GET_FAVICON', payload: { url: 'javascript:alert(1)' } })
+    ).toBe(false);
+  });
+
+  it('returns false for an over-length url', () => {
+    expect(
+      isGetFaviconRequest({ type: 'GET_FAVICON', payload: { url: 'https://a.com/' + 'x'.repeat(5000) } })
+    ).toBe(false);
+  });
+
+  it('returns false for null', () => {
+    expect(isGetFaviconRequest(null)).toBe(false);
   });
 });
