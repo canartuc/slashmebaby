@@ -41,7 +41,7 @@ MADE TO FIT YOU
 - On restricted pages (chrome:// and the Chrome Web Store) the toolbar icon opens a popup with the same search
 
 PRIVATE BY DESIGN
-Everything runs on your device. SlashMeBaby has no servers, no analytics, no telemetry, and no accounts. It never collects or transmits your data. The only network requests it makes fetch favicon images directly from the sites' own URLs, with credentials omitted. Full policy: link your hosted PRIVACY.md here.
+Everything runs on your device. SlashMeBaby has no servers, no analytics, no telemetry, and no accounts. It never collects or transmits your data. The only network requests it makes fetch favicon images directly from the sites' own URLs, with credentials omitted. Full policy: https://github.com/canartuc/slashmebaby/blob/main/PRIVACY.md
 
 Default shortcut: Ctrl+Shift+Space (Cmd+Shift+Space on Mac). Change it anytime in Settings or at chrome://extensions/shortcuts.
 
@@ -96,4 +96,4 @@ Remote code: **No, I am not using remote code.** All code ships inside the exten
 
 ### Privacy policy URL
 
-Host PRIVACY.md publicly (see store-assets/SUBMISSION.md) and paste its URL here.
+The policy is hosted at https://github.com/canartuc/slashmebaby/blob/main/PRIVACY.md. Paste that URL here.
