@@ -4,10 +4,10 @@ Human steps that cannot be automated. Work top to bottom; everything you need to
 
 ## 1. Account prerequisites
 
-- [ ] Create a [Chrome Web Store developer account](https://chrome.google.com/webstore/devconsole) and pay the one-time **$5 registration fee**.
-- [ ] Verify the publisher contact email, **canartuc@gmail.com**, in the dashboard (Account tab). Unverified emails block publishing.
-- [ ] Enable **two-factor authentication** on the Google account. CWS developer accounts require it.
-- [ ] Complete the **EU Digital Services Act (DSA) trader/non-trader declaration** in the Account tab. If you publish as an individual hobbyist with no revenue, declare non-trader; if you monetize, you must declare trader and provide contact details that will be shown publicly in the EU. Publishing to EU users is blocked until this is answered.
+- [x] Create a [Chrome Web Store developer account](https://chrome.google.com/webstore/devconsole) and pay the one-time **$5 registration fee**.
+- [x] Verify the publisher contact email, **canartuc@gmail.com**, in the dashboard (Account tab). Unverified emails block publishing.
+- [x] Enable **two-factor authentication** on the Google account. CWS developer accounts require it.
+- [x] Complete the **EU Digital Services Act (DSA) trader/non-trader declaration** in the Account tab. If you publish as an individual hobbyist with no revenue, declare non-trader; if you monetize, you must declare trader and provide contact details that will be shown publicly in the EU. Publishing to EU users is blocked until this is answered.
 
 ## 2. Privacy policy hosting
 
