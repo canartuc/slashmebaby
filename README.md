@@ -36,6 +36,8 @@ npm install
 npm run build
 ```
 
+For development with hot reload, use `npm run dev` (Chrome) or `npm run dev:firefox` instead of `npm run build`.
+
 Then load the unpacked extension:
 
 1. Open `chrome://extensions/`
