@@ -8,3 +8,6 @@ coverage/
 test-results/
 playwright-report/
 *.zip
+
+# Internal planning records (kept local only)
+docs/superpowers/
