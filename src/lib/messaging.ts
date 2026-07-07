@@ -137,6 +137,28 @@ export interface GetFaviconResponse {
   dataUrl: string | null;
 }
 
+// ─── Overlay Data Messages (history + actions for the content overlay) ──────
+
+export interface GetHistoryItemsRequest { type: 'GET_HISTORY_ITEMS'; }
+
+export interface HistoryItemInfo {
+  id: string;
+  title: string;
+  url: string;
+  lastVisitTime?: number;
+}
+
+export interface GetHistoryItemsResponse { items: HistoryItemInfo[]; }
+
+export interface GetActionsRequest { type: 'GET_ACTIONS'; }
+
+export interface ActionItemInfo {
+  id: string;
+  title: string;
+}
+
+export interface GetActionsResponse { actions: ActionItemInfo[]; }
+
 // ─── Union Type ───────────────────────────────────────────────────────────────
 
 export type Message =
@@ -150,7 +172,9 @@ export type Message =
   | ToggleOverlayCommand
   | GetAllTabsRequest
   | GetBookmarkTreeRequest
-  | GetFaviconRequest;
+  | GetFaviconRequest
+  | GetHistoryItemsRequest
+  | GetActionsRequest;
 
 // ─── Type Guards ──────────────────────────────────────────────────────────────
 
@@ -237,6 +261,14 @@ export function isGetAllTabsRequest(v: unknown): v is GetAllTabsRequest {
 
 export function isGetBookmarkTreeRequest(v: unknown): v is GetBookmarkTreeRequest {
   return isObject(v) && v['type'] === 'GET_BOOKMARK_TREE';
+}
+
+export function isGetHistoryItemsRequest(v: unknown): v is GetHistoryItemsRequest {
+  return isObject(v) && v['type'] === 'GET_HISTORY_ITEMS';
+}
+
+export function isGetActionsRequest(v: unknown): v is GetActionsRequest {
+  return isObject(v) && v['type'] === 'GET_ACTIONS';
 }
 
 export function isGetFaviconRequest(value: unknown): value is GetFaviconRequest {

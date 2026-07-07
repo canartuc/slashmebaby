@@ -33,7 +33,11 @@ export async function getFaviconDataUrl(
     // credentials: 'omit' — never send cookies, so a page-controlled favicon
     // URL pointing at an authenticated cross-origin/internal endpoint can't
     // exfiltrate a logged-in response through the proxy.
-    const resp = await fetch(url, { credentials: 'omit' });
+    // redirect: 'error' — isSafeFaviconUrl vets only the initial URL, so a
+    // public host could otherwise 302 to a loopback/private/link-local
+    // address and bypass the SSRF guard. Any redirect rejects the fetch
+    // (favicons virtually never need redirects) and we return null.
+    const resp = await fetch(url, { credentials: 'omit', redirect: 'error' });
     if (!resp.ok) return null;
 
     // Reject an over-large favicon before buffering it, when the server

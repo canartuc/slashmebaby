@@ -16,8 +16,17 @@ import {
   isOpenNewTabRequest,
   isNavigateRequest,
   isGetFaviconRequest,
+  isGetHistoryItemsRequest,
+  isGetActionsRequest,
 } from '../../lib/messaging';
-import type { TabWithGroup, TabGroupInfo, BookmarkNode } from '../../lib/messaging';
+import type {
+  TabWithGroup,
+  TabGroupInfo,
+  BookmarkNode,
+  HistoryItemInfo,
+  ActionItemInfo,
+} from '../../lib/messaging';
+import type { TabContext } from './actions';
 import type { SearchableItem, SearchEngine } from '../../lib/search';
 import { validateNavigationUrl, isNavigableUrl } from '../../lib/url-safety';
 
@@ -52,15 +61,48 @@ export async function createMessageRouter(): Promise<MessageRouter> {
 
   // Cached search engine, keyed by the identity of each source's item array.
   // Every cache refresh swaps in a new array, so reference equality detects
-  // staleness for all refresh paths (events, alarms) without extra plumbing.
-  // Excluded sources are keyed as null; actions are static and need no key.
+  // staleness for all refresh paths without extra plumbing. Excluded sources
+  // are keyed as null. Action labels/visibility depend on the active tab's
+  // state (F09), so they are keyed by a small context signature string.
   let engineCache: {
     engine: SearchEngine;
     tabs: SearchableItem[] | null;
     bookmarks: SearchableItem[] | null;
     history: SearchableItem[] | null;
+    actionsKey: string;
     maxResultsPerGroup: number;
   } | null = null;
+
+  // ─── Active-tab context helpers (F08/F09) ───────────────────────────────
+
+  // Resolves the tab the palette is acting on: the sender's own tab when the
+  // message comes from a content script, otherwise (popup context) the active
+  // tab in the current window.
+  async function resolveContextTab(
+    sender?: chrome.runtime.MessageSender
+  ): Promise<chrome.tabs.Tab | undefined> {
+    if (sender?.tab) return sender.tab;
+    try {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      return activeTab;
+    } catch {
+      return undefined;
+    }
+  }
+
+  function toTabContext(tab: chrome.tabs.Tab | undefined): TabContext | undefined {
+    if (!tab) return undefined;
+    return {
+      pinned: tab.pinned === true,
+      audible: tab.audible === true,
+      muted: tab.mutedInfo?.muted === true,
+    };
+  }
+
+  function actionsCacheKey(context: TabContext | undefined): string {
+    if (!context) return 'default';
+    return `${context.pinned}|${context.audible}|${context.muted}`;
+  }
 
   // ─── Message Handler ────────────────────────────────────────────────────
 
@@ -74,11 +116,16 @@ export async function createMessageRouter(): Promise<MessageRouter> {
 
       const settings = await getSettings();
 
+      // Action labels/visibility reflect the active tab's state (F09).
+      const context = toTabContext(await resolveContextTab(sender));
+      const actionsKey = actionsCacheKey(context);
+
       if (
         !engineCache ||
         engineCache.tabs !== tabItems ||
         engineCache.bookmarks !== bookmarkItems ||
         engineCache.history !== historyItems ||
+        engineCache.actionsKey !== actionsKey ||
         engineCache.maxResultsPerGroup !== settings.maxResultsPerGroup
       ) {
         const items: SearchableItem[] = [];
@@ -86,8 +133,8 @@ export async function createMessageRouter(): Promise<MessageRouter> {
         if (bookmarkItems) items.push(...bookmarkItems);
         if (historyItems) items.push(...historyItems);
 
-        // Actions are always included
-        items.push(...actionRegistry.getItems());
+        // Actions are always included, contextualized to the active tab
+        items.push(...actionRegistry.getItems(context));
 
         engineCache = {
           engine: createSearchEngine(items, {
@@ -96,6 +143,7 @@ export async function createMessageRouter(): Promise<MessageRouter> {
           tabs: tabItems,
           bookmarks: bookmarkItems,
           history: historyItems,
+          actionsKey,
           maxResultsPerGroup: settings.maxResultsPerGroup,
         };
       }
@@ -104,21 +152,38 @@ export async function createMessageRouter(): Promise<MessageRouter> {
     }
 
     if (isSmartSuggestionsRequest(message)) {
-      // Smart suggestions: 3 recent tabs + 2 bookmarks + 2 actions
-      const tabItems = tabCache.getItems();
-      const bookmarkItems = bookmarkCache.getItems();
-      const actionItems = actionRegistry.getItems();
+      // Smart suggestions (F08): 3 most recently accessed tabs + 2 most
+      // recently added bookmarks + 2 actions contextual to the active tab.
+      // The Settings "Search Sources" toggles apply here too — a source the
+      // user switched off must not resurface in the empty state. Actions are
+      // always allowed.
+      const settings = await getSettings();
+      const sources = settings.searchSources;
+      const tabItems = sources.tabs ? tabCache.getItems() : [];
+      const bookmarkItems = sources.bookmarks ? bookmarkCache.getItems() : [];
+
+      // The extension's own pages (popup/settings/onboarding tabs) are noise
+      // with raw chrome-extension:// hostnames — never suggest them.
+      const ownPagePrefix =
+        typeof chrome.runtime?.id === 'string' && chrome.runtime.id.length > 0
+          ? `chrome-extension://${chrome.runtime.id}/`
+          : null;
 
       // Sort tabs by recency (most recent first) and take top 3
-      const recentTabs = [...tabItems]
+      const recentTabs = tabItems
+        .filter((item) => !ownPagePrefix || !(item.url ?? '').startsWith(ownPagePrefix))
         .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
         .slice(0, 3);
 
-      // Take first 2 bookmarks
-      const topBookmarks = bookmarkItems.slice(0, 2);
+      // Take the 2 most recently added bookmarks (timestamp = dateAdded)
+      const topBookmarks = [...bookmarkItems]
+        .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
+        .slice(0, 2);
 
-      // Take first 2 actions
-      const topActions = actionItems.slice(0, 2);
+      // Take 2 actions relevant to the active tab (e.g. Unpin when pinned,
+      // Mute only when audible)
+      const context = toTabContext(await resolveContextTab(sender));
+      const topActions = actionRegistry.getContextualItems(context, 2);
 
       const groups = [];
 
@@ -368,6 +433,28 @@ export async function createMessageRouter(): Promise<MessageRouter> {
       return { tree };
     }
 
+    if (isGetHistoryItemsRequest(message)) {
+      // F04: expose the history cache to the content overlay so history is
+      // searchable outside the popup.
+      const items: HistoryItemInfo[] = historyCache.getItems().map((item) => ({
+        id: item.id,
+        title: item.title,
+        url: item.url ?? '',
+        lastVisitTime: item.timestamp,
+      }));
+      return { items };
+    }
+
+    if (isGetActionsRequest(message)) {
+      // F12: the overlay's '>' action mode needs the action list, with
+      // labels contextualized to the sender's tab (F09).
+      const context = toTabContext(await resolveContextTab(sender));
+      const actions: ActionItemInfo[] = actionRegistry
+        .getItems(context)
+        .map((item) => ({ id: item.id, title: item.title }));
+      return { actions };
+    }
+
     if (isGetFaviconRequest(message)) {
       const dataUrl = await getFaviconDataUrl(message.payload.url, faviconCache);
       return { dataUrl };
@@ -449,7 +536,9 @@ export function registerBackgroundListeners(): void {
 
   chrome.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
-      chrome.tabs.create({ url: chrome.runtime.getURL('/onboarding/index.html') });
+      // WXT emits the onboarding entrypoint at the bundle root as
+      // "onboarding.html" (see .output/*/onboarding.html).
+      chrome.tabs.create({ url: chrome.runtime.getURL('/onboarding.html') });
     }
   });
 

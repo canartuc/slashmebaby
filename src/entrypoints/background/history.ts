@@ -2,12 +2,10 @@ import type { SearchableItem } from '../../lib/search';
 import { isNavigableUrl } from '../../lib/url-safety';
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const ALARM_NAME = 'slashmebaby-history-refresh';
 
 export class HistoryCache {
   private items: SearchableItem[] = [];
   private intervalId: ReturnType<typeof setInterval> | null = null;
-  private alarmListener: ((alarm: chrome.alarms.Alarm) => void) | null = null;
 
   async refresh(): Promise<void> {
     return new Promise((resolve) => {
@@ -38,31 +36,16 @@ export class HistoryCache {
   }
 
   /**
-   * Starts a periodic refresh. Prefers chrome.alarms for MV3 service worker
-   * compatibility (setInterval is unreliable there — the SW may be torn down
-   * between ticks). Falls back to setInterval when chrome.alarms is absent
-   * (e.g. MV2 Firefox test environments).
+   * Starts a periodic refresh. The cache is rebuilt from scratch on every
+   * service-worker start (createMessageRouter awaits refresh()), and this
+   * setInterval keeps it fresh for as long as the worker stays alive. If the
+   * MV3 worker is torn down between ticks the interval dies with it — that's
+   * fine, because the next wake-up rebuilds the cache anyway. The extension
+   * does not request the "alarms" permission, so chrome.alarms is never used.
    */
   startPeriodicRefresh(intervalMs: number = DEFAULT_INTERVAL_MS): void {
     // Perform an initial refresh immediately
     this.refresh();
-
-    if (typeof chrome !== 'undefined' && chrome.alarms?.create && chrome.alarms.onAlarm) {
-      const periodInMinutes = Math.max(1, Math.round(intervalMs / 60000));
-      try {
-        chrome.alarms.create(ALARM_NAME, { periodInMinutes });
-      } catch {
-        // fall through to setInterval if create throws
-      }
-      const listener = (alarm: chrome.alarms.Alarm) => {
-        if (alarm.name === ALARM_NAME) {
-          this.refresh();
-        }
-      };
-      this.alarmListener = listener;
-      chrome.alarms.onAlarm.addListener(listener);
-      return;
-    }
 
     this.intervalId = setInterval(() => {
       this.refresh();
@@ -73,19 +56,6 @@ export class HistoryCache {
     if (this.intervalId !== null) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-    }
-    if (this.alarmListener && typeof chrome !== 'undefined' && chrome.alarms) {
-      try {
-        chrome.alarms.onAlarm.removeListener(this.alarmListener);
-      } catch {
-        // ignore
-      }
-      try {
-        chrome.alarms.clear?.(ALARM_NAME);
-      } catch {
-        // ignore
-      }
-      this.alarmListener = null;
     }
   }
 }

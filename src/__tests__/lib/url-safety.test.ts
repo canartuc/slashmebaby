@@ -85,6 +85,60 @@ describe('isSafeFaviconUrl', () => {
     expect(isSafeFaviconUrl('not a url')).toBe(false);
     expect(isSafeFaviconUrl('://bogus')).toBe(false);
   });
+
+  describe('SSRF hardening — private / loopback / link-local hosts', () => {
+    const rejected: Array<[string, string]> = [
+      ['localhost hostname', 'http://localhost/favicon.ico'],
+      ['localhost with port', 'https://localhost:3000/favicon.ico'],
+      ['uppercase localhost', 'http://LOCALHOST/favicon.ico'],
+      ['IPv4 loopback', 'http://127.0.0.1/favicon.ico'],
+      ['IPv4 loopback /8 upper bound', 'http://127.255.255.255/favicon.ico'],
+      ['hex-encoded loopback (URL-normalized)', 'http://0x7f.0.0.1/favicon.ico'],
+      ['10.0.0.0/8 private', 'http://10.0.0.5/favicon.ico'],
+      ['172.16.0.0/12 lower bound', 'http://172.16.0.1/favicon.ico'],
+      ['172.16.0.0/12 upper bound', 'http://172.31.255.255/favicon.ico'],
+      ['192.168.0.0/16 private', 'https://192.168.1.1/favicon.ico'],
+      ['169.254.0.0/16 link-local (cloud metadata)', 'http://169.254.169.254/latest/meta-data'],
+      ['IPv6 loopback', 'http://[::1]/favicon.ico'],
+      ['IPv6 loopback long form (URL-normalized)', 'http://[0:0:0:0:0:0:0:1]/favicon.ico'],
+      ['IPv6 unique-local fc00::/7 (fc)', 'http://[fc00::1]/favicon.ico'],
+      ['IPv6 unique-local fc00::/7 (fd)', 'http://[fd12:3456::1]/favicon.ico'],
+      ['IPv6 link-local fe80::/10', 'http://[fe80::1]/favicon.ico'],
+      ['IPv6 link-local fe80::/10 upper range', 'http://[febf::1]/favicon.ico'],
+      ['IPv4-mapped IPv6 loopback', 'http://[::ffff:127.0.0.1]/favicon.ico'],
+      ['IPv4-mapped IPv6 private', 'http://[::ffff:192.168.1.1]/favicon.ico'],
+      ['0.0.0.0 unspecified', 'http://0.0.0.0/favicon.ico'],
+      ['0.0.0.0/8 member', 'http://0.255.0.1/favicon.ico'],
+      ['IPv4-mapped IPv6 unspecified', 'http://[::ffff:0.0.0.0]/favicon.ico'],
+      ['IPv6 unspecified [::]', 'http://[::]/favicon.ico'],
+      ['IPv6 unspecified long form (URL-normalized)', 'http://[0:0:0:0:0:0:0:0]/favicon.ico'],
+      ['localhost with trailing dot', 'http://localhost./favicon.ico'],
+      ['uppercase localhost with trailing dot', 'http://LOCALHOST./favicon.ico'],
+      ['localhost with trailing dot and port', 'https://localhost.:8443/favicon.ico'],
+    ];
+
+    it.each(rejected)('rejects %s', (_label, url) => {
+      expect(isSafeFaviconUrl(url)).toBe(false);
+    });
+
+    const accepted: Array<[string, string]> = [
+      ['public IPv4', 'http://8.8.8.8/favicon.ico'],
+      ['public IPv4 just below 172.16/12', 'http://172.15.255.255/favicon.ico'],
+      ['public IPv4 just above 172.16/12', 'http://172.32.0.1/favicon.ico'],
+      ['public 192.x outside 192.168/16', 'http://192.169.0.1/favicon.ico'],
+      ['public 169.x outside 169.254/16', 'http://169.253.0.1/favicon.ico'],
+      ['public hostname', 'https://icons.example.com/f.ico'],
+      ['hostname containing "localhost"', 'https://localhost.example.com/f.ico'],
+      ['hostname containing "localhost" with trailing dot', 'https://localhost.example.com./f.ico'],
+      ['hostname starting with "localhost."', 'https://localhost.dev/f.ico'],
+      ['public IPv6', 'http://[2606:4700::1111]/favicon.ico'],
+      ['data: URI (no host)', 'data:image/png;base64,iVBORw0KGgo='],
+    ];
+
+    it.each(accepted)('accepts %s', (_label, url) => {
+      expect(isSafeFaviconUrl(url)).toBe(true);
+    });
+  });
 });
 
 describe('validateNavigationUrl — disallowed-but-not-blocked schemes', () => {
