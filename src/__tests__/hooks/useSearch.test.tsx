@@ -56,6 +56,78 @@ describe('useSearch', () => {
     );
   });
 
+  it('omits disabled sources from the SEARCH payload', () => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      _msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
+        if (callback) callback({ groups: mockGroups });
+        return undefined as unknown as Promise<unknown>;
+      }) as unknown as typeof chrome.runtime.sendMessage
+    );
+
+    renderHook(() =>
+      useSearch('react', { tabs: true, bookmarks: false, history: true })
+    );
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      {
+        type: 'SEARCH',
+        payload: { query: 'react', sources: ['tabs', 'history', 'actions'] },
+      },
+      expect.any(Function)
+    );
+  });
+
+  it('always includes actions even when all source toggles are off', () => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      _msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
+        if (callback) callback({ groups: mockGroups });
+        return undefined as unknown as Promise<unknown>;
+      }) as unknown as typeof chrome.runtime.sendMessage
+    );
+
+    renderHook(() =>
+      useSearch('react', { tabs: false, bookmarks: false, history: false })
+    );
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      {
+        type: 'SEARCH',
+        payload: { query: 'react', sources: ['actions'] },
+      },
+      expect.any(Function)
+    );
+  });
+
+  it('re-sends SEARCH when the source toggles change', () => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      _msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
+        if (callback) callback({ groups: mockGroups });
+        return undefined as unknown as Promise<unknown>;
+      }) as unknown as typeof chrome.runtime.sendMessage
+    );
+
+    const { rerender } = renderHook(
+      ({ sources }) => useSearch('react', sources),
+      { initialProps: { sources: { tabs: true, bookmarks: true, history: true } } }
+    );
+
+    rerender({ sources: { tabs: true, bookmarks: true, history: false } });
+
+    expect(chrome.runtime.sendMessage).toHaveBeenLastCalledWith(
+      {
+        type: 'SEARCH',
+        payload: { query: 'react', sources: ['tabs', 'bookmarks', 'actions'] },
+      },
+      expect.any(Function)
+    );
+  });
+
   it('returns groups from the response', async () => {
     vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
       _msg: unknown,

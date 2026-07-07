@@ -5,6 +5,7 @@ import { useTreeData } from '../../hooks/useTreeData';
 import type {
   GetAllTabsResponse,
   GetBookmarkTreeResponse,
+  GetHistoryItemsResponse,
 } from '../../lib/messaging';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -73,11 +74,29 @@ const mockBookmarkResponse: GetBookmarkTreeResponse = {
   ],
 };
 
+const mockHistoryResponse: GetHistoryItemsResponse = {
+  items: [
+    {
+      id: 'history-h1',
+      title: 'Old Docs Page',
+      url: 'https://docs.example.com/guide',
+      lastVisitTime: 1700000000000,
+    },
+    {
+      id: 'history-h2',
+      title: 'News Article',
+      url: 'https://news.example.com/story',
+      lastVisitTime: 1700000001000,
+    },
+  ],
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function setupSendMessage(
   tabsResp: GetAllTabsResponse = mockTabsResponse,
-  bookmarkResp: GetBookmarkTreeResponse = mockBookmarkResponse
+  bookmarkResp: GetBookmarkTreeResponse = mockBookmarkResponse,
+  historyResp: GetHistoryItemsResponse = mockHistoryResponse
 ) {
   vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
     msg: unknown,
@@ -88,6 +107,8 @@ function setupSendMessage(
         callback(tabsResp);
       } else if (m.type === 'GET_BOOKMARK_TREE' && callback) {
         callback(bookmarkResp);
+      } else if (m.type === 'GET_HISTORY_ITEMS' && callback) {
+        callback(historyResp);
       }
       return undefined as unknown as Promise<unknown>;
     }) as unknown as typeof chrome.runtime.sendMessage
@@ -264,6 +285,131 @@ describe('useTreeData', () => {
 
     expect(result.current.visibleItems).toEqual([]);
     expect(result.current.allTabs).toEqual([]);
+  });
+
+  it('sends GET_HISTORY_ITEMS on mount', () => {
+    setupSendMessage();
+
+    renderHook(() => useTreeData());
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      { type: 'GET_HISTORY_ITEMS' },
+      expect.any(Function)
+    );
+  });
+
+  it('exposes history items as TreeItems of type "history"', async () => {
+    setupSendMessage();
+
+    const { result } = renderHook(() => useTreeData());
+
+    await waitFor(() => {
+      expect(result.current.historyItems).toHaveLength(2);
+    });
+
+    const [first, second] = result.current.historyItems;
+    expect(first.id).toBe('history-h1');
+    expect(first.type).toBe('history');
+    expect(first.title).toBe('Old Docs Page');
+    expect(first.url).toBe('https://docs.example.com/guide');
+    expect(first.depth).toBe(0);
+    expect(second.id).toBe('history-h2');
+  });
+
+  it('history items never appear in visibleItems (tree view stays history-free)', async () => {
+    setupSendMessage();
+
+    const { result } = renderHook(() => useTreeData());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.historyItems).toHaveLength(2);
+    });
+
+    expect(
+      result.current.visibleItems.find((i) => i.type === 'history')
+    ).toBeUndefined();
+  });
+
+  it('handles a missing GET_HISTORY_ITEMS response gracefully', async () => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
+        const m = msg as { type: string };
+        if (m.type === 'GET_ALL_TABS' && callback) {
+          callback(mockTabsResponse);
+        } else if (m.type === 'GET_BOOKMARK_TREE' && callback) {
+          callback(mockBookmarkResponse);
+        } else if (m.type === 'GET_HISTORY_ITEMS' && callback) {
+          callback(undefined);
+        }
+        return undefined as unknown as Promise<unknown>;
+      }) as unknown as typeof chrome.runtime.sendMessage
+    );
+
+    const { result } = renderHook(() => useTreeData());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.historyItems).toEqual([]);
+  });
+
+  it('checks runtime.lastError on a failed GET_HISTORY_ITEMS, logs once, and keeps the UI stable', async () => {
+    // A dead message channel: the callback fires with `undefined` and
+    // chrome.runtime.lastError set for its duration. Leaving lastError
+    // unread makes Chrome log "Unchecked runtime.lastError" on the page.
+    const lastErrorReads: unknown[] = [];
+    const runtime = chrome.runtime as unknown as { lastError?: { message: string } };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
+        const m = msg as { type: string };
+        if (m.type === 'GET_ALL_TABS' && callback) {
+          callback(mockTabsResponse);
+        } else if (m.type === 'GET_BOOKMARK_TREE' && callback) {
+          callback(mockBookmarkResponse);
+        } else if (m.type === 'GET_HISTORY_ITEMS' && callback) {
+          const descriptor = { message: 'The message port closed before a response was received.' };
+          Object.defineProperty(runtime, 'lastError', {
+            configurable: true,
+            get() {
+              lastErrorReads.push(descriptor);
+              return descriptor;
+            },
+          });
+          try {
+            callback(undefined);
+          } finally {
+            delete runtime.lastError;
+          }
+        }
+        return undefined as unknown as Promise<unknown>;
+      }) as unknown as typeof chrome.runtime.sendMessage
+    );
+
+    try {
+      const { result } = renderHook(() => useTreeData());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // lastError was actually read inside the callback (nothing unchecked).
+      expect(lastErrorReads.length).toBeGreaterThan(0);
+      // Logged exactly once, and the UI stays stable with no history rows.
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(String(warnSpy.mock.calls[0].join(' '))).toContain('history');
+      expect(result.current.historyItems).toEqual([]);
+      expect(result.current.visibleItems.length).toBeGreaterThan(0);
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it('tab items in allTabs include icon from favIconUrl', async () => {

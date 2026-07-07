@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Fuse from 'fuse.js';
-import type { UserSettings } from '../../lib/messaging';
+import type { IFuseOptions } from 'fuse.js';
+import type { UserSettings, GetActionsResponse, ExecuteActionResponse } from '../../lib/messaging';
 import { DEFAULT_SETTINGS } from '../../lib/messaging';
 import { SearchInput } from './SearchInput';
 import { TreeView } from './TreeView';
@@ -11,6 +12,22 @@ import { useTheme } from '../../hooks/useTheme';
 import { isActionKey, getActionForKey } from '../../lib/labels';
 import { cleanUrl } from '../../lib/url-clean';
 import { foldDiacritics } from '../../lib/diacritics';
+import { guessNavigableUrl } from '../../lib/url-guess';
+
+const ERROR_AUTO_HIDE_MS = 2500;
+
+const FUSE_OPTIONS: IFuseOptions<TreeItem> = {
+  keys: [
+    { name: 'title', getFn: (item: TreeItem) => foldDiacritics(item.title ?? '') },
+    { name: 'url', getFn: (item: TreeItem) => foldDiacritics(item.url ?? '') },
+  ],
+  threshold: 0.4,
+  ignoreLocation: true,
+  includeScore: false,
+};
+
+// Search results render grouped by section, in this order (F04).
+const RESULT_GROUP_ORDER = ['tab', 'bookmark', 'history'] as const;
 
 function nextIndex(prev: number, len: number, dir: 1 | -1): number {
   if (len <= 0) return 0;
@@ -27,8 +44,10 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+  const [actionItems, setActionItems] = useState<TreeItem[]>([]);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const { pinnedTabs, allTabs, visibleItems, allItems, toggleExpand } = useTreeData();
+  const { pinnedTabs, allTabs, visibleItems, allItems, historyItems, toggleExpand } = useTreeData();
   // Labels assigned across tabs + bookmarks (continuous sequence)
   const totalLabelItems = allTabs.length + visibleItems.length;
   const { labels, handleKeyPress } = useLabelAssignment(totalLabelItems);
@@ -46,40 +65,181 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     });
   }, []);
 
+  // Track settings changes live while the palette is open (mirrors the
+  // content script's shortcut listener), so a theme change in the settings
+  // page applies without reopening the overlay.
+  useEffect(() => {
+    const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
+      if (area !== 'sync') return;
+      const next = changes['settings']?.newValue;
+      if (next && typeof next === 'object') {
+        setSettings((prev) => ({ ...prev, ...(next as Partial<UserSettings>) }));
+      }
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }, []);
+
+  // The overlay's theme variables are defined on :host([data-theme=…]) in
+  // command-bar.css, and the shadow *host* lives outside React's tree — so
+  // the resolved theme must be mirrored onto it explicitly. (The attribute on
+  // .smb-container below is kept for introspection/e2e parity with the popup.)
+  useEffect(() => {
+    const rootNode = containerRef.current?.getRootNode();
+    if (rootNode instanceof ShadowRoot && rootNode.host instanceof HTMLElement) {
+      rootNode.host.setAttribute('data-theme', theme);
+    }
+  }, [theme]);
+
+  // Load the action list for '>' action-prefix mode (F12). The background
+  // contextualizes labels to this tab (Pin↔Unpin, Mute↔Unmute). Failures are
+  // tracked (not swallowed) so '>' mode can retry once and, if the list still
+  // can't be loaded, explain the empty list instead of showing nothing.
+  const [actionsLoadFailed, setActionsLoadFailed] = useState(false);
+  const actionsRetriedRef = useRef(false);
+
+  const loadActions = useCallback(() => {
+    chrome.runtime.sendMessage(
+      { type: 'GET_ACTIONS' },
+      (response: GetActionsResponse | undefined) => {
+        // Read lastError unconditionally — leaving it unchecked makes Chrome
+        // log "Unchecked runtime.lastError" on the host page.
+        const lastError = chrome.runtime.lastError;
+        if (lastError || !response || !Array.isArray(response.actions)) {
+          setActionsLoadFailed(true);
+          return;
+        }
+        setActionsLoadFailed(false);
+        setActionItems(
+          response.actions.map((action) => ({
+            id: action.id,
+            title: action.title,
+            type: 'action' as const,
+            actionId: action.id,
+            depth: 0,
+            isExpanded: false,
+            childCount: 0,
+          }))
+        );
+      }
+    );
+  }, []);
+
+  useEffect(() => {
+    loadActions();
+  }, [loadActions]);
+
+  // Inline error strip (aria-live) for failed actions; auto-hides.
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showActionError = useCallback((message: string) => {
+    setActionError(message);
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = setTimeout(() => setActionError(null), ERROR_AUTO_HIDE_MS);
+  }, []);
+  useEffect(() => () => {
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+  }, []);
+
+  // Runs an action in the background. On success the palette dismisses as
+  // before; on failure it stays open and surfaces the error inline instead
+  // of swallowing it.
+  const dispatchAction = useCallback((actionId: string) => {
+    chrome.runtime.sendMessage(
+      { type: 'EXECUTE_ACTION', payload: { actionId } },
+      (response: ExecuteActionResponse | undefined) => {
+        // Read lastError unconditionally — leaving it unchecked makes Chrome
+        // log "Unchecked runtime.lastError" on the host page when the port
+        // closes without a receiver.
+        const lastError = chrome.runtime.lastError;
+        // Only an explicit { success: true } is a success. Everything else —
+        // { success: false }, the router's { error } catch-all shape (which
+        // has no success field), or an undefined response (dead channel) —
+        // keeps the palette open and surfaces the error.
+        if (lastError || !response || response.success !== true) {
+          showActionError(response?.error ?? lastError?.message ?? 'Action failed');
+          return;
+        }
+        onDismiss();
+      }
+    );
+  }, [onDismiss, showActionError]);
+
   // Reset selected index when visible items change
   useEffect(() => {
     setSelectedIndex(0);
   }, [visibleItems]);
 
-  // Search corpus: pinned tabs + open tabs + all bookmark leaves.
-  // Fuse is rebuilt whenever the corpus changes; it's cheap.
-  const searchCorpus = useMemo<TreeItem[]>(() => {
-    const bookmarkLeaves = (allItems.length > 0 ? allItems : visibleItems).filter(
-      (i) => i.type !== 'folder' && i.type !== 'group'
-    );
-    return [...pinnedTabs, ...allTabs, ...bookmarkLeaves];
-  }, [pinnedTabs, allTabs, allItems, visibleItems]);
+  // '>' as the first character switches to actions-only mode (F12). The
+  // prefix is stripped before matching so it is never fuzzy-matched as text.
+  const actionMode = query.startsWith('>');
+  const effectiveQuery = actionMode ? query.slice(1).trim() : query;
 
-  const fuse = useMemo(
-    () =>
-      new Fuse(searchCorpus, {
-        keys: [
-          { name: 'title', getFn: (item) => foldDiacritics(item.title ?? '') },
-          { name: 'url', getFn: (item) => foldDiacritics(item.url ?? '') },
-        ],
-        threshold: 0.4,
-        ignoreLocation: true,
-        includeScore: false,
-      }),
-    [searchCorpus]
-  );
+  // If the initial GET_ACTIONS failed, retry once when the user actually
+  // enters '>' mode; a second failure is surfaced as an in-list line below.
+  useEffect(() => {
+    if (actionMode && actionsLoadFailed && !actionsRetriedRef.current) {
+      actionsRetriedRef.current = true;
+      loadActions();
+    }
+  }, [actionMode, actionsLoadFailed, loadActions]);
+
+  // Search corpus: pinned tabs + open tabs + bookmark leaves + history,
+  // honoring the Settings "Search Sources" toggles. Fuse is rebuilt whenever
+  // the corpus changes; it's cheap.
+  const searchCorpus = useMemo<TreeItem[]>(() => {
+    const sources = settings.searchSources ?? DEFAULT_SETTINGS.searchSources;
+    const corpus: TreeItem[] = [];
+    if (sources.tabs) {
+      corpus.push(...pinnedTabs, ...allTabs);
+    }
+    if (sources.bookmarks) {
+      const bookmarkLeaves = (allItems.length > 0 ? allItems : visibleItems).filter(
+        (i) => i.type !== 'folder' && i.type !== 'group'
+      );
+      corpus.push(...bookmarkLeaves);
+    }
+    if (sources.history) {
+      corpus.push(...historyItems);
+    }
+    return corpus;
+  }, [pinnedTabs, allTabs, allItems, visibleItems, historyItems, settings.searchSources]);
+
+  const fuse = useMemo(() => new Fuse(searchCorpus, FUSE_OPTIONS), [searchCorpus]);
+  const actionsFuse = useMemo(() => new Fuse(actionItems, FUSE_OPTIONS), [actionItems]);
 
   // When searching, run the query (folded) through Fuse so that fuzzy matches
   // and diacritic-insensitive matches both work — "sozcu" finds "sözcü".
+  // Results are grouped by section (tabs, bookmarks, history), each capped at
+  // maxResultsPerGroup, with an optional go-to-URL row appended (F10).
   const filteredItems = useMemo(() => {
     if (!query) return visibleItems;
-    return fuse.search(foldDiacritics(query)).map((r) => r.item);
-  }, [query, visibleItems, fuse]);
+
+    if (actionMode) {
+      if (!effectiveQuery) return actionItems;
+      return actionsFuse.search(foldDiacritics(effectiveQuery)).map((r) => r.item);
+    }
+
+    const matches = fuse.search(foldDiacritics(query)).map((r) => r.item);
+    const limit = settings.maxResultsPerGroup ?? DEFAULT_SETTINGS.maxResultsPerGroup;
+    const grouped: TreeItem[] = [];
+    for (const type of RESULT_GROUP_ORDER) {
+      grouped.push(...matches.filter((i) => i.type === type).slice(0, limit));
+    }
+
+    const gotoUrl = guessNavigableUrl(query);
+    if (gotoUrl) {
+      grouped.push({
+        id: 'goto-url',
+        title: `Go to ${gotoUrl}`,
+        url: gotoUrl,
+        type: 'goto',
+        depth: 0,
+        isExpanded: false,
+        childCount: 0,
+      });
+    }
+    return grouped;
+  }, [query, actionMode, effectiveQuery, visibleItems, fuse, actionsFuse, actionItems, settings.maxResultsPerGroup]);
 
   // Reset selected index when filtered items change
   useEffect(() => {
@@ -104,12 +264,16 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     );
   }, [onDismiss]);
 
-  // Activates an item; returns true if the item was a leaf (tab/url) so callers
-  // can skip selection updates that only matter for non-dismissing actions.
+  // Activates an item; returns true if the item was a leaf (tab/url/action) so
+  // callers can skip selection updates that only matter for non-dismissing rows.
   const activate = useCallback((item: TreeItem, openInNewTab: boolean): boolean => {
     if (item.type === 'folder' || item.type === 'group') {
       toggleExpand(item.id);
       return false;
+    }
+    if (item.type === 'action' && item.actionId) {
+      dispatchAction(item.actionId);
+      return true;
     }
     if (item.type === 'tab' && item.tabId) {
       switchTab(item.tabId);
@@ -120,7 +284,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
       return true;
     }
     return false;
-  }, [toggleExpand, switchTab, openUrl]);
+  }, [toggleExpand, switchTab, openUrl, dispatchAction]);
 
   const handleItemSelect = useCallback((index: number) => {
     const item = stateRef.current.filteredItems[index];
@@ -133,7 +297,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
   }, [switchTab]);
 
   const handleKey = useCallback((key: string, shiftKey: boolean) => {
-    const { mode: currentMode, selectedIndex: idx, filteredItems: items, pinnedTabs: pinned } = stateRef.current;
+    const { mode: currentMode, selectedIndex: idx, filteredItems: items, pinnedTabs: pinned, query: currentQuery } = stateRef.current;
 
     // Number keys (1-9, 0) switch to pinned tabs in jump mode
     if (currentMode === 'jump' && /^[0-9]$/.test(key) && pinned.length > 0) {
@@ -143,8 +307,12 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
       return;
     }
 
-    // '/' toggles mode
+    // '/' toggles mode — but never while a non-empty query is being typed:
+    // there it's literal text handled by the native input (the content
+    // script doesn't forward it in that case; this guard keeps a stray
+    // forwarded '/' from wiping the user's query).
     if (key === '/') {
+      if (currentMode === 'search' && currentQuery.length > 0) return;
       setMode(prev => {
         if (prev === 'search') {
           setQuery('');
@@ -168,10 +336,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
         return;
       }
       if (actionId) {
-        chrome.runtime.sendMessage(
-          { type: 'EXECUTE_ACTION', payload: { actionId: `action-${actionId}` } },
-          () => onDismiss()
-        );
+        dispatchAction(`action-${actionId}`);
       }
       return;
     }
@@ -226,7 +391,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
       : bkItems[result.targetIndex - tabs.length];
     if (!item) return;
     if (!activate(item, shiftKey)) setSelectedIndex(result.targetIndex);
-  }, [toggleExpand, onDismiss, handleKeyPress, activate, switchTab]);
+  }, [toggleExpand, onDismiss, handleKeyPress, activate, switchTab, dispatchAction]);
 
   // Listen for smb-keydown custom events from the content script
   useEffect(() => {
@@ -279,6 +444,14 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
         aria-modal="true"
       >
         <SearchInput query={query} onQueryChange={setQuery} mode={mode} />
+        {/* Always mounted so aria-live announcements fire when text appears */}
+        <div
+          className={`smb-error-strip${actionError ? ' smb-error-strip--visible' : ''}`}
+          role="status"
+          aria-live="polite"
+        >
+          {actionError ?? ''}
+        </div>
         <TreeView
           pinnedTabs={pinnedTabs}
           allTabs={allTabs}
@@ -291,6 +464,11 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
           onTabGridSelect={handlePinnedTabSelect}
           searchMode={mode === 'search'}
           searchQuery={query}
+          emptyStateMessage={
+            actionMode && actionsLoadFailed && filteredItems.length === 0
+              ? "Couldn't load actions"
+              : undefined
+          }
         />
       </div>
     </div>

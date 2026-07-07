@@ -301,6 +301,85 @@ describe('content script entrypoint', () => {
     expect(count).toBe(0);
   });
 
+  // '/' routing (F10/F27): mode toggle only when not typing a query — a
+  // non-empty focused search input must receive '/' as literal text so
+  // path-bearing URLs like "example.com/admin" stay typeable.
+
+  async function openWithFocusedInput(value: string) {
+    buildChrome();
+    const keys = captureKeydown();
+    const cs = await loadContentMain();
+    cs.main();
+
+    keys.handler()(fakeKey({ key: ' ', ctrlKey: true, shiftKey: true }));
+
+    const shadow = document.getElementById('slashmebaby-root')!.shadowRoot as ShadowRoot;
+    const input = document.createElement('input');
+    input.value = value;
+    shadow.appendChild(input);
+    input.focus();
+
+    const received: CustomEvent[] = [];
+    shadow.addEventListener('smb-keydown', (e) => {
+      received.push(e as CustomEvent);
+    });
+
+    // Unmounts the React root and lets its scheduled work settle, so no
+    // render task fires after the test environment is torn down.
+    const close = async () => {
+      keys.handler()(fakeKey({ key: 'Escape' }));
+      await new Promise((r) => setTimeout(r, 0));
+    };
+    return { keys, received, close };
+  }
+
+  it("'/' is NOT intercepted while the focused search input has text (stays typeable)", async () => {
+    const { keys, received, close } = await openWithFocusedInput('example.com');
+
+    const slash = fakeKey({ key: '/' });
+    keys.handler()(slash);
+
+    // Not forwarded as a mode toggle, and not preventDefault-ed — the native
+    // input keeps the keystroke and inserts the literal '/'.
+    expect(received).toHaveLength(0);
+    expect(slash.preventDefault).not.toHaveBeenCalled();
+    await close();
+  });
+
+  it("'/' IS forwarded as the mode toggle when the focused search input is empty", async () => {
+    const { keys, received, close } = await openWithFocusedInput('');
+
+    const slash = fakeKey({ key: '/' });
+    keys.handler()(slash);
+
+    expect(received).toHaveLength(1);
+    expect(received[0].detail).toMatchObject({ key: '/' });
+    expect(slash.preventDefault).toHaveBeenCalled();
+    await close();
+  });
+
+  it("'/' IS forwarded as the mode toggle when no input is focused (jump mode)", async () => {
+    buildChrome();
+    const keys = captureKeydown();
+    const cs = await loadContentMain();
+    cs.main();
+
+    keys.handler()(fakeKey({ key: ' ', ctrlKey: true, shiftKey: true }));
+
+    const shadow = document.getElementById('slashmebaby-root')!.shadowRoot as ShadowRoot;
+    const received: CustomEvent[] = [];
+    shadow.addEventListener('smb-keydown', (e) => {
+      received.push(e as CustomEvent);
+    });
+
+    keys.handler()(fakeKey({ key: '/' }));
+    expect(received).toHaveLength(1);
+    expect(received[0].detail).toMatchObject({ key: '/' });
+
+    keys.handler()(fakeKey({ key: 'Escape' }));
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
   it('TOGGLE_OVERLAY message from background opens then dismisses overlay', async () => {
     const captured = buildChrome();
     const cs = await loadContentMain();

@@ -4,6 +4,8 @@ import { ShortcutSetting } from './ShortcutSetting';
 import { PositionSetting } from './PositionSetting';
 import { ThemeSetting } from './ThemeSetting';
 import { SearchSources } from './SearchSources';
+import { MaxResultsSetting } from './MaxResultsSetting';
+import { FaviconSetting } from './FaviconSetting';
 
 export const SettingsPage: React.FC = () => {
   const { settings, updateSetting, isLoading } = useSettings();
@@ -27,6 +29,8 @@ export const SettingsPage: React.FC = () => {
         <PositionSetting settings={settings} onUpdate={updateSetting} />
         <ThemeSetting settings={settings} onUpdate={updateSetting} />
         <SearchSources settings={settings} onUpdate={updateSetting} />
+        <MaxResultsSetting settings={settings} onUpdate={updateSetting} />
+        <FaviconSetting settings={settings} onUpdate={updateSetting} />
       </div>
     </div>
   );

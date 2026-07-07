@@ -138,9 +138,17 @@ export default defineContentScript({
       const activeEl = shadow.activeElement as HTMLInputElement | null;
       const isSearchInputActive = activeEl?.tagName === 'INPUT' && !activeEl?.readOnly;
 
+      // '/' toggles jump/search mode, but while a non-empty query is being
+      // typed it must stay typeable as literal text — path-bearing go-to-URL
+      // queries like "example.com/admin" (F10) die at the '/' otherwise. So
+      // it only acts as the toggle when the search input isn't focused or is
+      // still empty; in every other case it falls through to the native input.
+      const slashTogglesMode =
+        e.key === '/' && (!isSearchInputActive || (activeEl?.value.length ?? 0) === 0);
+
       // Always forward special keys
-      const specialKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Tab', '/'];
-      const isSpecialKey = specialKeys.includes(e.key);
+      const specialKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Tab'];
+      const isSpecialKey = specialKeys.includes(e.key) || slashTogglesMode;
 
       if (isSpecialKey || !isSearchInputActive) {
         e.preventDefault();

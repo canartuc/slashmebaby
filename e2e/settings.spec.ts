@@ -131,9 +131,9 @@ test('Shows search source toggles', async () => {
   await page.waitForLoadState('domcontentloaded');
   await new Promise(r => setTimeout(r, 1000));
 
-  // Three toggle switches for Tabs, Bookmarks, History
+  // Four toggle switches: Tabs, Bookmarks, History + Show favicons
   const toggles = page.locator('button[role="switch"]');
-  await expect(toggles).toHaveCount(3);
+  await expect(toggles).toHaveCount(4);
 
   await expect(page.locator('text=Tabs')).toBeVisible();
   await expect(page.locator('text=Bookmarks')).toBeVisible();

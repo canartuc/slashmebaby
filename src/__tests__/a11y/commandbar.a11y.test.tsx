@@ -34,6 +34,7 @@ function stubChrome() {
         get: vi.fn((_: unknown, cb: (r: Record<string, unknown>) => void) => cb({})),
         set: vi.fn(),
       },
+      onChanged: { addListener: vi.fn(), removeListener: vi.fn() },
     },
   });
 

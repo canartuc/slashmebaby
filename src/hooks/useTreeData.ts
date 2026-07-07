@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type {
   GetAllTabsResponse,
   GetBookmarkTreeResponse,
+  GetHistoryItemsResponse,
   TabGroupInfo,
   TabWithGroup,
   BookmarkNode,
@@ -15,7 +16,10 @@ export interface TreeItem {
   title: string;
   url?: string;
   icon?: string;
-  type: 'tab' | 'bookmark' | 'folder' | 'group';
+  // 'history' rows come from the background history cache (search-only, F04);
+  // 'action' rows back the '>' prefix mode (F12); 'goto' is the synthetic
+  // go-to-URL fallback row (F10).
+  type: 'tab' | 'bookmark' | 'folder' | 'group' | 'history' | 'action' | 'goto';
   depth: number;
   isExpanded: boolean;
   childCount: number;
@@ -23,6 +27,8 @@ export interface TreeItem {
   tabId?: number;
   pinned?: boolean;
   siteName?: string;
+  /** For type 'action': the EXECUTE_ACTION id (already 'action-' prefixed). */
+  actionId?: string;
 }
 
 // ─── Internal tree node (full tree, not filtered by expansion) ───────────────
@@ -141,6 +147,7 @@ export function useTreeData(): {
   allTabs: TreeItem[];
   visibleItems: TreeItem[];
   allItems: TreeItem[];
+  historyItems: TreeItem[];
   toggleExpand: (id: string) => void;
   isLoading: boolean;
 } {
@@ -151,6 +158,7 @@ export function useTreeData(): {
   const [allTabs, setAllTabs] = useState<TreeItem[]>([]);
   const [visibleItems, setVisibleItems] = useState<TreeItem[]>([]);
   const [allItems, setAllItems] = useState<TreeItem[]>([]);
+  const [historyItems, setHistoryItems] = useState<TreeItem[]>([]);
 
   // Fetch data on mount
   useEffect(() => {
@@ -218,6 +226,47 @@ export function useTreeData(): {
     };
   }, []);
 
+  // History is fetched independently of the tree (F04): it only feeds the
+  // overlay's search corpus and never appears in the jump-mode tree, so it
+  // does not gate isLoading.
+  useEffect(() => {
+    let cancelled = false;
+
+    chrome.runtime.sendMessage(
+      { type: 'GET_HISTORY_ITEMS' },
+      (response: GetHistoryItemsResponse | undefined) => {
+        // Read lastError before anything else — leaving it unchecked makes
+        // Chrome log "Unchecked runtime.lastError" on the host page.
+        const lastError = chrome.runtime.lastError;
+        if (cancelled) return;
+        if (lastError || !response || !Array.isArray(response.items)) {
+          // History is a progressive enhancement of the search corpus: keep
+          // the UI stable (no rows) and log once so the failure is traceable.
+          console.warn(
+            '[SlashMeBaby] Failed to load history items:',
+            lastError?.message ?? 'invalid response'
+          );
+          return;
+        }
+        setHistoryItems(
+          response.items.map((item) => ({
+            id: item.id,
+            title: item.title,
+            url: item.url,
+            type: 'history' as const,
+            depth: 0,
+            isExpanded: false,
+            childCount: 0,
+          }))
+        );
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const toggleExpand = useCallback((id: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -231,5 +280,5 @@ export function useTreeData(): {
     });
   }, []);
 
-  return { pinnedTabs, allTabs, visibleItems, allItems, toggleExpand, isLoading };
+  return { pinnedTabs, allTabs, visibleItems, allItems, historyItems, toggleExpand, isLoading };
 }

@@ -5,6 +5,8 @@ import { ShortcutSetting } from '../../components/Settings/ShortcutSetting';
 import { PositionSetting } from '../../components/Settings/PositionSetting';
 import { ThemeSetting } from '../../components/Settings/ThemeSetting';
 import { SearchSources } from '../../components/Settings/SearchSources';
+import { MaxResultsSetting } from '../../components/Settings/MaxResultsSetting';
+import { FaviconSetting } from '../../components/Settings/FaviconSetting';
 import { SettingsPage } from '../../components/Settings/SettingsPage';
 import { DEFAULT_SETTINGS } from '../../lib/messaging';
 import type { UserSettings } from '../../lib/messaging';
@@ -197,6 +199,93 @@ describe('SearchSources', () => {
   });
 });
 
+describe('MaxResultsSetting', () => {
+  it('renders all 3 result-count options', () => {
+    const onUpdate = vi.fn();
+    render(<MaxResultsSetting settings={DEFAULT_SETTINGS} onUpdate={onUpdate} />);
+
+    expect(screen.getByText('3 results')).toBeTruthy();
+    expect(screen.getByText('5 results')).toBeTruthy();
+    expect(screen.getByText('8 results')).toBeTruthy();
+  });
+
+  it('shows the current value as selected', () => {
+    const onUpdate = vi.fn();
+    render(<MaxResultsSetting settings={DEFAULT_SETTINGS} onUpdate={onUpdate} />);
+
+    const radios = screen.getAllByRole('radio') as HTMLInputElement[];
+    const selected = radios.find((r) => r.checked);
+    expect(selected?.value).toBe('5');
+  });
+
+  it('calls onUpdate with a number when a different count is selected', () => {
+    const onUpdate = vi.fn();
+    render(<MaxResultsSetting settings={DEFAULT_SETTINGS} onUpdate={onUpdate} />);
+
+    const radios = screen.getAllByRole('radio') as HTMLInputElement[];
+    const eightRadio = radios.find((r) => r.value === '8');
+    fireEvent.click(eightRadio!);
+
+    expect(onUpdate).toHaveBeenCalledWith('maxResultsPerGroup', 8);
+  });
+
+  it('reflects a non-default stored value', () => {
+    const onUpdate = vi.fn();
+    const settings: UserSettings = { ...DEFAULT_SETTINGS, maxResultsPerGroup: 3 };
+    render(<MaxResultsSetting settings={settings} onUpdate={onUpdate} />);
+
+    const radios = screen.getAllByRole('radio') as HTMLInputElement[];
+    const selected = radios.find((r) => r.checked);
+    expect(selected?.value).toBe('3');
+  });
+
+  it('renders section title', () => {
+    const onUpdate = vi.fn();
+    render(<MaxResultsSetting settings={DEFAULT_SETTINGS} onUpdate={onUpdate} />);
+    expect(screen.getByText('Results Per Group')).toBeTruthy();
+  });
+});
+
+describe('FaviconSetting', () => {
+  it('renders the favicon toggle with section title', () => {
+    const onUpdate = vi.fn();
+    render(<FaviconSetting settings={DEFAULT_SETTINGS} onUpdate={onUpdate} />);
+
+    expect(screen.getByText('Favicons')).toBeTruthy();
+    expect(screen.getByText('Show favicons')).toBeTruthy();
+    expect(screen.getAllByRole('switch').length).toBe(1);
+  });
+
+  it('is on by default (aria-checked true)', () => {
+    const onUpdate = vi.fn();
+    render(<FaviconSetting settings={DEFAULT_SETTINGS} onUpdate={onUpdate} />);
+
+    const toggle = screen.getByRole('switch');
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('calls onUpdate with false when toggled off', () => {
+    const onUpdate = vi.fn();
+    render(<FaviconSetting settings={DEFAULT_SETTINGS} onUpdate={onUpdate} />);
+
+    fireEvent.click(screen.getByRole('switch'));
+
+    expect(onUpdate).toHaveBeenCalledWith('showFavicons', false);
+  });
+
+  it('shows off state and toggles back on', () => {
+    const onUpdate = vi.fn();
+    const settings: UserSettings = { ...DEFAULT_SETTINGS, showFavicons: false };
+    render(<FaviconSetting settings={settings} onUpdate={onUpdate} />);
+
+    const toggle = screen.getByRole('switch');
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(toggle);
+    expect(onUpdate).toHaveBeenCalledWith('showFavicons', true);
+  });
+});
+
 describe('SettingsPage', () => {
   beforeEach(() => {
     vi.mocked(chrome.storage.sync.get).mockReset();
@@ -231,6 +320,8 @@ describe('SettingsPage', () => {
       expect(screen.getByText('Command Bar Position')).toBeTruthy();
       expect(screen.getByText('Theme')).toBeTruthy();
       expect(screen.getByText('Search Sources')).toBeTruthy();
+      expect(screen.getByText('Results Per Group')).toBeTruthy();
+      expect(screen.getByText('Favicons')).toBeTruthy();
     });
   });
 

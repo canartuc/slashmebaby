@@ -38,6 +38,7 @@ function makeItems(count: number): TreeItemData[] {
 const ITEM_COUNT = 100;
 const KEYPRESSES = 100;
 
+// Stays gated: an on-demand benchmark (timings logged to PERF_OUT, no thresholds), not a correctness test.
 describe.runIf(process.env.PERF === '1')('TreeView arrow-key render benchmark', () => {
   it('measures total render duration across selection changes', () => {
     const items = makeItems(ITEM_COUNT);
