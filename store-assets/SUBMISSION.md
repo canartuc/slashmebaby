@@ -31,6 +31,6 @@ Human steps that cannot be automated. Work top to bottom; everything you need to
 
 ## 5. After acceptance
 
-- [ ] Tag the release in git: `git tag v1.0.0 && git push origin v1.0.0`.
-- [ ] Create the corresponding GitHub release so the CHANGELOG link resolves.
+- [x] Tag the release in git: done, `v1.0.0` pushed.
+- [x] Create the corresponding GitHub release so the CHANGELOG link resolves: https://github.com/canartuc/slashmebaby/releases/tag/v1.0.0 (chrome zip, firefox zip, and AMO source zip attached).
 - [ ] Update README/store listing with the live Chrome Web Store URL.
