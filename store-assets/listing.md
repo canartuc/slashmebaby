@@ -10,15 +10,11 @@ SlashMeBaby
 
 ### Short description (max 132 characters)
 
-Option A — matches the manifest description (120 characters):
-
-> Arc & Zen-style command palette for any browser. Switch tabs, search bookmarks, and run actions with a single keystroke.
-
-Option B — safer alternative without trademark references (128 characters):
+Matches the manifest description in `wxt.config.ts` (128 characters):
 
 > A keyboard-driven command palette for your browser. Switch tabs, search bookmarks and history, and run actions in one keystroke.
 
-> **Trademark note:** "Arc" and "Zen" are other companies' browser brands. Chrome Web Store policy prohibits using third-party trademarks in a way that implies affiliation or endorsement, and listings have been rejected for less. Option B avoids the issue entirely; if you keep Option A, be prepared to change it if the reviewer objects. Consider also updating the `description` in `wxt.config.ts` to match whichever you choose, since the manifest description is what actually ships.
+> **Trademark note (resolved):** an earlier draft read "Arc & Zen-style command palette". "Arc" and "Zen" are other companies' browser brands, and Chrome Web Store policy prohibits third-party trademarks in listing metadata that imply affiliation. The shipped manifest and this listing now use the trademark-free wording above; the inspiration credit remains only in the README, which is not store metadata.
 
 ### Detailed description
 

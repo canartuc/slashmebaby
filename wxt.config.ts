@@ -7,7 +7,7 @@ export default defineConfig({
   // Function form so permissions/keys can vary per target browser.
   manifest: ({ browser }) => ({
     name: 'SlashMeBaby',
-    description: 'Arc & Zen-style command palette for any browser. Switch tabs, search bookmarks, and run actions with a single keystroke.',
+    description: 'A keyboard-driven command palette for your browser. Switch tabs, search bookmarks and history, and run actions in one keystroke.',
     version: '1.0.0',
     // Note: "commands" is a manifest key, not a permission, and "activeTab"
     // is unused (no executeScript/captureVisibleTab/insertCSS anywhere).
