@@ -13,7 +13,7 @@ WXT + React 18 + TypeScript (strict) + Fuse.js + Vitest + Playwright
 
 ## Conventions
 - TDD: Write failing test first, then implement
-- All browser APIs via WXT's `browser` namespace
+- Browser APIs called directly via `chrome.*` (Firefox supports the `chrome` namespace; Chrome-only APIs like `chrome.tabGroups` are feature-detected at runtime)
 - Typed messaging in src/lib/messaging.ts
 - CSS scoped inside Shadow DOM only
 - Conventional commits (feat:, fix:, test:, docs:, chore:)

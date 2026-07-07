@@ -1,4 +1,4 @@
-# PLAN.md — SlashMeBaby Sprint Plan
+# PLAN.md: SlashMeBaby Sprint Plan
 
 Last updated: 2026-03-14
 
@@ -31,7 +31,7 @@ Last updated: 2026-03-14
 
 ---
 
-## Sprint 1 — Foundation
+## Sprint 1: Foundation
 
 **Goal:** Every developer can clone the repo, run `npm install`, and have a working dev server with hot reload in under 5 minutes. CI is green on an empty test suite.
 
@@ -50,7 +50,7 @@ Last updated: 2026-03-14
 | 1.9 | wxt.config.ts | Architect | Contains all 7 permissions; keyboard command `toggle-overlay` registered with Alt+Space default |
 | 1.10 | Documentation baseline | Context Eng | FEATURES.md, DESIGN.md, ARCHITECTURE.md, CONTEXT.md, CLAUDE.md, PLAN.md all present at repo root |
 
-### QA Gate — Sprint 1
+### QA Gate: Sprint 1
 
 - [ ] `npm ci && npm run lint && tsc --noEmit` exits 0
 - [ ] `npm run build` and `npm run build:firefox` both exit 0 with output directories present
@@ -60,7 +60,7 @@ Last updated: 2026-03-14
 
 ---
 
-## Sprint 2 — Core Backend
+## Sprint 2: Core Backend
 
 **Goal:** All background service worker modules (TabCache, BookmarkCache, HistoryCache, ActionRegistry, SearchEngine, MessageRouter) are implemented with 100% unit test coverage.
 
@@ -79,17 +79,17 @@ Last updated: 2026-03-14
 | 2.9 | Utility Actions | Engineer | Close All Duplicates finds and closes duplicate-URL tabs; Sort by Domain reorders tabs by domain name; both have unit tests |
 | 2.10 | storage.ts | Engineer | `getSettings()` returns UserSettings with defaults applied; `saveSettings(partial)` deep-merges; unit tests mock chrome.storage.sync |
 
-### QA Gate — Sprint 2
+### QA Gate: Sprint 2
 
 - [ ] 100% statement coverage on `src/lib/` and `src/entrypoints/background/`
 - [ ] All recency scoring tests pass with exact expected values
 - [ ] MessageRouter unit test exercises every message type
-- [ ] No direct `chrome.*` calls (only `browser.*`) — verified by grep in CI
+- [ ] No direct `chrome.*` calls (only `browser.*`), verified by grep in CI
 - [ ] `npm run build` and `npm run build:firefox` still exit 0
 
 ---
 
-## Sprint 3 — Command Bar UI
+## Sprint 3: Command Bar UI
 
 **Goal:** The command bar overlay appears on Alt+Space, renders search results from real data, supports full keyboard navigation, and is visually complete per DESIGN.md (Luminal design language).
 
@@ -112,26 +112,26 @@ Last updated: 2026-03-14
 | 3.13 | Focus management | Engineer | Input auto-focused on open; focus trapped inside shadow DOM while open; focus returned to host page element on close |
 | 3.14 | Component unit tests | Engineer + QA | 90%+ coverage on all CommandBar components; test keyboard navigation; test empty state; test theme switching |
 
-### QA Gate — Sprint 3
+### QA Gate: Sprint 3
 
 - [ ] Alt+Space opens overlay on any http/https page within 50ms (measured via Performance.now() in E2E test)
 - [ ] Escape closes overlay; focus returns to previously focused element
 - [ ] All keyboard navigation paths tested and passing in E2E suite
-- [ ] Visual design matches DESIGN.md Luminal specs — Designer sign-off
+- [ ] Visual design matches DESIGN.md Luminal specs (Designer sign-off)
 - [ ] No CSS leakage to host page verified (E2E test: check document.body styles unchanged after overlay open/close)
 - [ ] ARIA attributes verified with axe-playwright
 
 ---
 
-## Sprint 4 — Actions & Integration
+## Sprint 4: Actions & Integration
 
-**Goal:** All P0 actions (F09, F10, F11) are wired end-to-end. The full user flow — open, search, select, execute — works on both Chrome and Firefox.
+**Goal:** All P0 actions (F09, F10, F11) are wired end-to-end. The full user flow (open, search, select, execute) works on both Chrome and Firefox.
 
 ### Deliverables
 
 | # | Deliverable | Owner | Acceptance Criteria |
 |---|------------|-------|---------------------|
-| 4.1 | Tab action execution | Engineer | Close Tab, Close Other Tabs, Pin/Unpin, Mute/Unmute, Duplicate, Move to Window, Reload — all execute correctly via EXECUTE_ACTION message; Mute/Unmute only shows when tab is audible |
+| 4.1 | Tab action execution | Engineer | Close Tab, Close Other Tabs, Pin/Unpin, Mute/Unmute, Duplicate, Move to Window, and Reload all execute correctly via EXECUTE_ACTION message; Mute/Unmute only shows when tab is audible |
 | 4.2 | Navigation actions | Engineer | New Tab opens blank tab and closes overlay; Recently Closed shows 10-item sub-list from chrome.sessions; selecting a recently closed item calls sessions.restore(); Go to URL navigates current tab |
 | 4.3 | Utility actions | Engineer | Close All Duplicates removes all but one tab per URL; Sort by Domain reorders tabs; Settings opens extension settings page |
 | 4.4 | Action prefix mode E2E | QA | Typing `>` in overlay filters to actions only; backspacing to empty restores all sources; E2E test covers both transitions |
@@ -142,7 +142,7 @@ Last updated: 2026-03-14
 | 4.9 | Performance validation | Engineer + QA | E2E test measures overlay open time < 50ms; search response time < 16ms; profiled with Chrome DevTools Performance panel |
 | 4.10 | Error handling | Engineer | EXECUTE_ACTION returns `{ success: false, error: string }` on failure; content script shows brief error toast; no uncaught exceptions in console |
 
-### QA Gate — Sprint 4
+### QA Gate: Sprint 4
 
 - [ ] All P0 features (F01–F16) manually tested end-to-end on Chrome
 - [ ] All P0 features (F01–F16) manually tested end-to-end on Firefox
@@ -152,7 +152,7 @@ Last updated: 2026-03-14
 
 ---
 
-## Sprint 5 — Settings & Onboarding
+## Sprint 5: Settings & Onboarding
 
 **Goal:** F17–F20 (P1 features) are complete. First-time user experience is tested end-to-end. Settings sync across devices.
 
@@ -168,14 +168,14 @@ Last updated: 2026-03-14
 | 5.6 | SearchSources toggles | Engineer | Checkboxes for Tabs / Bookmarks / History; toggling off omits source from SEARCH payload |
 | 5.7 | Settings sync | Engineer + QA | Change setting on device A; verify (manually) it appears on device B via chrome.storage.sync |
 | 5.8 | Onboarding trigger | Engineer | runtime.onInstalled opens onboarding tab; does NOT open on browser update or extension update (only on fresh install) |
-| 5.9 | Step 1 — Choose Shortcut | Engineer + Designer | Grid of 4 shortcut options; selection highlighted; Next button advances; choice saved to storage.local |
-| 5.10 | Step 2 — Try It Now | Engineer + Designer | Prompts user to press chosen shortcut; command bar appears live in the onboarding tab; detecting shortcut advances to Step 3 |
-| 5.11 | Step 3 — Navigation Guide | Engineer + Designer | Keyboard cheat sheet with arrow keys, Tab, Enter, Escape, `>` prefix; Next button advances |
-| 5.12 | Step 4 — Completion | Engineer + Designer | Pro tips: `>` prefix, recency learning, settings link; Finish button marks onboarding complete in storage.local |
+| 5.9 | Step 1: Choose Shortcut | Engineer + Designer | Grid of 4 shortcut options; selection highlighted; Next button advances; choice saved to storage.local |
+| 5.10 | Step 2: Try It Now | Engineer + Designer | Prompts user to press chosen shortcut; command bar appears live in the onboarding tab; detecting shortcut advances to Step 3 |
+| 5.11 | Step 3: Navigation Guide | Engineer + Designer | Keyboard cheat sheet with arrow keys, Tab, Enter, Escape, `>` prefix; Next button advances |
+| 5.12 | Step 4: Completion | Engineer + Designer | Pro tips: `>` prefix, recency learning, settings link; Finish button marks onboarding complete in storage.local |
 | 5.13 | Onboarding resume | Engineer | If user closes onboarding tab at Step 2, reopening extension icon shows step 2 (not step 1) |
 | 5.14 | Onboarding unit tests | QA | Step transitions tested; storage reads/writes mocked; completion state verified |
 
-### QA Gate — Sprint 5
+### QA Gate: Sprint 5
 
 - [ ] New install flow manually tested: onboarding opens, all 4 steps complete, command bar works after
 - [ ] Settings changes persist after browser restart
@@ -185,7 +185,7 @@ Last updated: 2026-03-14
 
 ---
 
-## Sprint 6 — Polish & QA
+## Sprint 6: Polish & QA
 
 **Goal:** Zero P0 bugs. Performance targets met. WCAG AA compliance. Both browser store submissions prepared and submitted.
 
@@ -207,7 +207,7 @@ Last updated: 2026-03-14
 | 6.12 | Firefox submission | PM | Extension zip submitted to AMO; review pending |
 | 6.13 | Release notes | Context Eng | CHANGELOG.md created with v1.0.0 entry listing all P0 and P1 features |
 
-### QA Gate — Sprint 6 (Release Gate)
+### QA Gate: Sprint 6 (Release Gate)
 
 - [ ] Zero open P0 bugs
 - [ ] Zero axe-playwright critical/serious violations
@@ -264,9 +264,9 @@ A story or task is not Done unless ALL of the following are true:
 
 1. **No scope creep without PM sign-off.** If a new requirement emerges mid-sprint, the PM must explicitly add it to the backlog. The Scrum Master blocks any undeclared work from being started.
 2. **Blockers reported within 24 hours.** Any blocker that prevents a deliverable must be surfaced in the next standup (or sooner via async message). The Scrum Master owns removal within 48 hours or escalates.
-3. **Velocity is measured, not pressured.** Story points are used for forecasting only. The Scrum Master does not use velocity to pressure engineers.
+3. **Velocity is for forecasting only.** The Scrum Master does not use story points or velocity to pressure engineers.
 4. **CI must be green at end of every sprint.** The Scrum Master does not allow a sprint to close with a broken CI pipeline. Any broken build is a P0 blocker regardless of feature completeness.
-5. **QA gates are mandatory.** No sprint closes until the QA gate checklist is fully checked. QA is not optional and is not a phase that happens only at the end.
+5. **QA gates are mandatory.** No sprint closes until the QA gate checklist is fully checked. QA work runs throughout the sprint, not only at the end.
 6. **No "done in my head."** If it's not committed, tested, and in CI, it's not done. The Scrum Master enforces this strictly to prevent false progress reports.
-7. **Retrospective is timeboxed to 45 minutes.** One thing that went well. One thing to improve. One concrete action item assigned to one person with a due date.
-8. **Technical debt is tracked, not hidden.** If a shortcut is taken under time pressure, it must be filed as a GitHub issue with a `tech-debt` label before the sprint closes.
+7. **Retrospective is timeboxed to 45 minutes.** It covers one thing that went well, one thing to improve, and one concrete action item assigned to one person with a due date.
+8. **Technical debt is tracked.** If a shortcut is taken under time pressure, it must be filed as a GitHub issue with a `tech-debt` label before the sprint closes.

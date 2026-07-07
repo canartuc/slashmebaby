@@ -136,8 +136,8 @@ To add a new searchable data source (e.g., reading list, downloads):
 1. Create a cache class in `src/entrypoints/background/` following the pattern of `TabCache`, `BookmarkCache`, or `HistoryCache`.
 
 2. The cache must implement:
-   - `refresh(): Promise<void>` — fetch data from the browser API
-   - `getItems(): SearchableItem[]` — return cached items
+   - `refresh(): Promise<void>` fetches data from the browser API
+   - `getItems(): SearchableItem[]` returns cached items
 
 3. Register the cache in `src/entrypoints/background/index.ts`:
    - Instantiate it in `createMessageRouter()`

@@ -1,4 +1,4 @@
-# CONTEXT.md — SlashMeBaby AI Context & Prompt Templates
+# CONTEXT.md: SlashMeBaby AI Context & Prompt Templates
 
 Last updated: 2026-03-14
 
@@ -18,7 +18,7 @@ Targets: Chrome MV3 (and Chromium forks), Firefox MV2/MV3.
 
 Key files:
 - FEATURES.md: prioritized feature tracker (P0/P1/P2)
-- DESIGN.md: design language "Luminal" — exact hex tokens, spacing, animation specs
+- DESIGN.md: design language "Luminal" (exact hex tokens, spacing, animation specs)
 - ARCHITECTURE.md: system components, messaging protocol TypeScript types, search algorithm
 - PLAN.md: 6-sprint delivery plan with acceptance criteria
 
@@ -33,8 +33,8 @@ Architecture summary:
 Conventions:
 - TDD: write failing test first, then implement
 - Conventional commits: feat:, fix:, test:, docs:, chore:
-- CSS scoped inside Shadow DOM only — no global styles
-- TypeScript strict mode — no `any`, no non-null assertions without justification
+- CSS scoped inside Shadow DOM only, no global styles
+- TypeScript strict mode: no `any`, no non-null assertions without justification
 ```
 
 ---
@@ -49,13 +49,13 @@ Use when working on `src/entrypoints/background/`, `src/lib/search.ts`, or `src/
 Context: Working on the background service worker for SlashMeBaby browser extension.
 
 File structure:
-- src/entrypoints/background/index.ts — MessageRouter (registers runtime.onMessage)
-- src/entrypoints/background/tabs.ts — TabCache class
-- src/entrypoints/background/bookmarks.ts — BookmarkCache class
-- src/entrypoints/background/history.ts — HistoryCache class
-- src/entrypoints/background/actions.ts — ActionRegistry class
-- src/lib/search.ts — SearchEngine class (Fuse.js + recency scoring)
-- src/lib/messaging.ts — All TypeScript message types
+- src/entrypoints/background/index.ts: MessageRouter (registers runtime.onMessage)
+- src/entrypoints/background/tabs.ts: TabCache class
+- src/entrypoints/background/bookmarks.ts: BookmarkCache class
+- src/entrypoints/background/history.ts: HistoryCache class
+- src/entrypoints/background/actions.ts: ActionRegistry class
+- src/lib/search.ts: SearchEngine class (Fuse.js + recency scoring)
+- src/lib/messaging.ts: All TypeScript message types
 
 Key constraints:
 - All browser APIs via WXT `browser` namespace
@@ -84,7 +84,7 @@ Context: Working on the CommandBar React UI for SlashMeBaby browser extension.
 
 UI runs inside a Shadow DOM root in the content script.
 Mount: ReactDOM.createRoot(mountDiv).render(<App />) on TOGGLE_OVERLAY message.
-Full unmount after close animation (150ms) — search state always resets.
+Full unmount after close animation (150ms). Search state always resets.
 
 Component tree:
 - content/index.tsx: Shadow DOM setup, message listener, mount/unmount logic
@@ -95,7 +95,7 @@ Component tree:
 - components/CommandBar/ResultItem.tsx: Individual result row
 - components/CommandBar/GroupHeader.tsx: Section label
 
-Design tokens (from DESIGN.md — Luminal design language):
+Design tokens (from DESIGN.md, Luminal design language):
 - Dark bg-primary: #1a1a2e, accent: #6366f1, accent-hover: #818cf8
 - Light bg-primary: #ffffff, accent: #6366f1, accent-hover: #4f46e5
 - Font: system-ui stack, sizes 10/12/14/16px
@@ -132,7 +132,7 @@ Test setup:
 Unit test conventions:
 - Describe the module, then individual behaviors
 - Mock browser APIs using vitest's vi.mock() and vi.fn()
-- Never test implementation details — test behavior and outputs
+- Never test implementation details. Test behavior and outputs
 - For SearchEngine: test scoring formulas with known inputs and expected outputs
 - For MessageRouter: test message dispatch without real browser APIs
 
@@ -202,7 +202,7 @@ Task: [DESCRIBE YOUR TASK HERE]
 | `src/hooks/useKeyboard.ts` | (none) | CommandBar.tsx |
 | `src/hooks/useTheme.ts` | (none) | App.tsx |
 | `src/hooks/useSettings.ts` | storage.ts, messaging.ts, browser (WXT) | App.tsx, Settings/* |
-| `src/styles/command-bar.css` | (none — pure CSS) | content/index.tsx (injected into Shadow DOM) |
+| `src/styles/command-bar.css` | (none, pure CSS) | content/index.tsx (injected into Shadow DOM) |
 | `wxt.config.ts` | (none) | Build system |
 
 ---
@@ -242,8 +242,8 @@ Evaluate against these constraints:
 2. Shadow DOM isolation: Zero CSS or JS leakage to/from the host page
 3. Performance targets: 50ms overlay open, 16ms search results
 4. Security: No unsafe-eval, no external requests, minimal permissions
-5. Offline-first: All data from browser APIs — no network calls for search
-6. Full unmount on close: React tree destroyed every time overlay closes — no persistent state
+5. Offline-first: All data from browser APIs, no network calls for search
+6. Full unmount on close: React tree destroyed every time overlay closes, no persistent state
 7. Messaging: All cross-context communication typed in src/lib/messaging.ts
 
 Does this decision comply? If not, propose an alternative that does.
@@ -263,7 +263,7 @@ Extension structure:
 - Content script: src/entrypoints/content/index.tsx
 - Message types: src/lib/messaging.ts
 
-Symptom: [DESCRIBE WHAT HAPPENS — e.g., "SEARCH message sent from content script, no response received"]
+Symptom: [DESCRIBE WHAT HAPPENS, e.g., "SEARCH message sent from content script, no response received"]
 
 Relevant code:
 [PASTE SENDER CODE]
@@ -290,10 +290,10 @@ Shadow DOM setup (from content/index.tsx):
 - Styles: <style> tag injected into shadow root with bundled CSS
 - React mounts into <div id="slashmebaby-app"> inside shadow root
 
-Symptom: [DESCRIBE — e.g., "host page font-size changes when overlay opens" OR "overlay inherits host page's dark theme class"]
+Symptom: [DESCRIBE, e.g., "host page font-size changes when overlay opens" OR "overlay inherits host page's dark theme class"]
 
 Common causes:
-1. CSS custom properties (variables) are inherited through shadow boundaries — use :host selector to reset
+1. CSS custom properties (variables) are inherited through shadow boundaries. Use :host selector to reset
 2. Global styles accidentally applied to document.body instead of shadow root
 3. Inherited CSS properties (color, font-size) not reset with `all: initial` on shadow host
 4. z-index stacking context issues with positioned host page elements
@@ -306,19 +306,19 @@ Diagnose and fix.
 ```
 I have a cross-browser bug in SlashMeBaby. The feature works on Chrome but fails on Firefox (or vice versa).
 
-Tech: WXT + browser namespace (webextension-polyfill).
+Tech: WXT; browser APIs called directly via chrome.* (Firefox supports the chrome namespace).
 
-Symptom: [DESCRIBE — e.g., "Keyboard shortcut registers on Chrome but not Firefox" OR "sessions API throws on Firefox"]
+Symptom: [DESCRIBE, e.g., "Keyboard shortcut registers on Chrome but not Firefox" OR "sessions API throws on Firefox"]
 
 Affected code:
 [PASTE CODE]
 
 Cross-browser checklist:
-1. Is `browser.*` used instead of `chrome.*`? (browser.* is polyfilled)
+1. Does the `chrome.*` API used exist on Firefox? (Firefox supports the chrome namespace, but some APIs differ or are missing)
 2. Is the feature available in Firefox? (e.g., browser.sessions may be limited in Firefox)
 3. Does the manifest permission exist in both Chrome and Firefox targets? (check wxt.config.ts)
 4. Are there MV2 vs MV3 API differences causing the issue? (background service worker vs persistent background page)
-5. Is feature detection used for Chrome-only APIs? (typeof browser.tabGroups !== 'undefined')
+5. Is feature detection used for Chrome-only APIs? (e.g. `if (chrome.tabGroups)` before querying)
 
 Diagnose and provide a compatible fix.
 ```

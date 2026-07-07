@@ -1,4 +1,4 @@
-# Chrome Web Store Listing — SlashMeBaby
+# SlashMeBaby Chrome Web Store Listing
 
 Everything needed to fill in the CWS Developer Dashboard in one pass.
 
@@ -18,12 +18,12 @@ Matches the manifest description in `wxt.config.ts` (128 characters):
 
 ### Detailed description
 
-SlashMeBaby puts your whole browser one keystroke away. Press Ctrl+Shift+Space (Cmd+Shift+Space on Mac) on any page and a fast, keyboard-driven command palette appears — search your open tabs, bookmarks, and history, or run tab-management commands, all without touching the mouse.
+SlashMeBaby puts your whole browser one keystroke away. Press Ctrl+Shift+Space (Cmd+Shift+Space on Mac) on any page and a fast, keyboard-driven command palette appears. Search your open tabs, bookmarks, and history, or run tab-management commands, all without touching the mouse.
 
 FIND ANYTHING, INSTANTLY
 - Switch tabs: fuzzy-search every open tab in every window and jump to it with Enter.
 - Search bookmarks: your full bookmark tree, including nested folders.
-- Search history: your recent browsing history, one keystroke away.
+- Search history: your recent browsing history, ready to reopen with Enter.
 - Empty-query browsing: open the palette to a navigable tree of all your tabs and bookmarks, with one-key jump labels.
 - Smart suggestions: the toolbar popup's empty state shows your most recent tabs, newest bookmarks, and contextual actions, with results ranked by both match quality and recency.
 
@@ -41,7 +41,7 @@ MADE TO FIT YOU
 - On restricted pages (chrome:// and the Chrome Web Store) the toolbar icon opens a popup with the same search
 
 PRIVATE BY DESIGN
-Everything runs on your device. SlashMeBaby has no servers, no analytics, no telemetry, and no accounts. It never collects or transmits your data — the only network requests it makes fetch favicon images directly from the sites' own URLs, with credentials omitted. Full policy: link your hosted PRIVACY.md here.
+Everything runs on your device. SlashMeBaby has no servers, no analytics, no telemetry, and no accounts. It never collects or transmits your data. The only network requests it makes fetch favicon images directly from the sites' own URLs, with credentials omitted. Full policy: link your hosted PRIVACY.md here.
 
 Default shortcut: Ctrl+Shift+Space (Cmd+Shift+Space on Mac). Change it anytime in Settings or at chrome://extensions/shortcuts.
 
@@ -61,19 +61,19 @@ SlashMeBaby is a keyboard-driven command palette for browser navigation and tab 
 
 ### Permission justifications
 
-**tabs** — Required to read the titles, URLs, and favicons of open tabs so the palette can list and fuzzy-search them, and to execute the user's tab actions (switch, close, pin, mute, duplicate, move, reload, sort by domain, close duplicates). Tab data is only held in an in-memory cache and never transmitted.
+The **tabs** permission is required to read the titles, URLs, and favicons of open tabs so the palette can list and fuzzy-search them, and to execute the user's tab actions (switch, close, pin, mute, duplicate, move, reload, sort by domain, close duplicates). Tab data is only held in an in-memory cache and never transmitted.
 
-**bookmarks** — Required to read the user's bookmark tree so the palette can fuzzy-search bookmarks and open the one the user selects. Bookmark data is only used for local search and is never transmitted.
+The **bookmarks** permission is required to read the user's bookmark tree so the palette can fuzzy-search bookmarks and open the one the user selects. Bookmark data is only used for local search and is never transmitted.
 
-**history** — Required to read recent browsing history so the palette can fuzzy-search it and reopen pages the user selects. History data is only used for local search and is never transmitted.
+The **history** permission is required to read recent browsing history so the palette can fuzzy-search it and reopen pages the user selects. History data is only used for local search and is never transmitted.
 
-**sessions** — Required for the "Recently Closed" action, which restores the user's most recently closed tab(s) — or undoes the palette's last tab operation — by reading chrome.sessions.getRecentlyClosed() and calling chrome.sessions.restore(). There is no browsable list: session data is read only at the moment of the restore, is never displayed, and is never transmitted.
+The **sessions** permission is required for the "Recently Closed" action, which restores the user's most recently closed tab(s), or undoes the palette's last tab operation, by reading chrome.sessions.getRecentlyClosed() and calling chrome.sessions.restore(). There is no browsable list: session data is read only at the moment of the restore, is never displayed, and is never transmitted.
 
-**storage** — Required to persist the user's UI settings (keyboard shortcut, palette position, theme, max results, favicon toggle, search-source toggles) in chrome.storage.sync, and first-run onboarding progress in chrome.storage.local. No browsing data or personal information is stored.
+The **storage** permission is required to persist the user's UI settings (keyboard shortcut, palette position, theme, max results, favicon toggle, search-source toggles) in chrome.storage.sync, and first-run onboarding progress in chrome.storage.local. No browsing data or personal information is stored.
 
-**tabGroups** — Required to read tab-group titles and colors so the palette's tab tree view can display tabs grouped the way the user organized them in Chrome. Read-only enrichment of the tab list; group data is never transmitted.
+The **tabGroups** permission is required to read tab-group titles and colors so the palette's tab tree view can display tabs grouped the way the user organized them in Chrome. Read-only enrichment of the tab list; group data is never transmitted.
 
-**Host permission `<all_urls>`** — Required for two reasons. First, the content script must inject the command-palette overlay into every page before any user gesture, because the palette opens via a global keyboard shortcut on whatever page the user is currently viewing — activeTab is not sufficient since there is no preceding click. Second, the background service worker fetches favicon images cross-origin from the sites' own favicon URLs (image responses only, credentials omitted, converted to data: URLs and cached in memory) so results can show icons even when a page's CSP or hotlink protection would block an image tag. No page content is read or modified beyond rendering the palette overlay in an isolated Shadow DOM, and no data is transmitted anywhere.
+The **`<all_urls>`** host permission is required for two reasons. First, the content script must inject the command-palette overlay into every page before any user gesture, because the palette opens via a global keyboard shortcut on whatever page the user is currently viewing (activeTab is not sufficient since there is no preceding click). Second, the background service worker fetches favicon images cross-origin from the sites' own favicon URLs (image responses only, credentials omitted, converted to data: URLs and cached in memory) so results can show icons even when a page's CSP or hotlink protection would block an image tag. No page content is read or modified beyond rendering the palette overlay in an isolated Shadow DOM, and no data is transmitted anywhere.
 
 ### Data usage disclosure answers
 

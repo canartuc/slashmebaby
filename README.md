@@ -1,20 +1,20 @@
 # SlashMeBaby
 
-A cross-browser command palette, inspired by Arc and Zen. Press one keyboard shortcut on any page to search your open tabs, bookmarks, and history, and to run tab-management actions — without leaving the keyboard.
+A cross-browser command palette, inspired by Arc and Zen. Press one keyboard shortcut on any page to search your open tabs, bookmarks, and history, and to run tab-management actions without leaving the keyboard.
 
 Works in Chrome (Manifest V3) and Firefox (Manifest V2).
 
 ## Features
 
-- **Tab switching** — fuzzy-search every open tab in every window and jump to it with Enter. (In the toolbar popup, results are additionally ranked by recency.)
-- **Bookmark search** — search your full bookmark tree, including nested folders.
-- **History search** — search your recent browsing history. (In the toolbar popup, results are additionally ranked by how recently you visited each page.)
-- **Tab actions** — close tab, close other tabs, pin/unpin, mute/unmute, duplicate, move to a new window, reload, new tab, go to URL, restore recently closed tabs, **close duplicate tabs**, and **sort tabs by domain**.
-- **Action-only mode** — type `>` as the first character to filter the palette to actions only (for example `>close`).
-- **Smart suggestions** — with an empty query, the toolbar popup shows your most recent tabs, newest bookmarks, and contextual actions. (The overlay's empty state shows a navigable tree of all tabs and bookmarks instead.)
-- **Onboarding** — a short interactive tutorial opens on first install to help you pick a shortcut and learn the keyboard navigation.
-- **Settings** — configure the activation shortcut, palette position (center / top / bottom), theme (system / light / dark), maximum results per group, favicon display, and which search sources are enabled. Settings sync via your browser account.
-- **Popup fallback** — on pages where content scripts cannot run (`chrome://`, `about:`, the Chrome Web Store), the toolbar icon opens a popup with the same search.
+- **Tab switching.** Fuzzy-search every open tab in every window and jump to it with Enter. (In the toolbar popup, results are also ranked by recency.)
+- **Bookmark search.** Search your full bookmark tree, including nested folders.
+- **History search.** Search your recent browsing history. (In the toolbar popup, results are also ranked by how recently you visited each page.)
+- **Tab actions.** Close tab, close other tabs, pin/unpin, mute/unmute, duplicate, move to a new window, reload, new tab, go to URL, restore recently closed tabs, close duplicate tabs, and sort tabs by domain.
+- **Action-only mode.** Type `>` as the first character to filter the palette to actions only (for example `>close`).
+- **Smart suggestions.** With an empty query, the toolbar popup shows your most recent tabs, newest bookmarks, and contextual actions. (The overlay's empty state shows a navigable tree of all tabs and bookmarks instead.)
+- **Onboarding.** A short interactive tutorial opens on first install to help you pick a shortcut and learn the keyboard navigation.
+- **Settings.** Configure the activation shortcut, palette position (center / top / bottom), theme (system / light / dark), maximum results per group, favicon display, and which search sources are enabled. Settings sync via your browser account.
+- **Popup fallback.** On pages where content scripts cannot run (`chrome://`, `about:`, the Chrome Web Store), the toolbar icon opens a popup with the same search.
 
 ## Keyboard shortcut
 
@@ -43,15 +43,19 @@ See [docs/developer-guide.md](docs/developer-guide.md) for the full development 
 
 ## Privacy
 
-Everything runs on-device: no telemetry, no analytics, and no data ever leaves your browser. See [PRIVACY.md](PRIVACY.md) for the full policy.
+Everything runs on-device: no telemetry or analytics, and no data ever leaves your browser. See [PRIVACY.md](PRIVACY.md) for the full policy.
 
 ## Tech stack
 
-- [WXT](https://wxt.dev/) — cross-browser extension framework
+- [WXT](https://wxt.dev/) (cross-browser extension framework)
 - React 19 + TypeScript (strict)
-- [Fuse.js](https://www.fusejs.io/) — fuzzy search
+- [Fuse.js](https://www.fusejs.io/) (fuzzy search)
 - Vitest (unit tests) + Playwright (end-to-end tests)
+
+## Contributing
+
+Bug reports, feature requests, and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the development setup and the checks a PR must pass. AI-assisted contributions are fine with disclosure (see [AI_CONTRIBUTIONS.md](AI_CONTRIBUTIONS.md)). The project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). Report security issues privately as described in [SECURITY.md](SECURITY.md), not in the issue tracker.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

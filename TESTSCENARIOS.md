@@ -1,4 +1,4 @@
-# TESTSCENARIOS.md — SlashMeBaby QA Test Scenarios
+# TESTSCENARIOS.md: SlashMeBaby QA Test Scenarios
 
 Last updated: 2026-07-07
 

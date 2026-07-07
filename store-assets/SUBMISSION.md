@@ -1,27 +1,26 @@
-# Chrome Web Store Submission Checklist — SlashMeBaby
+# Chrome Web Store Submission Checklist (SlashMeBaby)
 
 Human steps that cannot be automated. Work top to bottom; everything you need to paste into the dashboard lives in [listing.md](listing.md).
 
 ## 1. Account prerequisites
 
 - [ ] Create a [Chrome Web Store developer account](https://chrome.google.com/webstore/devconsole) and pay the one-time **$5 registration fee**.
-- [ ] Verify the publisher contact email in the dashboard (Account tab). Unverified emails block publishing.
-- [ ] Enable **two-factor authentication** on the Google account — required for CWS developer accounts.
+- [ ] Verify the publisher contact email, **canartuc@gmail.com**, in the dashboard (Account tab). Unverified emails block publishing.
+- [ ] Enable **two-factor authentication** on the Google account. CWS developer accounts require it.
 - [ ] Complete the **EU Digital Services Act (DSA) trader/non-trader declaration** in the Account tab. If you publish as an individual hobbyist with no revenue, declare non-trader; if you monetize, you must declare trader and provide contact details that will be shown publicly in the EU. Publishing to EU users is blocked until this is answered.
 
 ## 2. Privacy policy hosting
 
-- [ ] The Privacy tab requires a **public URL** for the privacy policy. The GitHub repo is currently **private**, so a raw github.com link will 404 for reviewers. Pick one:
-  - Make the repo public (PRIVACY.md then works at `https://github.com/canartuc/slashmebaby/blob/main/PRIVACY.md`), or
-  - Publish PRIVACY.md via **GitHub Pages** (repo Settings → Pages; works even for a private repo on paid plans, and always if the repo is public), or
-  - Host it anywhere else public (personal site, Gist set to public, etc.).
-- [ ] Paste the final URL into the dashboard's **Privacy → Privacy policy** field.
+- [x] The Privacy tab requires a **public URL** for the privacy policy. Done. The repo is public, so the policy is live at:
+  `https://github.com/canartuc/slashmebaby/blob/main/PRIVACY.md`
+- [ ] Paste that URL into the dashboard's **Privacy → Privacy policy** field.
 
 ## 3. Package and listing
 
 - [ ] Build the store zip: `npm run pack` (output in `.output/`).
 - [ ] Upload the zip in the dashboard (Package tab).
 - [ ] Fill the Store Listing tab from [listing.md](listing.md): name, short + detailed description, category (Productivity → Tools), language (English).
+- [ ] Use the public repo URL `https://github.com/canartuc/slashmebaby` as the listing's **homepage** and **support** links.
 - [ ] Upload screenshots from `store-assets/screenshots/` (1280×800 or 640×400 PNG/JPEG; at least one, up to five). Capture the palette on a real page, the action-only `>` mode, and the settings page.
 - [ ] Fill the Privacy tab from listing.md: single-purpose statement, per-permission justifications, data-usage answers, remote-code answer, privacy policy URL.
 

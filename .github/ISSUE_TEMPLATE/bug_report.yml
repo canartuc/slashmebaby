@@ -1,0 +1,72 @@
+name: Bug report
+description: Something in SlashMeBaby is broken or behaving unexpectedly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. If this is an exploitable security bug, do **not** file it here; see [SECURITY.md](https://github.com/canartuc/slashmebaby/blob/main/SECURITY.md) for private reporting.
+
+        If an AI tool drafted this report, reproduce the bug yourself before filing (see [AI_CONTRIBUTIONS.md](https://github.com/canartuc/slashmebaby/blob/main/AI_CONTRIBUTIONS.md)).
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      description: The browser you saw the bug in.
+      placeholder: "e.g. Chrome 138.0.7204.50, Firefox 140"
+    validations:
+      required: true
+  - type: input
+    id: extension-version
+    attributes:
+      label: Extension version
+      description: Shown at chrome://extensions (or about:addons), or the git commit if you built from source.
+      placeholder: "e.g. 1.0.0"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps, starting from a fresh page. Include the URL of the page if the bug only happens there.
+      placeholder: |
+        1. Open https://example.com
+        2. Press Ctrl+Shift+Space
+        3. Type ">close"
+        4. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened.
+    validations:
+      required: true
+  - type: dropdown
+    id: other-extensions
+    attributes:
+      label: Reproducible with other extensions disabled?
+      description: Other extensions (ad blockers, keyboard managers) often intercept the same keystrokes. Try disabling them and reproducing.
+      options:
+        - "Yes, happens with all other extensions disabled"
+        - "No, only happens with other extensions enabled"
+        - "Haven't tried"
+    validations:
+      required: true
+  - type: textarea
+    id: console-errors
+    attributes:
+      label: Console errors
+      description: |
+        Any errors from the page console (F12 → Console) or the service worker console (chrome://extensions → SlashMeBaby → "service worker"). Leave empty if none.
+      render: text
+    validations:
+      required: false

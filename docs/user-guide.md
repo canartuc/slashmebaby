@@ -2,7 +2,7 @@
 
 ## What is SlashMeBaby?
 
-SlashMeBaby is a command palette for your browser. It lets you search open tabs, bookmarks, and browsing history, and run browser actions -- all from a single keyboard shortcut. Think Spotlight for macOS or the VS Code command palette, but for your browser.
+SlashMeBaby is a command palette for your browser. It lets you search open tabs, bookmarks, and browsing history, and run browser actions, all from a single keyboard shortcut. It works like Spotlight on macOS or the VS Code command palette, but inside your browser.
 
 ## Installation
 
@@ -26,10 +26,10 @@ See the [Developer Guide](./developer-guide.md) for instructions on loading the 
 
 When you install SlashMeBaby for the first time, an onboarding wizard opens automatically. It guides you through:
 
-1. **Choose your shortcut** -- Pick the keyboard shortcut you prefer to open the command bar.
-2. **Try it out** -- A short demo of how your chosen shortcut opens the command bar (press Next to continue; the shortcut works on regular web pages once you finish).
-3. **Navigate results** -- Learn the keyboard shortcuts for navigating the command bar.
-4. **You are ready** -- Pro tips and a link to settings.
+1. **Choose your shortcut.** Pick the keyboard shortcut you prefer to open the command bar.
+2. **Try it out.** A short demo of how your chosen shortcut opens the command bar (press Next to continue; the shortcut works on regular web pages once you finish).
+3. **Navigate results.** Learn the keyboard shortcuts for navigating the command bar.
+4. **You are ready.** Pro tips and a link to settings.
 
 After completing onboarding, you can start using SlashMeBaby on any web page.
 
@@ -47,7 +47,7 @@ Search across your entire bookmark collection. Results show the bookmark title a
 
 ### History Search
 
-Search the last 1,000 items from your browsing history. Results show the page title and URL. In the toolbar popup, history results are additionally ranked by recency (recently visited pages score higher).
+Search the last 1,000 items from your browsing history. Results show the page title and URL. In the toolbar popup, history results are also ranked by recency (recently visited pages score higher).
 
 ### Browser Actions
 
@@ -71,7 +71,7 @@ SlashMeBaby includes built-in browser actions:
 
 ### Action Prefix Mode
 
-Type `>` as the first character in the search bar to filter results to actions only. This hides tabs, bookmarks, and history results, making it faster to find and execute browser actions.
+Type `>` as the first character in the search bar to filter results to actions only. This hides tabs, bookmarks, and history results, so browser actions are faster to find and execute.
 
 For example, type `>close` to quickly find the Close Tab, Close Other Tabs, and Close Duplicate Tabs actions.
 
@@ -141,4 +141,4 @@ Yes. SlashMeBaby supports Firefox via the Firefox Add-ons store. The extension u
 
 ### Why does the command bar look different from the host page?
 
-SlashMeBaby renders inside a Shadow DOM, which isolates its styles from the host page. This ensures the command bar always looks consistent regardless of the website's CSS.
+SlashMeBaby renders inside a Shadow DOM, which isolates its styles from the host page. The command bar keeps the same look regardless of the website's CSS.

@@ -1,4 +1,4 @@
-# ARCHITECTURE.md — SlashMeBaby Technical Architecture
+# ARCHITECTURE.md: SlashMeBaby Technical Architecture
 
 Last updated: 2026-03-14
 
@@ -177,7 +177,7 @@ class ActionRegistry {
 
 ### 2.5 SearchEngine
 
-**Responsibility:** Orchestrates Fuse.js fuzzy search across all data sources. Applies recency-weighted scoring. Groups and sorts results. Returns a `SearchResponse` suitable for the UI.
+**Responsibility:** Runs Fuse.js fuzzy search across all data sources. Applies recency-weighted scoring. Groups and sorts results. Returns a `SearchResponse` suitable for the UI.
 
 **File path:** `src/lib/search.ts`
 
@@ -211,7 +211,7 @@ class SearchEngine {
 
 **File path:** `src/entrypoints/background/index.ts`
 
-**Public methods:** Not exposed directly — registers `browser.runtime.onMessage` listener on service worker startup.
+**Public methods:** Not exposed directly. Registers `browser.runtime.onMessage` listener on service worker startup.
 
 **Message handling:**
 - `SEARCH` → `SearchEngine.search()`
@@ -458,7 +458,7 @@ function groupResults(
 
 ### Why Open Mode
 
-`mode: 'open'` allows browser DevTools to inspect the Shadow DOM during development. There is no security-sensitive content inside the overlay (no tokens, no PII) — everything rendered is already available in the browser UI. Closed mode would provide no security benefit while making debugging significantly harder.
+`mode: 'open'` allows browser DevTools to inspect the Shadow DOM during development. There is no security-sensitive content inside the overlay (no tokens, no PII). Everything rendered is already available in the browser UI. Closed mode would provide no security benefit while making debugging harder.
 
 ### Full Unmount on Close
 
@@ -563,8 +563,8 @@ WXT enforces strict CSP in MV3:
 }
 ```
 
-- No `unsafe-eval` — Fuse.js does not require it
-- No `unsafe-inline` — all styles are loaded from extension bundle, not inline strings (with the exception of dynamically injected CSS into Shadow DOM which is technically inline but within the extension's own controlled context)
+- No `unsafe-eval` (Fuse.js does not require it)
+- No `unsafe-inline`. All styles are loaded from extension bundle, not inline strings (with the exception of dynamically injected CSS into Shadow DOM which is technically inline but within the extension's own controlled context)
 - No external script sources
 
 ### Permissions
@@ -573,13 +573,13 @@ Minimal permissions, each justified:
 
 | Permission | Justification | Could Be Reduced? |
 |-----------|--------------|-------------------|
-| `tabs` | Read tab titles, URLs, favicons; execute tab actions (close, pin, mute) | No — core feature |
-| `bookmarks` | Search bookmark tree | No — core feature |
-| `history` | Search browsing history | No — core feature |
-| `storage` | Persist user settings and onboarding state | No — required for personalization |
-| `commands` | Register keyboard shortcut | No — activation mechanism |
-| `activeTab` | Execute actions on the currently active tab | No — required for tab actions |
-| `sessions` | Access `chrome.sessions.getRecentlyClosed()` and `chrome.sessions.restore()` | No — required for Recently Closed feature |
+| `tabs` | Read tab titles, URLs, favicons; execute tab actions (close, pin, mute) | No (core feature) |
+| `bookmarks` | Search bookmark tree | No (core feature) |
+| `history` | Search browsing history | No (core feature) |
+| `storage` | Persist user settings and onboarding state | No (required for personalization) |
+| `commands` | Register keyboard shortcut | No (activation mechanism) |
+| `activeTab` | Execute actions on the currently active tab | No (required for tab actions) |
+| `sessions` | Access `chrome.sessions.getRecentlyClosed()` and `chrome.sessions.restore()` | No (required for Recently Closed feature) |
 
 No host permissions are requested beyond the content script match pattern (`<all_urls>` limited to `http://` and `https://`).
 

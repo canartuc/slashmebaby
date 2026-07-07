@@ -1,4 +1,4 @@
-# DESIGN.md — SlashMeBaby Design Language: Luminal
+# SlashMeBaby Design Language: Luminal
 
 Last updated: 2026-03-14
 
@@ -6,13 +6,13 @@ Last updated: 2026-03-14
 
 ## 1. Philosophy
 
-Luminal is the design language for SlashMeBaby. The name evokes light breaking through: a focused beam of functionality that pierces visual noise and surfaces what the user actually needs. Every design decision in Luminal is subordinate to speed of comprehension — the user must process results in milliseconds, not seconds. Luminal refuses decoration for its own sake; every pixel earns its place by guiding the eye or communicating state. The language is dark-first because command palettes live in active browsing sessions where a bright overlay creates jarring contrast — dark is comfortable and focused. Light mode is a first-class citizen, not an afterthought, designed to be equally polished for users in bright environments.
+Luminal is the design language for SlashMeBaby. The name refers to light: a focused beam that cuts through visual noise and shows what the user needs. Every design decision is subordinate to speed of comprehension. The user must process results in milliseconds, not seconds. Decoration appears only where it guides the eye or communicates state. The language is dark-first because command palettes open over active browsing sessions, where a bright overlay creates jarring contrast; dark is comfortable and focused. Light mode gets the same polish, designed for users in bright environments.
 
 ---
 
 ## 2. Color System
 
-### Design Tokens — Reference
+### Design Token Reference
 
 All colors are defined as CSS custom properties inside the Shadow DOM. The host page's CSS cannot override them.
 
@@ -85,7 +85,7 @@ font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
              Oxygen, Ubuntu, sans-serif;
 ```
 
-The system font stack ensures the command bar feels native on every OS. No web fonts are loaded — this eliminates font-loading latency and avoids privacy concerns from external font requests.
+With the system font stack, the command bar feels native on every OS. No web fonts are loaded; this eliminates font-loading latency and avoids privacy concerns from external font requests.
 
 ### Type Scale
 
@@ -170,7 +170,7 @@ All interactive animations use the same easing curve:
 --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 ```
 
-This is a fast-out, slow-in curve — the overlay springs open quickly and settles softly. It reads as responsive without feeling mechanical.
+This is a fast-out, slow-in curve: the overlay springs open quickly and settles softly. It reads as responsive without feeling mechanical.
 
 ### Duration Tokens
 
@@ -232,7 +232,7 @@ When results appear after a search, each result group staggers in with a 20ms de
 .result-group:nth-child(4) { animation-delay: 60ms; }
 ```
 
-The stagger is subtle — the goal is polish, not distraction. Total time for all groups to appear: 60ms + 150ms base = 210ms max, well within the 50ms overlay appearance target since the stagger starts after the container is already visible.
+The stagger is subtle; it adds polish without pulling attention. Total time for all groups to appear: 60ms + 150ms base = 210ms max, well within the 50ms overlay appearance target since the stagger starts after the container is already visible.
 
 ### Reduced Motion
 
@@ -260,8 +260,8 @@ The search input is the focal point of the command bar.
 **Layout:** Full-width. Icon (16×16 magnifying glass monoline SVG) to the left of the text input, both centered vertically within the row. Keyboard hint badge (e.g., "Esc") floats to the right.
 
 **Sizing:**
-- Height: 48px (fixed — ensures finger-friendly target even though this is keyboard-driven)
-- Padding: `var(--space-3) var(--space-4)` — 12px top/bottom, 16px left/right
+- Height: 48px (fixed; keeps the target finger-friendly even though the bar is keyboard-driven)
+- Padding: `var(--space-3) var(--space-4)` (12px top/bottom, 16px left/right)
 - Border-radius: `var(--radius-md)` (8px)
 
 **Colors:**
@@ -276,7 +276,7 @@ The search input is the focal point of the command bar.
 - No box-shadow on input itself (the container already has the overlay shadow)
 - The input is always auto-focused on overlay open
 
-**Autocomplete:** `autocomplete="off"`, `spellcheck="false"`, `autocorrect="off"`, `autocapitalize="off"` — the input is for navigation, not text entry.
+**Autocomplete:** `autocomplete="off"`, `spellcheck="false"`, `autocorrect="off"`, `autocapitalize="off"`. The input is for navigation, not text entry.
 
 ### 7.2 ResultItem
 
@@ -286,7 +286,7 @@ Each result row renders a single searchable item.
 
 **Sizing:**
 - Min-height: 40px
-- Padding: `var(--space-2) var(--space-4)` — 8px top/bottom, 16px left/right
+- Padding: `var(--space-2) var(--space-4)` (8px top/bottom, 16px left/right)
 - Icon: 16×16px, `flex-shrink: 0`
 - Gap between icon and text: `var(--space-2)` (8px)
 
@@ -305,7 +305,7 @@ Each result row renders a single searchable item.
 
 Section labels that separate result groups.
 
-**Layout:** Full-width row. Text left-aligned. No interactive state — purely presentational.
+**Layout:** Full-width row. Text left-aligned. No interactive state; purely presentational.
 
 **Sizing:**
 - Padding: `var(--space-2) var(--space-4)`
@@ -321,9 +321,9 @@ The translucent overlay behind the command bar container.
 
 **Layout:** Fixed-position full-viewport div, `z-index` just below the command bar container. Pointer events pass through to close the overlay on click.
 
-**Color:** `var(--color-backdrop)` — `rgba(0,0,0,0.50)` dark, `rgba(0,0,0,0.30)` light.
+**Color:** `var(--color-backdrop)` (`rgba(0,0,0,0.50)` dark, `rgba(0,0,0,0.30)` light).
 
-**Animation:** Opacity 0→1 in `var(--duration-base)`, matching the container open animation. No blur effect (performance) — the dark semi-transparent layer creates sufficient visual separation.
+**Animation:** Opacity 0→1 in `var(--duration-base)`, matching the container open animation. No blur effect (performance); the dark semi-transparent layer creates sufficient visual separation.
 
 ---
 
@@ -389,9 +389,9 @@ State is never communicated by color alone. The selected item uses both a backgr
 - Style: monoline SVG, 1.5px stroke, rounded linecap/linejoin
 - Size: 16×16px viewbox
 - Color: `var(--color-accent)` for active actions, `var(--color-text-secondary)` for neutral actions
-- No fills — stroke-only for visual consistency with system UI icon conventions
+- No fills; stroke-only for visual consistency with system UI icon conventions
 - Icons required: Tab (rectangle), Bookmark (ribbon), History (clock), Close (X), Pin, Mute, Duplicate, Window, Reload, New Tab, Restore, URL/Globe, Settings (gear)
 
 ### No External Icon Libraries
 
-All icons are inline SVG strings embedded in the component source. This eliminates additional network requests, avoids icon library version drift, and ensures icons are always available even on pages with restrictive Content Security Policies.
+All icons are inline SVG strings embedded in the component source. This avoids extra network requests and icon library version drift, and the icons stay available even on pages with restrictive Content Security Policies.
