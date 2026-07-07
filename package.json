@@ -1,6 +1,6 @@
 {
   "name": "slashmebaby",
-  "description": "Arc & Zen-style command palette for any browser.",
+  "description": "A keyboard-driven command palette for your browser.",
   "private": true,
   "version": "1.0.0",
   "engines": {

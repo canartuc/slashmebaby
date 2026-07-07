@@ -7,6 +7,17 @@ interface ActionDefinition {
   description?: string;
 }
 
+/**
+ * Snapshot of the active tab's state, used to make action labels and
+ * visibility contextual (F08/F09): Pin vs Unpin, Mute vs Unmute, and
+ * hiding Mute entirely for a silent, unmuted tab.
+ */
+export interface TabContext {
+  pinned: boolean;
+  audible: boolean;
+  muted: boolean;
+}
+
 const ACTION_DEFINITIONS: ActionDefinition[] = [
   { id: 'close-tab', title: 'Close Tab', description: 'Close the current tab' },
   { id: 'close-other-tabs', title: 'Close Other Tabs', description: 'Close all tabs except the current one' },
@@ -16,7 +27,7 @@ const ACTION_DEFINITIONS: ActionDefinition[] = [
   { id: 'move-to-window', title: 'Move to New Window', description: 'Move the current tab to a new window' },
   { id: 'reload-tab', title: 'Reload Tab', description: 'Reload the current tab' },
   { id: 'new-tab', title: 'New Tab', description: 'Open a new tab' },
-  { id: 'recently-closed', title: 'Recently Closed', description: 'Show recently closed tabs' },
+  { id: 'recently-closed', title: 'Recently Closed', description: 'Restore the most recently closed tab (or undo the last palette tab action)' },
   { id: 'close-duplicates', title: 'Close Duplicate Tabs', description: 'Close duplicate tabs with the same URL' },
   { id: 'sort-by-domain', title: 'Sort Tabs by Domain', description: 'Sort all tabs alphabetically by domain' },
   { id: 'settings', title: 'Open Settings', description: 'Open extension settings' },
@@ -29,15 +40,74 @@ type UndoEntry =
   | { type: 'close-tab'; tabId: number }
   | { type: 'none' };
 
+/**
+ * Converts the chrome.runtime.lastError state into an ExecuteActionResponse.
+ * MUST be called synchronously inside a chrome.* callback — that is the only
+ * window in which Chrome exposes lastError, and reading it there also keeps
+ * Chrome from logging "Unchecked runtime.lastError". Callback-style APIs
+ * never throw on failure, so resolving `{ success: true }` without this check
+ * silently swallows every real error.
+ */
+function callbackOutcome(): ExecuteActionResponse {
+  const lastError = chrome.runtime.lastError;
+  if (lastError) {
+    return { success: false, error: lastError.message ?? 'Unknown browser error' };
+  }
+  return { success: true };
+}
+
 export class ActionRegistry {
   private lastUndo: UndoEntry = { type: 'none' };
 
-  getItems(): SearchableItem[] {
-    return ACTION_DEFINITIONS.map((action): SearchableItem => ({
-      id: `action-${action.id}`,
-      title: action.title,
-      category: 'actions',
-    }));
+  /**
+   * Returns the searchable action list. When a tab context is provided
+   * (F09), labels flip to match the tab's state (Pin↔Unpin, Mute↔Unmute)
+   * and the mute action is hidden for a silent, unmuted tab. Without a
+   * context, all 12 actions are returned with their default labels.
+   */
+  getItems(context?: TabContext): SearchableItem[] {
+    const items: SearchableItem[] = [];
+    for (const action of ACTION_DEFINITIONS) {
+      let title = action.title;
+      if (context) {
+        if (action.id === 'pin-tab') {
+          title = context.pinned ? 'Unpin Tab' : 'Pin Tab';
+        } else if (action.id === 'mute-tab') {
+          // F09: only offer the mute toggle when it makes sense —
+          // the tab is making sound, or it's already muted (offer Unmute).
+          if (!context.audible && !context.muted) continue;
+          title = context.muted ? 'Unmute Tab' : 'Mute Tab';
+        }
+      }
+      items.push({
+        id: `action-${action.id}`,
+        title,
+        category: 'actions',
+      });
+    }
+    return items;
+  }
+
+  /**
+   * Returns up to `limit` actions for the smart-suggestions empty state
+   * (F08), prioritized by relevance to the active tab: Unmute/Mute when the
+   * tab is muted/audible, then Unpin/Pin, then general actions.
+   */
+  getContextualItems(context?: TabContext, limit = 2): SearchableItem[] {
+    const prioritizedIds: string[] = [];
+    if (context && (context.audible || context.muted)) {
+      prioritizedIds.push('mute-tab');
+    }
+    prioritizedIds.push('pin-tab', 'new-tab', 'recently-closed');
+
+    const byId = new Map(this.getItems(context).map((item) => [item.id, item]));
+    const out: SearchableItem[] = [];
+    for (const id of prioritizedIds) {
+      const item = byId.get(`action-${id}`);
+      if (item) out.push(item);
+      if (out.length >= limit) break;
+    }
+    return out;
   }
 
   async execute(actionId: string, targetTabId?: number): Promise<ExecuteActionResponse> {
@@ -108,10 +178,13 @@ export class ActionRegistry {
   }
 
   private closeTab(tabId: number): Promise<ExecuteActionResponse> {
-    this.lastUndo = { type: 'restore-tabs', count: 1 };
     return new Promise((resolve) => {
       chrome.tabs.remove(tabId, () => {
-        resolve({ success: true });
+        const outcome = callbackOutcome();
+        if (outcome.success) {
+          this.lastUndo = { type: 'restore-tabs', count: 1 };
+        }
+        resolve(outcome);
       });
     });
   }
@@ -119,6 +192,12 @@ export class ActionRegistry {
   private closeOtherTabs(targetTabId: number): Promise<ExecuteActionResponse> {
     return new Promise((resolve) => {
       chrome.tabs.query({ currentWindow: true }, (tabs) => {
+        const queryOutcome = callbackOutcome();
+        if (!queryOutcome.success) {
+          resolve(queryOutcome);
+          return;
+        }
+
         const tabsToClose: number[] = [];
         for (const tab of tabs) {
           if (tab.id !== undefined && tab.id !== targetTabId && !tab.pinned) {
@@ -126,38 +205,57 @@ export class ActionRegistry {
           }
         }
 
-        this.lastUndo = { type: 'restore-tabs', count: tabsToClose.length };
-
         if (tabsToClose.length === 0) {
+          this.lastUndo = { type: 'restore-tabs', count: 0 };
           resolve({ success: true });
           return;
         }
 
         chrome.tabs.remove(tabsToClose, () => {
-          resolve({ success: true });
+          const outcome = callbackOutcome();
+          if (outcome.success) {
+            this.lastUndo = { type: 'restore-tabs', count: tabsToClose.length };
+          }
+          resolve(outcome);
         });
       });
     });
   }
 
   private pinTab(tabId: number): Promise<ExecuteActionResponse> {
-    this.lastUndo = { type: 'toggle-pin', tabId };
     return new Promise((resolve) => {
       chrome.tabs.get(tabId, (tab) => {
+        const getOutcome = callbackOutcome();
+        if (!getOutcome.success || !tab) {
+          resolve(getOutcome.success ? { success: false, error: `Tab ${tabId} not found` } : getOutcome);
+          return;
+        }
         chrome.tabs.update(tabId, { pinned: !tab.pinned }, () => {
-          resolve({ success: true });
+          const outcome = callbackOutcome();
+          if (outcome.success) {
+            this.lastUndo = { type: 'toggle-pin', tabId };
+          }
+          resolve(outcome);
         });
       });
     });
   }
 
   private muteTab(tabId: number): Promise<ExecuteActionResponse> {
-    this.lastUndo = { type: 'toggle-mute', tabId };
     return new Promise((resolve) => {
       chrome.tabs.get(tabId, (tab) => {
+        const getOutcome = callbackOutcome();
+        if (!getOutcome.success || !tab) {
+          resolve(getOutcome.success ? { success: false, error: `Tab ${tabId} not found` } : getOutcome);
+          return;
+        }
         const currentlyMuted = tab.mutedInfo?.muted ?? false;
         chrome.tabs.update(tabId, { muted: !currentlyMuted }, () => {
-          resolve({ success: true });
+          const outcome = callbackOutcome();
+          if (outcome.success) {
+            this.lastUndo = { type: 'toggle-mute', tabId };
+          }
+          resolve(outcome);
         });
       });
     });
@@ -166,10 +264,11 @@ export class ActionRegistry {
   private duplicateTab(tabId: number): Promise<ExecuteActionResponse> {
     return new Promise((resolve) => {
       chrome.tabs.duplicate(tabId, (newTab) => {
-        if (newTab?.id) {
+        const outcome = callbackOutcome();
+        if (outcome.success && newTab?.id) {
           this.lastUndo = { type: 'close-tab', tabId: newTab.id };
         }
-        resolve({ success: true });
+        resolve(outcome);
       });
     });
   }
@@ -177,7 +276,7 @@ export class ActionRegistry {
   private moveToWindow(tabId: number): Promise<ExecuteActionResponse> {
     return new Promise((resolve) => {
       chrome.windows.create({ tabId }, () => {
-        resolve({ success: true });
+        resolve(callbackOutcome());
       });
     });
   }
@@ -185,7 +284,7 @@ export class ActionRegistry {
   private reloadTab(tabId: number): Promise<ExecuteActionResponse> {
     return new Promise((resolve) => {
       chrome.tabs.reload(tabId, {}, () => {
-        resolve({ success: true });
+        resolve(callbackOutcome());
       });
     });
   }
@@ -193,10 +292,11 @@ export class ActionRegistry {
   private newTab(): Promise<ExecuteActionResponse> {
     return new Promise((resolve) => {
       chrome.tabs.create({}, (tab) => {
-        if (tab?.id) {
+        const outcome = callbackOutcome();
+        if (outcome.success && tab?.id) {
           this.lastUndo = { type: 'close-tab', tabId: tab.id };
         }
-        resolve({ success: true });
+        resolve(outcome);
       });
     });
   }
@@ -204,6 +304,12 @@ export class ActionRegistry {
   private closeDuplicates(): Promise<ExecuteActionResponse> {
     return new Promise((resolve) => {
       chrome.tabs.query({}, (tabs) => {
+        const queryOutcome = callbackOutcome();
+        if (!queryOutcome.success) {
+          resolve(queryOutcome);
+          return;
+        }
+
         const seen = new Map<string, number>();
         const toClose: number[] = [];
 
@@ -216,15 +322,18 @@ export class ActionRegistry {
           }
         }
 
-        this.lastUndo = { type: 'restore-tabs', count: toClose.length };
-
         if (toClose.length === 0) {
+          this.lastUndo = { type: 'restore-tabs', count: 0 };
           resolve({ success: true });
           return;
         }
 
         chrome.tabs.remove(toClose, () => {
-          resolve({ success: true });
+          const outcome = callbackOutcome();
+          if (outcome.success) {
+            this.lastUndo = { type: 'restore-tabs', count: toClose.length };
+          }
+          resolve(outcome);
         });
       });
     });
@@ -233,6 +342,12 @@ export class ActionRegistry {
   private sortByDomain(): Promise<ExecuteActionResponse> {
     return new Promise((resolve) => {
       chrome.tabs.query({ currentWindow: true }, (tabs) => {
+        const queryOutcome = callbackOutcome();
+        if (!queryOutcome.success) {
+          resolve(queryOutcome);
+          return;
+        }
+
         const getHostname = (url?: string) => {
           try {
             return new URL(url ?? '').hostname;
@@ -248,18 +363,20 @@ export class ActionRegistry {
         });
 
         // Move each tab to its sorted position
-        const movePromises: Promise<void>[] = [];
+        const movePromises: Promise<ExecuteActionResponse>[] = [];
         let index = 0;
         for (const tab of sorted) {
           if (tab.id === undefined) continue;
           const tabId = tab.id;
           const targetIndex = index++;
-          movePromises.push(new Promise<void>((res) => {
-            chrome.tabs.move(tabId, { index: targetIndex }, () => res());
+          movePromises.push(new Promise<ExecuteActionResponse>((res) => {
+            chrome.tabs.move(tabId, { index: targetIndex }, () => res(callbackOutcome()));
           }));
         }
 
-        Promise.all(movePromises).then(() => resolve({ success: true }));
+        Promise.all(movePromises).then((outcomes) => {
+          resolve(outcomes.find((o) => !o.success) ?? { success: true });
+        });
       });
     });
   }

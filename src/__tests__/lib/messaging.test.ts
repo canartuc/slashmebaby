@@ -527,6 +527,11 @@ describe('isGetFaviconRequest', () => {
     expect(isGetFaviconRequest({ type: 'GET_FAVICON', payload: {} })).toBe(false);
   });
 
+  it('returns false when payload is not an object', () => {
+    expect(isGetFaviconRequest({ type: 'GET_FAVICON' })).toBe(false);
+    expect(isGetFaviconRequest({ type: 'GET_FAVICON', payload: 'https://a.com' })).toBe(false);
+  });
+
   it('returns false for a non-string url', () => {
     expect(isGetFaviconRequest({ type: 'GET_FAVICON', payload: { url: 123 } })).toBe(false);
   });
@@ -543,7 +548,78 @@ describe('isGetFaviconRequest', () => {
     ).toBe(false);
   });
 
+  it('returns false for a malformed url that new URL() cannot parse', () => {
+    expect(
+      isGetFaviconRequest({ type: 'GET_FAVICON', payload: { url: 'not a parseable url' } })
+    ).toBe(false);
+  });
+
   it('returns false for null', () => {
     expect(isGetFaviconRequest(null)).toBe(false);
+  });
+});
+
+// ─── Overlay data guards (GET_HISTORY_ITEMS / GET_ACTIONS) ─────────────────
+
+import {
+  isGetHistoryItemsRequest,
+  isGetActionsRequest,
+} from '../../lib/messaging';
+import type {
+  GetHistoryItemsRequest,
+  GetActionsRequest,
+} from '../../lib/messaging';
+
+describe('isGetHistoryItemsRequest', () => {
+  it('returns true for a valid GetHistoryItemsRequest', () => {
+    const msg: GetHistoryItemsRequest = { type: 'GET_HISTORY_ITEMS' };
+    expect(isGetHistoryItemsRequest(msg)).toBe(true);
+  });
+
+  it('returns false for a different type', () => {
+    expect(isGetHistoryItemsRequest({ type: 'GET_ALL_TABS' })).toBe(false);
+  });
+
+  it('returns false for null', () => {
+    expect(isGetHistoryItemsRequest(null)).toBe(false);
+  });
+
+  it('returns false for undefined', () => {
+    expect(isGetHistoryItemsRequest(undefined)).toBe(false);
+  });
+
+  it('returns false for empty object', () => {
+    expect(isGetHistoryItemsRequest({})).toBe(false);
+  });
+
+  it('returns false for a string', () => {
+    expect(isGetHistoryItemsRequest('GET_HISTORY_ITEMS')).toBe(false);
+  });
+});
+
+describe('isGetActionsRequest', () => {
+  it('returns true for a valid GetActionsRequest', () => {
+    const msg: GetActionsRequest = { type: 'GET_ACTIONS' };
+    expect(isGetActionsRequest(msg)).toBe(true);
+  });
+
+  it('returns false for a different type', () => {
+    expect(isGetActionsRequest({ type: 'EXECUTE_ACTION' })).toBe(false);
+  });
+
+  it('returns false for null', () => {
+    expect(isGetActionsRequest(null)).toBe(false);
+  });
+
+  it('returns false for undefined', () => {
+    expect(isGetActionsRequest(undefined)).toBe(false);
+  });
+
+  it('returns false for empty object', () => {
+    expect(isGetActionsRequest({})).toBe(false);
+  });
+
+  it('returns false for a string', () => {
+    expect(isGetActionsRequest('GET_ACTIONS')).toBe(false);
   });
 });

@@ -55,7 +55,7 @@ export const Popup: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { settings } = useSettings();
-  const { groups } = useSearch(query);
+  const { groups } = useSearch(query, settings.searchSources);
   const theme = useTheme(settings.theme);
 
   const totalItems = useMemo(() => countTotalItems(groups), [groups]);

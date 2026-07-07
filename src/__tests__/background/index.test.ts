@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createMessageRouter, registerBackgroundListeners } from '../../entrypoints/background/index';
+import backgroundEntrypoint, { createMessageRouter, registerBackgroundListeners } from '../../entrypoints/background/index';
 import type { SearchRequest, SmartSuggestionsRequest, ExecuteActionRequest, GetSettingsRequest } from '../../lib/messaging';
 
 // ─── Chrome stub helpers ───────────────────────────────────────────────────
@@ -203,6 +203,279 @@ describe('createMessageRouter', () => {
         expect(tabGroup.items.length).toBeLessThanOrEqual(3);
       }
     });
+
+    it('returns the 2 most recently added bookmarks (dateAdded desc, not tree order)', async () => {
+      const chromeMock = makeChromeMock();
+      chromeMock.bookmarks.getTree = vi.fn((cb: (results: chrome.bookmarks.BookmarkTreeNode[]) => void) =>
+        cb([
+          {
+            id: 'root',
+            title: 'Root',
+            children: [
+              // Tree order deliberately differs from dateAdded order.
+              { id: 'old', title: 'Oldest', url: 'https://oldest.com', index: 0, dateAdded: 1000, syncing: false },
+              { id: 'new', title: 'Newest', url: 'https://newest.com', index: 1, dateAdded: 5000, syncing: false },
+              { id: 'mid', title: 'Middle', url: 'https://middle.com', index: 2, dateAdded: 3000, syncing: false },
+            ],
+            index: 0,
+            syncing: false,
+          },
+        ])
+      );
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SMART_SUGGESTIONS' }) as {
+        groups: Array<{ category: string; items: Array<{ id: string; title: string }> }>;
+      };
+      const bookmarkGroup = response.groups.find((g) => g.category === 'bookmarks');
+      expect(bookmarkGroup).toBeDefined();
+      expect(bookmarkGroup!.items.map((i) => i.id)).toEqual(['bookmark-new', 'bookmark-mid']);
+    });
+
+    it('suggests contextual actions for the sender tab (Unpin for a pinned tab)', async () => {
+      const router = await createMessageRouter();
+      const sender = {
+        id: 'real-ext-id',
+        tab: makeFakeTab({ id: 7, pinned: true, audible: false, mutedInfo: { muted: false } }),
+      } as chrome.runtime.MessageSender;
+
+      const response = await router({ type: 'SMART_SUGGESTIONS' }, sender) as {
+        groups: Array<{ category: string; items: Array<{ id: string; title: string }> }>;
+      };
+      const actionGroup = response.groups.find((g) => g.category === 'actions');
+      expect(actionGroup).toBeDefined();
+      expect(actionGroup!.items).toHaveLength(2);
+      const pin = actionGroup!.items.find((i) => i.id === 'action-pin-tab');
+      expect(pin).toBeDefined();
+      expect(pin!.title).toBe('Unpin Tab');
+    });
+
+    it('suggests Unmute first when the sender tab is muted', async () => {
+      const router = await createMessageRouter();
+      const sender = {
+        id: 'real-ext-id',
+        tab: makeFakeTab({ id: 7, pinned: false, audible: false, mutedInfo: { muted: true } }),
+      } as chrome.runtime.MessageSender;
+
+      const response = await router({ type: 'SMART_SUGGESTIONS' }, sender) as {
+        groups: Array<{ category: string; items: Array<{ id: string; title: string }> }>;
+      };
+      const actionGroup = response.groups.find((g) => g.category === 'actions');
+      expect(actionGroup!.items[0].id).toBe('action-mute-tab');
+      expect(actionGroup!.items[0].title).toBe('Unmute Tab');
+    });
+
+    it('falls back to the active tab for context when there is no sender tab', async () => {
+      // Default mock: active tab 1 is unpinned and silent → Pin Tab + New Tab.
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SMART_SUGGESTIONS' }) as {
+        groups: Array<{ category: string; items: Array<{ id: string; title: string }> }>;
+      };
+      const actionGroup = response.groups.find((g) => g.category === 'actions');
+      expect(actionGroup).toBeDefined();
+      expect(actionGroup!.items.map((i) => i.id)).toEqual(['action-pin-tab', 'action-new-tab']);
+      expect(actionGroup!.items.map((i) => i.title)).toEqual(['Pin Tab', 'New Tab']);
+    });
+
+    // ── Settings "Search Sources" toggles apply to suggestions too ──────────
+
+    function stubStoredSearchSources(
+      chromeMock: ReturnType<typeof makeChromeMock>,
+      searchSources: { tabs: boolean; bookmarks: boolean; history: boolean }
+    ) {
+      chromeMock.storage.sync.get = vi.fn(
+        (_: string, cb: (result: Record<string, unknown>) => void) =>
+          cb({ settings: { searchSources } })
+      );
+    }
+
+    it('omits the tabs group when searchSources.tabs is toggled off', async () => {
+      const chromeMock = makeChromeMock();
+      stubStoredSearchSources(chromeMock, { tabs: false, bookmarks: true, history: true });
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SMART_SUGGESTIONS' }) as {
+        groups: Array<{ category: string; items: unknown[] }>;
+      };
+      expect(response.groups.find((g) => g.category === 'tabs')).toBeUndefined();
+      expect(response.groups.find((g) => g.category === 'bookmarks')).toBeDefined();
+      expect(response.groups.find((g) => g.category === 'actions')).toBeDefined();
+    });
+
+    it('omits the bookmarks group when searchSources.bookmarks is toggled off', async () => {
+      const chromeMock = makeChromeMock();
+      stubStoredSearchSources(chromeMock, { tabs: true, bookmarks: false, history: true });
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SMART_SUGGESTIONS' }) as {
+        groups: Array<{ category: string; items: unknown[] }>;
+      };
+      expect(response.groups.find((g) => g.category === 'bookmarks')).toBeUndefined();
+      expect(response.groups.find((g) => g.category === 'tabs')).toBeDefined();
+      expect(response.groups.find((g) => g.category === 'actions')).toBeDefined();
+    });
+
+    it('still suggests actions when every search source is toggled off', async () => {
+      const chromeMock = makeChromeMock();
+      stubStoredSearchSources(chromeMock, { tabs: false, bookmarks: false, history: false });
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SMART_SUGGESTIONS' }) as {
+        groups: Array<{ category: string; items: unknown[] }>;
+      };
+      expect(response.groups.find((g) => g.category === 'tabs')).toBeUndefined();
+      expect(response.groups.find((g) => g.category === 'bookmarks')).toBeUndefined();
+      const actionGroup = response.groups.find((g) => g.category === 'actions');
+      expect(actionGroup).toBeDefined();
+      expect(actionGroup!.items.length).toBeGreaterThan(0);
+    });
+
+    // ── Self-referential suggestions (the extension's own pages) ────────────
+
+    it("excludes the extension's own chrome-extension:// pages from tab suggestions", async () => {
+      const chromeMock = makeChromeMock();
+      (chromeMock.runtime as { id?: string }).id = 'fake-ext-id';
+      chromeMock.tabs.query = vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+        const tabs = [
+          makeFakeTab({ id: 1, title: 'SlashMeBaby Settings', url: 'chrome-extension://fake-ext-id/settings.html', lastAccessed: Date.now() }),
+          makeFakeTab({ id: 2, title: 'Tab Two', url: 'https://two.com', lastAccessed: Date.now() - 1000 }),
+          makeFakeTab({ id: 3, title: 'Tab Three', url: 'https://three.com', lastAccessed: Date.now() - 2000 }),
+          makeFakeTab({ id: 4, title: 'Tab Four', url: 'https://four.com', lastAccessed: Date.now() - 3000 }),
+        ];
+        cb?.(tabs);
+        return Promise.resolve(tabs);
+      });
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SMART_SUGGESTIONS' }) as {
+        groups: Array<{ category: string; items: Array<{ id: string; url?: string }> }>;
+      };
+      const tabGroup = response.groups.find((g) => g.category === 'tabs');
+      expect(tabGroup).toBeDefined();
+      // The own-extension page (most recent!) is skipped; the next 3 fill the slots.
+      expect(tabGroup!.items.map((i) => i.id)).toEqual(['tab-2', 'tab-3', 'tab-4']);
+    });
+
+    it("keeps other extensions' pages in tab suggestions (only its own are filtered)", async () => {
+      const chromeMock = makeChromeMock();
+      (chromeMock.runtime as { id?: string }).id = 'fake-ext-id';
+      chromeMock.tabs.query = vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+        const tabs = [
+          makeFakeTab({ id: 1, title: 'Other Extension', url: 'chrome-extension://other-ext-id/page.html', lastAccessed: Date.now() }),
+          makeFakeTab({ id: 2, title: 'Tab Two', url: 'https://two.com', lastAccessed: Date.now() - 1000 }),
+        ];
+        cb?.(tabs);
+        return Promise.resolve(tabs);
+      });
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SMART_SUGGESTIONS' }) as {
+        groups: Array<{ category: string; items: Array<{ id: string }> }>;
+      };
+      const tabGroup = response.groups.find((g) => g.category === 'tabs');
+      expect(tabGroup!.items.map((i) => i.id)).toEqual(['tab-1', 'tab-2']);
+    });
+  });
+
+  describe('SEARCH contextual action labels (F09)', () => {
+    it('labels the pin action "Unpin Tab" when the sender tab is pinned', async () => {
+      const router = await createMessageRouter();
+      const sender = {
+        id: 'real-ext-id',
+        tab: makeFakeTab({ id: 7, pinned: true, audible: false, mutedInfo: { muted: false } }),
+      } as chrome.runtime.MessageSender;
+
+      const response = await router(
+        { type: 'SEARCH', payload: { query: 'pin', sources: [] } },
+        sender
+      ) as { groups: Array<{ category: string; items: Array<{ id: string; title: string }> }> };
+
+      const actionGroup = response.groups.find((g) => g.category === 'actions');
+      expect(actionGroup).toBeDefined();
+      const pin = actionGroup!.items.find((i) => i.id === 'action-pin-tab');
+      expect(pin).toBeDefined();
+      expect(pin!.title).toBe('Unpin Tab');
+    });
+
+    it('omits the mute action when the sender tab is silent and unmuted', async () => {
+      const router = await createMessageRouter();
+      const sender = {
+        id: 'real-ext-id',
+        tab: makeFakeTab({ id: 7, pinned: false, audible: false, mutedInfo: { muted: false } }),
+      } as chrome.runtime.MessageSender;
+
+      const response = await router(
+        { type: 'SEARCH', payload: { query: 'mute', sources: [] } },
+        sender
+      ) as { groups: Array<{ category: string; items: Array<{ id: string }> }> };
+
+      for (const group of response.groups) {
+        expect(group.items.find((i) => i.id === 'action-mute-tab')).toBeUndefined();
+      }
+    });
+
+    it('uses default action labels when no tab context can be resolved', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          // Callback style (cache init) succeeds; promise style (the
+          // active-tab context lookup) rejects, e.g. no window focused.
+          query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+            if (cb) { cb([]); return; }
+            return Promise.reject(new Error('no active tab'));
+          }),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router(
+        { type: 'SEARCH', payload: { query: 'mute', sources: [] } }
+      ) as { groups: Array<{ category: string; items: Array<{ id: string; title: string }> }> };
+
+      // Without a context the mute action stays visible with its default label.
+      const actionGroup = response.groups.find((g) => g.category === 'actions');
+      expect(actionGroup).toBeDefined();
+      const mute = actionGroup!.items.find((i) => i.id === 'action-mute-tab');
+      expect(mute).toBeDefined();
+      expect(mute!.title).toBe('Mute Tab');
+    });
+
+    it('rebuilds action labels when the tab context changes between searches', async () => {
+      const router = await createMessageRouter();
+      const pinnedSender = {
+        id: 'real-ext-id',
+        tab: makeFakeTab({ id: 7, pinned: true }),
+      } as chrome.runtime.MessageSender;
+      const unpinnedSender = {
+        id: 'real-ext-id',
+        tab: makeFakeTab({ id: 8, pinned: false }),
+      } as chrome.runtime.MessageSender;
+
+      const first = await router(
+        { type: 'SEARCH', payload: { query: 'pin', sources: [] } },
+        pinnedSender
+      ) as { groups: Array<{ category: string; items: Array<{ id: string; title: string }> }> };
+      const second = await router(
+        { type: 'SEARCH', payload: { query: 'pin', sources: [] } },
+        unpinnedSender
+      ) as { groups: Array<{ category: string; items: Array<{ id: string; title: string }> }> };
+
+      const firstPin = first.groups.find((g) => g.category === 'actions')!
+        .items.find((i) => i.id === 'action-pin-tab');
+      const secondPin = second.groups.find((g) => g.category === 'actions')!
+        .items.find((i) => i.id === 'action-pin-tab');
+      expect(firstPin!.title).toBe('Unpin Tab');
+      expect(secondPin!.title).toBe('Pin Tab');
+    });
   });
 
   describe('EXECUTE_ACTION message', () => {
@@ -242,6 +515,26 @@ describe('createMessageRouter', () => {
       };
 
       await router(request);
+      expect(chromeMock.tabs.remove).toHaveBeenCalledWith(42, expect.any(Function));
+    });
+
+    it('falls back to the sender tab as the target when no explicit targetTabId is given', async () => {
+      const chromeMock = makeChromeMock();
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const sender = {
+        id: 'real-ext-id',
+        tab: makeFakeTab({ id: 42 }),
+      } as chrome.runtime.MessageSender;
+
+      const response = await router(
+        { type: 'EXECUTE_ACTION', payload: { actionId: 'action-close-tab' } },
+        sender
+      ) as { success: boolean };
+
+      expect(response.success).toBe(true);
+      // The sender's own tab (42) is closed, not the active tab (1).
       expect(chromeMock.tabs.remove).toHaveBeenCalledWith(42, expect.any(Function));
     });
   });
@@ -390,6 +683,43 @@ describe('createMessageRouter', () => {
       const response = await router({ type: 'NAVIGATE', payload: { url: 'https://example.com' } }) as { success: boolean; error: string };
       expect(response.success).toBe(false);
       expect(response.error).toContain('Query failed');
+    });
+  });
+
+  describe('OPEN_NEW_TAB message', () => {
+    it('creates a new tab for a safe http(s) url', async () => {
+      const chromeMock = makeChromeMock();
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({
+        type: 'OPEN_NEW_TAB',
+        payload: { url: 'https://example.com/' },
+      }) as { success: boolean };
+
+      expect(response.success).toBe(true);
+      expect(chromeMock.tabs.create).toHaveBeenCalledWith({ url: 'https://example.com/' });
+    });
+
+    it('returns failure when tabs.create rejects', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          create: vi.fn(() => Promise.reject(new Error('create failed'))),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({
+        type: 'OPEN_NEW_TAB',
+        payload: { url: 'https://example.com/' },
+      }) as { success: boolean; error: string };
+
+      expect(response.success).toBe(false);
+      expect(response.error).toContain('create failed');
     });
   });
 
@@ -721,6 +1051,108 @@ describe('createMessageRouter', () => {
       expect(ungrouped).toBeDefined();
       expect(ungrouped!.tabs).toHaveLength(1);
     });
+
+    it('skips windows with no tabs when grouping by window', async () => {
+      const baseMock = makeChromeMock();
+      // All tabs live in window 1; window 2 is empty (e.g. devtools popout).
+      const tabs = [
+        makeFakeTab({ id: 1, windowId: 1, title: 'Tab One', groupId: -1 }),
+      ];
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          query: makeDualQueryMock(tabs),
+        },
+        windows: {
+          ...baseMock.windows,
+          getAll: vi.fn(() =>
+            Promise.resolve([
+              { id: 1, focused: true, alwaysOnTop: false, incognito: false, state: 'normal', type: 'normal' },
+              { id: 2, focused: false, alwaysOnTop: false, incognito: false, state: 'normal', type: 'normal' },
+            ])
+          ),
+        },
+        tabGroups: undefined,
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_ALL_TABS' }) as { groups: Array<{ label: string; tabs: unknown[] }> };
+
+      expect(response.groups).toHaveLength(1);
+      expect(response.groups[0].label).toBe('Window 1');
+      expect(response.groups[0].tabs).toHaveLength(1);
+    });
+
+    it('skips empty windows and labels ungrouped tabs per window when tab groups exist', async () => {
+      const baseMock = makeChromeMock();
+      // Window 1 holds a tab group plus an ungrouped tab; window 2 is empty.
+      const tabs = [
+        makeFakeTab({ id: 1, windowId: 1, title: 'Grouped One', groupId: 10 }),
+        makeFakeTab({ id: 2, windowId: 1, title: 'Grouped Two', groupId: 10 }),
+        makeFakeTab({ id: 3, windowId: 1, title: 'Loose', groupId: -1 }),
+      ];
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          query: makeDualQueryMock(tabs),
+        },
+        windows: {
+          ...baseMock.windows,
+          getAll: vi.fn(() =>
+            Promise.resolve([
+              { id: 1, focused: true, alwaysOnTop: false, incognito: false, state: 'normal', type: 'normal' },
+              { id: 2, focused: false, alwaysOnTop: false, incognito: false, state: 'normal', type: 'normal' },
+            ])
+          ),
+        },
+        tabGroups: {
+          query: vi.fn(() =>
+            Promise.resolve([
+              { id: 10, title: 'My Group', color: 'blue', windowId: 1, collapsed: false },
+            ])
+          ),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_ALL_TABS' }) as { groups: Array<{ label: string; type: string; tabs: unknown[] }> };
+
+      // Only window 1 produces sections; the empty window 2 is skipped.
+      expect(response.groups).toHaveLength(2);
+      expect(response.groups.map((g) => g.label)).toEqual(['My Group', 'Window 1 — Ungrouped']);
+    });
+
+    it('surfaces an error when a queried tab has no id (mapTab guard)', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          query: makeDualQueryMock([makeFakeTab({ id: undefined })]),
+        },
+        windows: {
+          ...baseMock.windows,
+          getAll: vi.fn(() =>
+            Promise.resolve([
+              { id: 1, focused: true, alwaysOnTop: false, incognito: false, state: 'normal', type: 'normal' },
+            ])
+          ),
+        },
+        tabGroups: undefined,
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      // The rejection is converted to an { error } response by the onMessage
+      // listener's catch in registerBackgroundListeners.
+      await expect(router({ type: 'GET_ALL_TABS' })).rejects.toThrow(
+        'mapTab called with tab.id === undefined'
+      );
+    });
   });
 
   // ─── GET_BOOKMARK_TREE tests ───────────────────────────────────────────────
@@ -857,6 +1289,45 @@ describe('createMessageRouter', () => {
       expect(folder?.children).toHaveLength(1);
     });
 
+    it('drops bookmark leaves with non-navigable schemes', async () => {
+      const baseMock = makeChromeMock();
+      const tree = [
+        {
+          id: 'root',
+          title: '',
+          index: 0,
+          children: [
+            {
+              id: 'f1',
+              title: 'Bookmarks Bar',
+              index: 0,
+              children: [
+                { id: 'bm1', title: 'Safe Site', url: 'https://safe.com', index: 0 },
+                { id: 'bm2', title: 'Bookmarklet', url: 'javascript:alert(1)', index: 1 },
+              ],
+            },
+          ],
+        },
+      ];
+      const chromeMock = {
+        ...baseMock,
+        bookmarks: {
+          ...baseMock.bookmarks,
+          getTree: makeDualGetTreeMock(tree),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_BOOKMARK_TREE' }) as {
+        tree: Array<{ children?: Array<{ id: string }> }>;
+      };
+
+      // The javascript: bookmarklet is stripped; the safe leaf survives.
+      expect(response.tree).toHaveLength(1);
+      expect(response.tree[0].children!.map((c) => c.id)).toEqual(['bm1']);
+    });
+
     it('returns empty tree when root has no children', async () => {
       const baseMock = makeChromeMock();
       const tree = [{ id: 'root', title: '', index: 0, children: [] }];
@@ -875,6 +1346,110 @@ describe('createMessageRouter', () => {
       expect(response.tree).toHaveLength(0);
     });
 
+  });
+
+  // ─── GET_HISTORY_ITEMS tests (F04 overlay history) ─────────────────────────
+
+  describe('GET_HISTORY_ITEMS message', () => {
+    it('returns the cached history items in a typed shape', async () => {
+      const chromeMock = makeChromeMock();
+      const now = Date.now();
+      chromeMock.history.search = vi.fn(
+        (_: chrome.history.HistoryQuery, cb: (results: chrome.history.HistoryItem[]) => void) =>
+          cb([
+            { id: 'h1', title: 'History One', url: 'https://history-one.com', lastVisitTime: now - 4000, visitCount: 3, typedCount: 1 },
+            { id: 'h2', title: 'History Two', url: 'https://history-two.com', lastVisitTime: now - 8000, visitCount: 1, typedCount: 0 },
+          ])
+      );
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_HISTORY_ITEMS' }) as {
+        items: Array<{ id: string; title: string; url: string; lastVisitTime?: number }>;
+      };
+
+      expect(response).toHaveProperty('items');
+      expect(response.items).toHaveLength(2);
+      expect(response.items[0]).toEqual({
+        id: 'history-h1',
+        title: 'History One',
+        url: 'https://history-one.com',
+        lastVisitTime: now - 4000,
+      });
+    });
+
+    it('returns an empty list when there is no history', async () => {
+      const chromeMock = makeChromeMock();
+      chromeMock.history.search = vi.fn(
+        (_: chrome.history.HistoryQuery, cb: (results: chrome.history.HistoryItem[]) => void) => cb([])
+      );
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_HISTORY_ITEMS' }) as { items: unknown[] };
+      expect(response.items).toEqual([]);
+    });
+  });
+
+  // ─── GET_ACTIONS tests (F12 overlay action mode) ───────────────────────────
+
+  describe('GET_ACTIONS message', () => {
+    it('returns the action list with ids and titles', async () => {
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_ACTIONS' }) as {
+        actions: Array<{ id: string; title: string }>;
+      };
+
+      expect(response).toHaveProperty('actions');
+      expect(response.actions.length).toBeGreaterThan(0);
+      const newTab = response.actions.find((a) => a.id === 'action-new-tab');
+      expect(newTab).toBeDefined();
+      expect(newTab!.title).toBe('New Tab');
+    });
+
+    it('contextualizes action labels to the sender tab (Unpin for pinned)', async () => {
+      const router = await createMessageRouter();
+      const sender = {
+        id: 'real-ext-id',
+        tab: makeFakeTab({ id: 7, pinned: true, audible: false, mutedInfo: { muted: false } }),
+      } as chrome.runtime.MessageSender;
+
+      const response = await router({ type: 'GET_ACTIONS' }, sender) as {
+        actions: Array<{ id: string; title: string }>;
+      };
+      const pin = response.actions.find((a) => a.id === 'action-pin-tab');
+      expect(pin).toBeDefined();
+      expect(pin!.title).toBe('Unpin Tab');
+      // Silent, unmuted tab → mute action hidden (F09)
+      expect(response.actions.find((a) => a.id === 'action-mute-tab')).toBeUndefined();
+    });
+
+    it('falls back to default labels when the active-tab lookup fails', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          // Callback style (cache init) succeeds; promise style (the
+          // active-tab context lookup) rejects, e.g. no window focused.
+          query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+            if (cb) { cb([]); return; }
+            return Promise.reject(new Error('no active tab'));
+          }),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_ACTIONS' }) as {
+        actions: Array<{ id: string; title: string }>;
+      };
+
+      // No context available → all 12 actions with their default labels.
+      expect(response.actions).toHaveLength(12);
+      expect(response.actions.find((a) => a.id === 'action-pin-tab')!.title).toBe('Pin Tab');
+      expect(response.actions.find((a) => a.id === 'action-mute-tab')!.title).toBe('Mute Tab');
+    });
   });
 
   describe('GET_FAVICON message', () => {
@@ -964,14 +1539,22 @@ describe('registerBackgroundListeners', () => {
 
   it('toggle-command-bar command sends TOGGLE_OVERLAY to the active tab', async () => {
     const commandListeners: Array<(cmd: string) => void> = [];
-    const tabsSendMessage = vi.fn();
+    // Simulate a page without a content script (e.g. chrome://): the message
+    // callback fires with chrome.runtime.lastError set. Count reads so we can
+    // assert the callback checks it (otherwise Chrome logs
+    // "Unchecked runtime.lastError").
+    let lastErrorReads = 0;
+    const tabsSendMessage = vi.fn((_tabId: number, _msg: unknown, cb?: () => void) => cb?.());
     const chromeMock = {
       runtime: {
         id: 'real-ext-id',
         onMessage: { addListener: vi.fn() },
         onInstalled: { addListener: vi.fn() },
         getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
-        lastError: undefined,
+        get lastError() {
+          lastErrorReads += 1;
+          return { message: 'Could not establish connection.' };
+        },
       },
       commands: {
         onCommand: { addListener: vi.fn((cb: (cmd: string) => void) => commandListeners.push(cb)) },
@@ -1013,6 +1596,9 @@ describe('registerBackgroundListeners', () => {
       { type: 'TOGGLE_OVERLAY' },
       expect.any(Function)
     );
+    // The sendMessage callback swallowed the "no receiver" error by reading
+    // chrome.runtime.lastError.
+    expect(lastErrorReads).toBeGreaterThan(0);
 
     // Unknown command — should be a no-op.
     commandListeners[0]('something-else');
@@ -1061,14 +1647,164 @@ describe('registerBackgroundListeners', () => {
     expect(installListeners).toHaveLength(1);
 
     installListeners[0]({ reason: 'install' } as chrome.runtime.InstalledDetails);
+    // WXT emits the onboarding entrypoint at the bundle root as
+    // "onboarding.html" — NOT "onboarding/index.html" (the source layout).
     expect(tabsCreate).toHaveBeenCalledWith({
-      url: 'chrome-extension://fake//onboarding/index.html',
+      url: 'chrome-extension://fake//onboarding.html',
     });
 
     // Update reason should not open onboarding.
     tabsCreate.mockClear();
     installListeners[0]({ reason: 'update' } as chrome.runtime.InstalledDetails);
     expect(tabsCreate).not.toHaveBeenCalled();
+  });
+
+  // Helper for the routing tests below: a minimal chrome mock whose cache
+  // init succeeds, capturing registered onMessage listeners.
+  function makeListenerHarness(opts: { tabsQuery?: ReturnType<typeof vi.fn> } = {}) {
+    const onMessageListeners: Array<
+      (m: unknown, s: unknown, r: (resp: unknown) => void) => boolean | void
+    > = [];
+    const chromeMock = {
+      runtime: {
+        id: 'real-ext-id',
+        onMessage: { addListener: vi.fn((fn) => onMessageListeners.push(fn)) },
+        onInstalled: { addListener: vi.fn() },
+        getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
+      },
+      commands: { onCommand: { addListener: vi.fn() } },
+      tabs: {
+        query:
+          opts.tabsQuery ??
+          vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+            cb?.([]);
+            return Promise.resolve([]);
+          }),
+        onCreated: { addListener: vi.fn() },
+        onRemoved: { addListener: vi.fn() },
+        onUpdated: { addListener: vi.fn() },
+        onActivated: { addListener: vi.fn() },
+      },
+      bookmarks: {
+        getTree: vi.fn((cb: (r: chrome.bookmarks.BookmarkTreeNode[]) => void) => cb([])),
+        onCreated: { addListener: vi.fn() },
+        onRemoved: { addListener: vi.fn() },
+        onChanged: { addListener: vi.fn() },
+      },
+      history: { search: vi.fn((_: object, cb: (r: chrome.history.HistoryItem[]) => void) => cb([])) },
+      storage: {
+        sync: {
+          get: vi.fn((_: string, cb: (r: Record<string, unknown>) => void) => cb({})),
+          set: vi.fn(),
+        },
+      },
+      alarms: { create: vi.fn(), clear: vi.fn(), onAlarm: { addListener: vi.fn() } },
+    };
+    return { chromeMock, onMessageListeners };
+  }
+
+  it('routes a same-extension message through the router and responds asynchronously', async () => {
+    const { chromeMock, onMessageListeners } = makeListenerHarness();
+    vi.stubGlobal('chrome', chromeMock);
+
+    registerBackgroundListeners();
+    expect(onMessageListeners).toHaveLength(1);
+
+    const response = await new Promise<unknown>((resolve) => {
+      const kept = onMessageListeners[0]({ type: 'GET_SETTINGS' }, { id: 'real-ext-id' }, resolve);
+      // true keeps the channel open for the async sendResponse.
+      expect(kept).toBe(true);
+    });
+    expect(response).toHaveProperty('settings');
+  });
+
+  it('responds with an error when router initialization keeps failing', async () => {
+    const failingQuery = vi.fn(() => {
+      throw new Error('init boom');
+    });
+    const { chromeMock, onMessageListeners } = makeListenerHarness({ tabsQuery: failingQuery });
+    vi.stubGlobal('chrome', chromeMock);
+
+    registerBackgroundListeners();
+
+    const response = await new Promise<unknown>((resolve) => {
+      onMessageListeners[0]({ type: 'GET_SETTINGS' }, { id: 'real-ext-id' }, resolve);
+    });
+    expect(response).toEqual({ error: expect.stringContaining('init boom') });
+  });
+
+  it('resets the router after a failed warm-up so the next message retries initialization', async () => {
+    let failInit = true;
+    const flakyQuery = vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+      if (failInit) throw new Error('warm-up boom');
+      cb?.([]);
+      return Promise.resolve([]);
+    });
+    const { chromeMock, onMessageListeners } = makeListenerHarness({ tabsQuery: flakyQuery });
+    vi.stubGlobal('chrome', chromeMock);
+
+    registerBackgroundListeners();
+    // Let the warm-up fail and the routerPromise reset take effect.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(chromeMock.bookmarks.getTree).toHaveBeenCalledTimes(1);
+
+    // The next message re-runs createMessageRouter and succeeds.
+    failInit = false;
+    const response = await new Promise<unknown>((resolve) => {
+      onMessageListeners[0]({ type: 'GET_SETTINGS' }, { id: 'real-ext-id' }, resolve);
+    });
+    expect(response).toHaveProperty('settings');
+    expect(chromeMock.bookmarks.getTree).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('background entrypoint (default export)', () => {
+  it('registers the background listeners when the entrypoint main runs', () => {
+    const onMessageAddListener = vi.fn();
+    const onCommandAddListener = vi.fn();
+    const onInstalledAddListener = vi.fn();
+    const chromeMock = {
+      runtime: {
+        id: 'real-ext-id',
+        onMessage: { addListener: onMessageAddListener },
+        onInstalled: { addListener: onInstalledAddListener },
+        getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
+      },
+      commands: { onCommand: { addListener: onCommandAddListener } },
+      tabs: {
+        query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+          cb?.([]);
+          return Promise.resolve([]);
+        }),
+        onCreated: { addListener: vi.fn() },
+        onRemoved: { addListener: vi.fn() },
+        onUpdated: { addListener: vi.fn() },
+        onActivated: { addListener: vi.fn() },
+      },
+      bookmarks: {
+        getTree: vi.fn((cb: (r: chrome.bookmarks.BookmarkTreeNode[]) => void) => cb([])),
+        onCreated: { addListener: vi.fn() },
+        onRemoved: { addListener: vi.fn() },
+        onChanged: { addListener: vi.fn() },
+      },
+      history: { search: vi.fn((_: object, cb: (r: chrome.history.HistoryItem[]) => void) => cb([])) },
+      storage: {
+        sync: {
+          get: vi.fn((_: string, cb: (r: Record<string, unknown>) => void) => cb({})),
+          set: vi.fn(),
+        },
+      },
+      alarms: { create: vi.fn(), clear: vi.fn(), onAlarm: { addListener: vi.fn() } },
+    };
+    vi.stubGlobal('chrome', chromeMock);
+
+    // The test setup stubs WXT's defineBackground as (fn) => fn, so the
+    // module's default export is the entrypoint's main function itself.
+    (backgroundEntrypoint as unknown as () => void)();
+
+    expect(onMessageAddListener).toHaveBeenCalledTimes(1);
+    expect(onCommandAddListener).toHaveBeenCalledTimes(1);
+    expect(onInstalledAddListener).toHaveBeenCalledTimes(1);
   });
 });
 

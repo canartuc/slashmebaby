@@ -46,9 +46,31 @@ export interface TreeViewProps {
   onTabGridSelect: (tabId: number) => void;
   searchMode: boolean;
   searchQuery: string;
+  /** Non-interactive line shown when the item list is empty (e.g. actions failed to load). */
+  emptyStateMessage?: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Maps an item type to the section header it renders under. */
+function sectionOf(item: TreeItemData): string | null {
+  switch (item.type) {
+    case 'tab':
+    case 'group':
+      return 'Open Tabs';
+    case 'bookmark':
+    case 'folder':
+      return 'Bookmarks';
+    case 'history':
+      return 'History';
+    case 'action':
+      return 'Actions';
+    case 'goto':
+      return 'Navigate';
+    default:
+      return null;
+  }
+}
 
 /**
  * Determines whether a section header should be shown before this item.
@@ -58,24 +80,10 @@ function getSectionHeader(
   items: TreeItemData[],
   index: number
 ): string | null {
-  const item = items[index];
-  const prev = index > 0 ? items[index - 1] : null;
-
-  const isTabSection = item.type === 'tab' || item.type === 'group';
-  const isBookmarkSection = item.type === 'bookmark' || item.type === 'folder';
-
-  const prevIsTabSection =
-    prev && (prev.type === 'tab' || prev.type === 'group');
-  const prevIsBookmarkSection =
-    prev && (prev.type === 'bookmark' || prev.type === 'folder');
-
-  if (isTabSection && !prevIsTabSection) {
-    return 'Open Tabs';
-  }
-  if (isBookmarkSection && !prevIsBookmarkSection) {
-    return 'Bookmarks';
-  }
-  return null;
+  const section = sectionOf(items[index]);
+  if (!section) return null;
+  const prevSection = index > 0 ? sectionOf(items[index - 1]) : null;
+  return section !== prevSection ? section : null;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -91,6 +99,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
   onPinnedTabSelect,
   onTabGridSelect,
   searchMode,
+  emptyStateMessage,
 }) => {
   // Build label map for tab grid (uses dynamic labels from the main pool)
   const tabGridLabels = new Map<number, string>();
@@ -176,6 +185,13 @@ export const TreeView: React.FC<TreeViewProps> = ({
           </React.Fragment>
         );
       })}
+
+      {/* Empty-state explanation (e.g. '>' mode when actions failed to load) */}
+      {visibleItems.length === 0 && emptyStateMessage && (
+        <div className="smb-empty-folder" role="presentation">
+          {emptyStateMessage}
+        </div>
+      )}
 
       {/* Action divider */}
       <div className="smb-action-divider" />

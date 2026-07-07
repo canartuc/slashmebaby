@@ -102,6 +102,11 @@ export const Favicon: React.FC<FaviconProps> = ({ src, size = 16, className }) =
       width={size}
       height={size}
       referrerPolicy="no-referrer"
+      // Anonymous CORS mode: the browser sends no cookies/credentials with
+      // this in-page request. Servers without CORS headers make the image
+      // error out, which lands in the background data:-URL proxy fallback —
+      // the same place a CSP-blocked load already goes.
+      crossOrigin="anonymous"
       loading="lazy"
       decoding="async"
       onError={handleError}

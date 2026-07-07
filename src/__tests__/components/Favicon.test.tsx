@@ -5,12 +5,15 @@ import { vi, beforeEach } from 'vitest';
 import { Favicon } from '../../components/CommandBar/Favicon';
 
 describe('Favicon', () => {
-  it('renders an img with no-referrer for https icons', () => {
+  it('renders an img with no-referrer and anonymous CORS for https icons', () => {
     const { container } = render(<Favicon src="https://icons.example.com/f.ico" />);
     const img = container.querySelector('img');
     expect(img).toBeTruthy();
     expect(img!.getAttribute('src')).toBe('https://icons.example.com/f.ico');
     expect(img!.getAttribute('referrerpolicy')).toBe('no-referrer');
+    // crossorigin="anonymous" keeps the browser from attaching cookies to the
+    // in-page favicon request (PRIVACY.md documents this two-stage loading).
+    expect(img!.getAttribute('crossorigin')).toBe('anonymous');
     expect(img!.getAttribute('loading')).toBe('lazy');
     expect(img!.getAttribute('decoding')).toBe('async');
     expect(img!.getAttribute('alt')).toBe('');

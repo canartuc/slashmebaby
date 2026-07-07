@@ -99,6 +99,41 @@ describe('getFaviconDataUrl', () => {
     expect(await getFaviconDataUrl('https://a.com/f.png', new Map())).toBeNull();
   });
 
+  it('fetches with redirect: "error" so a public URL cannot 302 into a private host (SSRF)', async () => {
+    // isSafeFaviconUrl only vets the *initial* URL string. If fetch followed
+    // redirects, a page-controlled favicon on a public host could 302 to
+    // http://127.0.0.1/... or http://169.254.169.254/... and the background
+    // worker (with <all_urls>) would probe it. redirect: 'error' makes any
+    // redirect reject the fetch outright.
+    const fetchSpy = mockFetchOnce({ contentType: 'image/png', bytes: new Uint8Array([1]) });
+    vi.stubGlobal('fetch', fetchSpy);
+    await getFaviconDataUrl('https://a.com/f.png', new Map());
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://a.com/f.png',
+      expect.objectContaining({ credentials: 'omit', redirect: 'error' })
+    );
+  });
+
+  it('returns null when the server redirects (redirect: "error" rejects)', async () => {
+    // Native fetch with redirect: 'error' rejects with a TypeError on any
+    // 3xx response — simulate that contract here.
+    const fetchSpy = vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.redirect === 'error') {
+        return Promise.reject(new TypeError('Failed to fetch: redirected'));
+      }
+      // A permissive fetch (the vulnerable behavior) would happily follow the
+      // redirect to a private host and return an image from it.
+      return Promise.resolve({
+        ok: true,
+        url: 'http://127.0.0.1/steal.png',
+        headers: { get: (k: string) => (k.toLowerCase() === 'content-type' ? 'image/png' : null) },
+        arrayBuffer: async () => new Uint8Array([1]).buffer,
+      });
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    expect(await getFaviconDataUrl('https://a.com/redirects.png', new Map())).toBeNull();
+  });
+
   it('evicts the oldest entry past the cache cap', async () => {
     const cache = new Map<string, string>();
     // Pre-fill to the cap with dummy entries.

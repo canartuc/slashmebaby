@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Popup } from '../../entrypoints/popup/Popup';
+import { DEFAULT_SETTINGS } from '../../lib/messaging';
 import type { ResultGroup } from '../../lib/messaging';
 
 const mockGroups: ResultGroup[] = [
@@ -195,6 +196,41 @@ describe('Popup', () => {
         (c) => (c[0] as unknown as { type: string }).type === 'SEARCH'
       );
       expect(searchCall).toBeTruthy();
+    });
+  });
+
+  it('honors search-source toggles from settings when searching', async () => {
+    // Settings with bookmarks and history disabled
+    vi.mocked(chrome.storage.sync.get).mockImplementation(
+      (_keys: unknown, cb: (result: Record<string, unknown>) => void) => {
+        cb({
+          settings: {
+            ...DEFAULT_SETTINGS,
+            searchSources: { tabs: true, bookmarks: false, history: false },
+          },
+        });
+      }
+    );
+
+    render(<Popup />);
+
+    // Wait for settings to load (initial suggestions rendered)
+    await waitFor(() => {
+      expect(screen.getByText('Gmail')).toBeTruthy();
+    });
+
+    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
+    (input as HTMLInputElement).value = 'react';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+
+    await waitFor(() => {
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+        {
+          type: 'SEARCH',
+          payload: { query: 'react', sources: ['tabs', 'actions'] },
+        },
+        expect.any(Function)
+      );
     });
   });
 

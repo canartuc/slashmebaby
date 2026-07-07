@@ -5,6 +5,6 @@ node_modules/
 dist/
 .output/
 coverage/
+test-results/
+playwright-report/
 *.zip
-*.md
-docs/

@@ -121,6 +121,7 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
 }
 
+// Stays gated: an on-demand benchmark (timings logged to PERF_OUT, no thresholds), not a correctness test.
 describe.runIf(process.env.PERF === '1')('background SEARCH benchmark', () => {
   beforeEach(() => {
     vi.stubGlobal('chrome', makeChromeMock());
