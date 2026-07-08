@@ -313,6 +313,52 @@ describe('CommandBar', () => {
     await waitFor(() => expect(screen.getByText('React Docs')).toBeTruthy());
   });
 
+  it('expanding a folder keeps the selection on that folder', async () => {
+    // Two top-level folders so a reset-to-top is observable.
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+      msg: unknown,
+      callback?: (response: unknown) => void
+    ) => {
+      const message = msg as { type: string };
+      if (message.type === 'GET_BOOKMARK_TREE' && callback) {
+        callback({
+          tree: [
+            { id: '1', title: 'Bookmarks Bar', children: [{ id: '2', title: 'React Docs', url: 'https://react.dev' }] },
+            { id: '3', title: 'Work Stuff', children: [{ id: '4', title: 'Jira', url: 'https://jira.example.com' }] },
+          ],
+        });
+      } else if (message.type === 'GET_ALL_TABS' && callback) {
+        callback({ groups: [] });
+      } else if (message.type === 'GET_SETTINGS' && callback) {
+        callback({
+          settings: {
+            shortcut: 'Ctrl+Shift+Space',
+            position: 'center',
+            theme: 'dark',
+            maxResultsPerGroup: 5,
+            showFavicons: true,
+            searchSources: { tabs: true, bookmarks: true, history: true },
+          },
+        });
+      }
+      return undefined as unknown as Promise<unknown>;
+    }) as unknown as typeof chrome.runtime.sendMessage);
+
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Work Stuff')).toBeTruthy());
+
+    fireSmbKey('ArrowDown'); // move from 'Bookmarks Bar' (idx 0) to 'Work Stuff' (idx 1)
+    await waitFor(() => {
+      const selected = container.querySelector('.smb-tree-item--selected');
+      expect(selected?.textContent).toContain('Work Stuff');
+    });
+
+    fireSmbKey('ArrowRight'); // expand 'Work Stuff' — must NOT reset selection to the top
+    await waitFor(() => expect(screen.getByText('Jira')).toBeTruthy());
+    const selected = container.querySelector('.smb-tree-item--selected');
+    expect(selected?.textContent).toContain('Work Stuff');
+  });
+
   it('Enter on a bookmark URL dispatches NAVIGATE', async () => {
     const onDismiss = vi.fn();
     const { container } = render(<CommandBar onDismiss={onDismiss} />);

@@ -164,11 +164,6 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     );
   }, [onDismiss, showActionError]);
 
-  // Reset selected index when visible items change
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [visibleItems]);
-
   // '>' as the first character switches to actions-only mode (F12). The
   // prefix is stripped before matching so it is never fuzzy-matched as text.
   const actionMode = query.startsWith('>');
@@ -241,9 +236,21 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     return grouped;
   }, [query, actionMode, effectiveQuery, visibleItems, fuse, actionsFuse, actionItems, settings.maxResultsPerGroup]);
 
-  // Reset selected index when filtered items change
+  // Reset the selection only when the filter itself changes (typing, action
+  // mode). Keying this on filteredItems identity would also fire on unrelated
+  // list refreshes (expand/collapse, late data), clobbering a selection made
+  // between that commit and its effect flush — a race that intermittently ate
+  // ArrowDown right after an expand.
   useEffect(() => {
     setSelectedIndex(0);
+  }, [query, actionMode]);
+
+  // When the list shrinks (collapse, narrower results), clamp an out-of-range
+  // selection instead of resetting, so in-range selections survive refreshes.
+  useEffect(() => {
+    setSelectedIndex((prev) =>
+      prev >= filteredItems.length ? Math.max(0, filteredItems.length - 1) : prev
+    );
   }, [filteredItems]);
 
   // Use a ref to always have access to latest state in the handler
