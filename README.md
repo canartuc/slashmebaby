@@ -3,7 +3,6 @@
 [![CI](https://github.com/canartuc/slashmebaby/actions/workflows/ci.yml/badge.svg)](https://github.com/canartuc/slashmebaby/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/canartuc/slashmebaby)](https://github.com/canartuc/slashmebaby/releases)
 [![License: MIT](https://img.shields.io/github/license/canartuc/slashmebaby)](LICENSE)
-[![CodeRabbit](https://img.shields.io/coderabbit/prs/github/canartuc/slashmebaby?label=CodeRabbit%20reviews)](https://coderabbit.ai)
 
 A cross-browser command palette, inspired by Arc and Zen. Press one keyboard shortcut on any page to search your open tabs, bookmarks, and history, and to run tab-management actions without leaving the keyboard.
 
