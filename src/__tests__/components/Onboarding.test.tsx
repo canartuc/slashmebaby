@@ -65,6 +65,16 @@ describe('TryItStep', () => {
     render(<TryItStep shortcut="Ctrl+Shift+Space" />);
     expect(screen.getByText('Try it out!')).toBeTruthy();
   });
+
+  it('warns that the shortcut does not work on this page', () => {
+    render(<TryItStep shortcut="Ctrl+Shift+Space" />);
+    expect(screen.getByText(/won't work on this page/)).toBeTruthy();
+  });
+
+  it('asks the user to try it on a regular website tab', () => {
+    render(<TryItStep shortcut="Ctrl+Shift+Space" />);
+    expect(screen.getByText(/switch to a regular website/i)).toBeTruthy();
+  });
 });
 
 describe('NavigationGuide', () => {

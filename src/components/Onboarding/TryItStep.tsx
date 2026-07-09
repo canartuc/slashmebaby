@@ -9,11 +9,12 @@ export const TryItStep: React.FC<TryItStepProps> = ({ shortcut }) => {
     <div className="smb-onboarding-step">
       <h2 className="smb-onboarding-step-title">Try it out!</h2>
       <p className="smb-onboarding-step-desc">
-        Press your chosen shortcut to open the command bar on any page.
+        Heads up: the shortcut won't work on this page. Browsers block extensions
+        on pages like this one, the Chrome Web Store, and chrome:// pages.
       </p>
       <div className="smb-onboarding-try-it">
         <div className="smb-onboarding-try-it-prompt">
-          <span className="smb-onboarding-try-it-label">Press</span>
+          <span className="smb-onboarding-try-it-label">Switch to a regular website tab, then press</span>
           <kbd className="smb-onboarding-try-it-kbd">{shortcut.replace(/\+/g, ' + ')}</kbd>
           <span className="smb-onboarding-try-it-label">to open the command bar</span>
         </div>
