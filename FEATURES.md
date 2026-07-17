@@ -1,6 +1,6 @@
 # SlashMeBaby Feature Tracker
 
-Last updated: 2026-07-07
+Last updated: 2026-07-18
 
 ## P0: Must Have (Launch Blockers)
 
@@ -20,7 +20,7 @@ These features are required for the initial public release on Chrome Web Store a
 | F10 | Navigation Actions | Global navigation commands: New Tab (open blank tab); Recently Closed (single-shot undo that reverses the last palette action: restores tabs the palette closed via `chrome.sessions.restore()`, re-toggles pin/mute, or closes a just-created tab; otherwise restores the most recently closed tab; no sub-list); Go to URL (when the query looks like a URL or domain, the overlay appends a "Go to <url>" row that navigates the current tab; default scheme https, unsafe schemes rejected). | Complete |
 | F11 | Utility Actions | Browser management commands: Close Duplicate Tabs (closes tabs with identical URLs, keeping one per URL), Sort Tabs by Domain (reorders the current window's tabs alphabetically by domain), Open Settings (opens the SlashMeBaby settings page). | Complete |
 | F12 | Action Prefix Mode | Typing `>` as the first character strips it from the query and filters results to Actions only (Tabs, Bookmarks, History groups hidden); a lone `>` lists all actions in the overlay. Deleting back to empty restores full multi-source mode. Works in both the overlay and the popup. | Complete |
-| F13 | Keyboard Shortcut | Configurable activation shortcut handled in-page by the content script. Default: Ctrl+Shift+Space (⌘+Shift+Space on Mac). Additional presets: Ctrl+Shift+L, Ctrl+., Ctrl+/ (⌘ variants on Mac). A browser-level `chrome.commands` binding (`toggle-command-bar`, same default) also toggles the bar and can be customized via `chrome://extensions/shortcuts`. | Complete |
+| F13 | Keyboard Shortcut | Configurable activation shortcut handled in-page by the content script. Default: Ctrl+Shift+Space (⌘+Shift+Space on Mac). Additional presets: Ctrl+Shift+L, Ctrl+., Ctrl+/ (⌘ variants on Mac). A browser-level `chrome.commands` binding (`toggle-command-bar`, same default) also toggles the bar and can be customized via `chrome://extensions/shortcuts`. On restricted pages (new tab, `chrome://`, Web Store) where the content script cannot run, the browser-level command falls back to opening the palette popup via `chrome.action.openPopup()` (Chrome 127+; called synchronously in the handler for Firefox's pre-149 user-input rule). | Complete |
 | F14 | System Theme | Default "System" theme auto-detects OS light/dark preference via `prefers-color-scheme` and renders the command bar in the matching palette. A manual Light/Dark override is available in Settings (F18). | Complete |
 | F15 | Shadow DOM Isolation | Content script creates a `<div id="slashmebaby-root">` attached to `document.body` with an open Shadow DOM root. All styles scoped inside. Zero CSS leakage to/from host page. | Complete |
 | F16 | Cross-Browser Support | Chrome MV3 (and Chromium forks: Edge, Brave). Firefox MV2 (with `browser_specific_settings.gecko` id and data-collection declaration). Built via WXT with a per-browser function-form manifest; code uses the `chrome.*` API surface (supported natively by Firefox) and feature-detects Chrome-only APIs such as `tabGroups`. Separate CI build targets for both. | Complete |
@@ -36,10 +36,10 @@ These features improve the product experience but are not required for launch. T
 
 | ID | Feature | Description | Status |
 |----|---------|-------------|--------|
-| F17 | Onboarding Tutorial | 4-step tutorial on first install: (1) Choose Shortcut, (2) Try It Now (shows the chosen shortcut with a static demo animation. Advance with the Next button; content scripts cannot run on extension pages, so the demo is not live), (3) Navigate Results (keyboard cheat sheet), (4) You're Ready (pro tips). Opens via `runtime.onInstalled`. Progress saved to `chrome.storage.local`. | Complete |
+| F17 | Onboarding Tutorial | 5-step tutorial on first install: (1) Choose Shortcut, (2) Try It Now (shows the chosen shortcut with a static demo animation. Advance with the Next button; content scripts cannot run on extension pages, so the demo is not live), (3) Navigate Results (keyboard cheat sheet), (4) Pin to Toolbar (browser-specific instructions via build-time `import.meta.env.BROWSER`; shows a live "Pinned" check via `chrome.action.getUserSettings()` where supported — feature-detected, absent on the Firefox MV2 build), (5) You're Ready (pro tips). Opens via `runtime.onInstalled`. Progress saved to `chrome.storage.local`. | Complete |
 | F18 | Settings Page | Full settings UI accessible via the "Open Settings" action or the extension's options entry (icon right-click → Options). Configures all six settings: shortcut, bar position, theme, search source toggles (tabs/bookmarks/history), max results per group (3/5/8), and favicon display. Settings persisted via `chrome.storage.sync`. | Complete |
 | F19 | Position Options | User-selectable bar position: Center Stage (default, Spotlight-style centered with backdrop), Top Anchored (drops from top, Arc-style), Bottom Anchored (rises from bottom). | Complete |
-| F20 | Popup Fallback | For restricted pages (`chrome://`, `about:`, browser internal pages) where content scripts cannot run, the extension icon opens a minimal popup with the same search functionality. | Complete |
+| F20 | Icon Click & Popup | Clicking the toolbar icon on normal pages opens the in-page overlay (per-tab popup routing: the background clears the per-tab popup on injectable tabs so clicks fire `action.onClicked`). On restricted pages (`chrome://`, `about:`, new tab, Web Store) the icon opens the popup, which renders the same CommandBar palette as the overlay (TreeView, jump/search modes, action chips) in a 720×540 window. | Complete |
 
 ## P2: Nice to Have (Post-Launch)
 

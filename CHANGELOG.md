@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-18
+
+### Added
+
+- Keyboard shortcut now works on the new tab page and other restricted pages (`chrome://`, Chrome Web Store): the browser-level command opens the palette popup there via `chrome.action.openPopup()`.
+- Onboarding gains a "Pin it to your toolbar" step with browser-specific instructions (Chrome / Firefox) and a live "Pinned" confirmation where the browser supports it.
+
+### Changed
+
+- Clicking the toolbar icon on normal pages now opens the in-page overlay palette (same as the shortcut); the popup remains the surface on restricted pages.
+- The popup is visually and behaviorally unified with the overlay palette: same CommandBar (tab grid, bookmark tree, jump/search modes, action chips) in a larger 720×540 window, with client-side fuzzy search replacing the old background-search mini list.
+- Minimum browser versions raised: Chrome 127 (for `action.openPopup`) and Firefox 126 (for the `commands.onCommand` tab argument).
+
 ## [1.0.0] - 2026-07-07
 
 Initial public release.
