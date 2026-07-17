@@ -1149,13 +1149,19 @@ describe('CommandBar — action-error aria-live region', () => {
   beforeEach(() => setupOverlayMock());
 
   // vitest stubs `?inline` CSS imports to an empty string and jsdom does not
-  // reliably cascade the full stylesheet, so read the shipped file from disk.
+  // reliably cascade the full stylesheet, so read the shipped files from
+  // disk. The overlay injects palette-core.css (shared component rules) plus
+  // command-bar.css (:host scoping) — concatenate them the same way.
   async function loadCommandBarCss(): Promise<string> {
     const { readFileSync } = await import('node:fs');
     const { fileURLToPath } = await import('node:url');
     const { resolve, dirname } = await import('node:path');
     const here = dirname(fileURLToPath(import.meta.url));
-    return readFileSync(resolve(here, '../../styles/command-bar.css'), 'utf8');
+    return (
+      readFileSync(resolve(here, '../../styles/palette-core.css'), 'utf8') +
+      '\n' +
+      readFileSync(resolve(here, '../../styles/command-bar.css'), 'utf8')
+    );
   }
 
   /** Extracts the body of the first CSS rule whose selector list matches exactly. */

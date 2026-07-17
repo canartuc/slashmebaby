@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import styles from '../../styles/command-bar.css?inline';
+import coreStyles from '../../styles/palette-core.css?inline';
+import overlayStyles from '../../styles/command-bar.css?inline';
 import { App } from './App';
 import { DEFAULT_SETTINGS, isToggleOverlayCommand } from '../../lib/messaging';
 import { isInjectableUrl } from '../../lib/url-safety';
@@ -53,7 +54,7 @@ export default defineContentScript({
     const shadow = host.attachShadow({ mode: 'open' });
 
     const styleEl = document.createElement('style');
-    styleEl.textContent = styles;
+    styleEl.textContent = coreStyles + '\n' + overlayStyles;
     shadow.appendChild(styleEl);
 
     const mountPoint = document.createElement('div');
