@@ -2,7 +2,8 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import styles from '../../styles/command-bar.css?inline';
 import { App } from './App';
-import { DEFAULT_SETTINGS } from '../../lib/messaging';
+import { DEFAULT_SETTINGS, isToggleOverlayCommand } from '../../lib/messaging';
+import { isInjectableUrl } from '../../lib/url-safety';
 
 function parseShortcut(shortcut: string) {
   const parts = shortcut.toLowerCase().split('+');
@@ -33,10 +34,10 @@ export default defineContentScript({
   runAt: 'document_idle',
   main() {
     // Skip injection inside cross-origin iframes that can't host overlay safely,
-    // and inside non-http(s) schemes (chrome-error://, view-source://, etc).
-    const loc = window.location;
-    const proto = loc.protocol;
-    if (proto !== 'http:' && proto !== 'https:' && proto !== 'file:') return;
+    // and inside non-http(s)/file schemes (chrome-error://, view-source://, etc).
+    // Shares the predicate with the background's per-tab action routing so
+    // both sides always agree on where the overlay can exist.
+    if (!isInjectableUrl(window.location.href)) return;
 
     const host = document.createElement('div');
     host.id = 'slashmebaby-root';
@@ -165,7 +166,7 @@ export default defineContentScript({
     chrome.runtime.onMessage.addListener((message, sender) => {
       // Only accept messages from our own extension's background.
       if (!sender || sender.id !== chrome.runtime.id) return;
-      if (message && typeof message === 'object' && (message as { type?: string }).type === 'TOGGLE_OVERLAY') {
+      if (isToggleOverlayCommand(message)) {
         if (root) dismiss();
         else open();
       }

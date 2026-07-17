@@ -62,10 +62,19 @@ async function loadContentMain(): Promise<ContentMain> {
   return mod.default;
 }
 
-function setLocation(protocol: 'http:' | 'https:' | 'chrome:' | 'about:') {
+function setLocation(protocol: 'http:' | 'https:' | 'chrome:' | 'about:' | 'file:') {
+  // The injectability guard parses the full URL, so href must agree with
+  // the faked protocol (jsdom's own href is always http://localhost/).
+  const hrefByProtocol: Record<string, string> = {
+    'http:': 'http://test.example/',
+    'https:': 'https://test.example/',
+    'chrome:': 'chrome://newtab/',
+    'about:': 'about:blank',
+    'file:': 'file:///Users/test/doc.html',
+  };
   Object.defineProperty(window, 'location', {
     configurable: true,
-    value: { ...window.location, protocol },
+    value: { ...window.location, protocol, href: hrefByProtocol[protocol] },
   });
 }
 
@@ -138,6 +147,14 @@ describe('content script entrypoint', () => {
     const cs = await loadContentMain();
     cs.main();
     expect(document.getElementById('slashmebaby-root')).toBeNull();
+  });
+
+  it('injects on file: pages', async () => {
+    setLocation('file:');
+    buildChrome();
+    const cs = await loadContentMain();
+    cs.main();
+    expect(document.getElementById('slashmebaby-root')).not.toBeNull();
   });
 
   it('injects host element with shadow root on https pages', async () => {
@@ -417,6 +434,19 @@ describe('content script entrypoint', () => {
       'not-an-object',
       { id: 'test-extension' } as chrome.runtime.MessageSender
     );
+    const host = document.getElementById('slashmebaby-root');
+    expect(host?.shadowRoot?.children.length).toBe(2);
+  });
+
+  it('ignores malformed TOGGLE_OVERLAY-ish messages via the shared type guard', async () => {
+    const captured = buildChrome();
+    const cs = await loadContentMain();
+    cs.main();
+
+    const sender = { id: 'test-extension' } as chrome.runtime.MessageSender;
+    captured.runtimeListeners[0]('TOGGLE_OVERLAY', sender); // bare string
+    captured.runtimeListeners[0]({ type: 'toggle_overlay' }, sender); // wrong case
+    captured.runtimeListeners[0](null, sender);
     const host = document.getElementById('slashmebaby-root');
     expect(host?.shadowRoot?.children.length).toBe(2);
   });
