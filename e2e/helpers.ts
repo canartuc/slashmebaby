@@ -1,5 +1,6 @@
 import { chromium, type BrowserContext, type Page } from '@playwright/test';
 import path from 'path';
+import { isInjectableUrl } from '../src/lib/url-safety';
 
 const EXTENSION_PATH = path.resolve('.output/chrome-mv3');
 
@@ -35,7 +36,7 @@ export async function openPage(context: BrowserContext, url = 'https://example.c
   // listener in the same synchronous block at document_idle, so the host's
   // presence means the palette is ready. Extension/chrome pages never get
   // the content script — skip the wait there.
-  if (/^(https?|file):/.test(url)) {
+  if (isInjectableUrl(url)) {
     // Let a timeout propagate: a missing host means the content script did
     // not inject, and every palette interaction after this would fail with
     // misleading errors.
