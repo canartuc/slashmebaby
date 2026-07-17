@@ -29,6 +29,9 @@ const FUSE_OPTIONS: IFuseOptions<TreeItem> = {
 // Search results render grouped by section, in this order (F04).
 const RESULT_GROUP_ORDER = ['tab', 'bookmark', 'history'] as const;
 
+// Stable empty labels map for non-jump modes (jump badges hidden).
+const EMPTY_LABELS: Map<number, string> = new Map();
+
 function nextIndex(prev: number, len: number, dir: 1 | -1): number {
   if (len <= 0) return 0;
   if (dir === 1) return prev >= len - 1 ? 0 : prev + 1;
@@ -41,6 +44,10 @@ export interface CommandBarProps {
    *  'popup': container fills the extension-action popup window, no
    *  backdrop, no position class — sizing comes from popup.css. */
   variant?: 'overlay' | 'popup';
+  /** Mode on mount. The overlay opens in 'jump' (labels); the popup opens
+   *  in 'search' so first keystrokes type into the query — its historical
+   *  behavior, and typing must never trigger label navigation there. */
+  initialMode?: 'jump' | 'search';
   /** Resolves the URL 'copy-clean-link' should copy. When absent, the
    *  synchronous window.location.href path is used (overlay: the host
    *  page). The popup passes the active tab's URL — its own location is
@@ -51,9 +58,10 @@ export interface CommandBarProps {
 export const CommandBar: React.FC<CommandBarProps> = ({
   onDismiss,
   variant = 'overlay',
+  initialMode = 'jump',
   resolveCopyUrl,
 }) => {
-  const [mode, setMode] = useState<'jump' | 'search'>('jump');
+  const [mode, setMode] = useState<'jump' | 'search'>(initialMode);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
@@ -422,30 +430,25 @@ export const CommandBar: React.FC<CommandBarProps> = ({
     if (!activate(item, shiftKey)) setSelectedIndex(result.targetIndex);
   }, [toggleExpand, onDismiss, handleKeyPress, activate, switchTab, dispatchAction, resolveCopyUrl]);
 
-  // Listen for smb-keydown custom events from the content script
+  // Listen for smb-keydown custom events. Two production channels share
+  // this contract: the content script dispatches into the shadow root
+  // (overlay), and usePopupKeySource dispatches on the document (action
+  // popup — NOT a test shim; jsdom tests ride the same document path).
   useEffect(() => {
-    const shadowRoot = containerRef.current?.getRootNode();
-    if (!(shadowRoot instanceof ShadowRoot)) {
-      // Fallback for testing: listen on the container's document
-      const doc = containerRef.current?.ownerDocument;
-      if (!doc) return;
-
-      const handler = (e: Event) => {
-        const detail = (e as CustomEvent).detail;
-        handleKey(detail.key, detail.shiftKey || false);
-      };
-
-      doc.addEventListener('smb-keydown', handler);
-      return () => doc.removeEventListener('smb-keydown', handler);
-    }
+    const rootNode = containerRef.current?.getRootNode();
+    const target: EventTarget | undefined =
+      rootNode instanceof ShadowRoot
+        ? rootNode
+        : containerRef.current?.ownerDocument ?? undefined;
+    if (!target) return;
 
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       handleKey(detail.key, detail.shiftKey || false);
     };
 
-    shadowRoot.addEventListener('smb-keydown', handler);
-    return () => shadowRoot.removeEventListener('smb-keydown', handler);
+    target.addEventListener('smb-keydown', handler);
+    return () => target.removeEventListener('smb-keydown', handler);
   }, [handleKey]);
 
   // Backdrop click to dismiss — use native listener since React events may not work
@@ -489,13 +492,17 @@ export const CommandBar: React.FC<CommandBarProps> = ({
         pinnedTabs={pinnedTabs}
         allTabs={allTabs}
         visibleItems={filteredItems}
-        labels={labels}
+        // Jump badges only make sense while label keys are live.
+        labels={mode === 'jump' ? labels : EMPTY_LABELS}
         selectedIndex={selectedIndex}
         showFavicons={settings.showFavicons}
         onSelectItem={handleItemSelect}
         onPinnedTabSelect={handlePinnedTabSelect}
         onTabGridSelect={handlePinnedTabSelect}
-        searchMode={mode === 'search'}
+        // Grids collapse only while a query is filtering; an empty search
+        // box keeps the full surface (pinned, tabs, bookmarks) visible —
+        // this is what the popup's search-first entry state shows.
+        searchMode={mode === 'search' && query.length > 0}
         searchQuery={query}
         emptyStateMessage={
           actionMode && actionsLoadFailed && filteredItems.length === 0

@@ -1496,6 +1496,17 @@ describe('CommandBar — popup variant', () => {
     expect(el?.classList.contains('smb-container--bottom')).toBe(false);
   });
 
+  it('search mode with an empty query keeps the tab grid visible without jump badges', async () => {
+    const { container } = render(
+      <CommandBar onDismiss={() => {}} variant="popup" initialMode="search" />
+    );
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+    // Full surface shown while nothing filters…
+    expect(screen.getByText('Open Tabs')).toBeTruthy();
+    // …but jump-label badges are hidden outside jump mode.
+    expect(container.querySelectorAll('.smb-tab-col-label')).toHaveLength(0);
+  });
+
   it("variant='popup' keeps the dialog role, error strip and TreeView listbox", async () => {
     render(<CommandBar onDismiss={() => {}} variant="popup" />);
     await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());

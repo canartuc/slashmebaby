@@ -92,6 +92,8 @@ function makeChromeMock() {
       getURL: vi.fn((path: string) => `chrome-extension://fake/${path}`),
       getManifest: vi.fn(() => ({ action: { default_popup: 'popup.html' } })),
       onMessage: { addListener: vi.fn() },
+      onInstalled: { addListener: vi.fn() },
+      onStartup: { addListener: vi.fn() },
     },
     action: {
       setPopup: vi.fn((_: object, cb?: () => void) => cb?.()),
@@ -1495,6 +1497,7 @@ describe('registerBackgroundListeners', () => {
         id: 'real-ext-id',
         onMessage: { addListener: vi.fn((fn) => onMessageListeners.push(fn)) },
         onInstalled: { addListener: vi.fn() },
+        onStartup: { addListener: vi.fn() },
         getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
       },
       commands: { onCommand: { addListener: vi.fn() } },
@@ -1563,11 +1566,14 @@ describe('registerBackgroundListeners', () => {
         id: 'real-ext-id',
         onMessage: { addListener: vi.fn() },
         onInstalled: { addListener: vi.fn() },
+        onStartup: { addListener: vi.fn() },
         getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
         getManifest: vi.fn(() => ({ action: { default_popup: 'popup.html' } })),
         get lastError() {
           lastErrorReads += 1;
-          return opts.lastError ? { message: 'Could not establish connection.' } : undefined;
+          return opts.lastError
+            ? { message: 'Could not establish connection. Receiving end does not exist.' }
+            : undefined;
         },
       },
       commands: {
@@ -1627,6 +1633,26 @@ describe('registerBackgroundListeners', () => {
     expect(actionApi.onClicked.addListener).toHaveBeenCalledTimes(1);
     expect(chromeMock.tabs.onUpdated.addListener).toHaveBeenCalled();
     expect(chromeMock.tabs.onActivated.addListener).toHaveBeenCalled();
+  });
+
+  it('sweeps popup routing from onInstalled and onStartup, not from plain registration', () => {
+    const { chromeMock } = makeCommandHarness();
+    // Registration alone must not rewrite per-tab popup state (mockClear in
+    // the harness ran after registerBackgroundListeners — query only fires
+    // for warm-up caches, and setPopup was untouched by then; assert the
+    // wired triggers instead).
+    const installedListener = (
+      chromeMock.runtime.onInstalled.addListener as ReturnType<typeof vi.fn>
+    ).mock.calls[0][0] as (d: chrome.runtime.InstalledDetails) => void;
+    installedListener({ reason: 'update' } as chrome.runtime.InstalledDetails);
+    expect(chromeMock.tabs.query).toHaveBeenCalledWith({}, expect.any(Function));
+
+    chromeMock.tabs.query.mockClear();
+    const startupListener = (
+      chromeMock.runtime.onStartup.addListener as ReturnType<typeof vi.fn>
+    ).mock.calls[0][0] as () => void;
+    startupListener();
+    expect(chromeMock.tabs.query).toHaveBeenCalledWith({}, expect.any(Function));
   });
 
   it('toggle-command-bar with a scriptable tab arg sends typed TOGGLE_OVERLAY without tabs.query', () => {
@@ -1701,6 +1727,7 @@ describe('registerBackgroundListeners', () => {
         onInstalled: {
           addListener: vi.fn((cb: (d: chrome.runtime.InstalledDetails) => void) => installListeners.push(cb)),
         },
+        onStartup: { addListener: vi.fn() },
         getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
       },
       commands: { onCommand: { addListener: vi.fn() } },
@@ -1756,6 +1783,7 @@ describe('registerBackgroundListeners', () => {
         id: 'real-ext-id',
         onMessage: { addListener: vi.fn((fn) => onMessageListeners.push(fn)) },
         onInstalled: { addListener: vi.fn() },
+        onStartup: { addListener: vi.fn() },
         getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
       },
       commands: { onCommand: { addListener: vi.fn() } },
@@ -1854,6 +1882,7 @@ describe('background entrypoint (default export)', () => {
         id: 'real-ext-id',
         onMessage: { addListener: onMessageAddListener },
         onInstalled: { addListener: onInstalledAddListener },
+        onStartup: { addListener: vi.fn() },
         getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
       },
       commands: { onCommand: { addListener: onCommandAddListener } },

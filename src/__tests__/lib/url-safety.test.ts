@@ -186,29 +186,37 @@ describe('isInjectableUrl', () => {
 });
 
 describe('isContentScriptBlockedUrl', () => {
-  it('flags the Chrome Web Store hosts', () => {
-    expect(isContentScriptBlockedUrl('https://chromewebstore.google.com/detail/x')).toBe(true);
-    expect(isContentScriptBlockedUrl('https://chrome.google.com/webstore/detail/x')).toBe(true);
+  it('flags the Chrome Web Store hosts on Chrome only', () => {
+    expect(isContentScriptBlockedUrl('https://chromewebstore.google.com/detail/x', 'chrome')).toBe(true);
+    expect(isContentScriptBlockedUrl('https://chrome.google.com/webstore/detail/x', 'chrome')).toBe(true);
+    // Firefox happily injects there — routing to the popup would hide the
+    // working overlay.
+    expect(isContentScriptBlockedUrl('https://chromewebstore.google.com/detail/x', 'firefox')).toBe(false);
+    expect(isContentScriptBlockedUrl('https://chrome.google.com/webstore/detail/x', 'firefox')).toBe(false);
   });
 
-  it('flags Firefox-protected hosts', () => {
-    expect(isContentScriptBlockedUrl('https://addons.mozilla.org/en-US/firefox/')).toBe(true);
-    expect(isContentScriptBlockedUrl('https://accounts.firefox.com/signin')).toBe(true);
+  it('flags Firefox-protected hosts on Firefox only', () => {
+    expect(isContentScriptBlockedUrl('https://addons.mozilla.org/en-US/firefox/', 'firefox')).toBe(true);
+    expect(isContentScriptBlockedUrl('https://accounts.firefox.com/signin', 'firefox')).toBe(true);
+    expect(isContentScriptBlockedUrl('https://addons.mozilla.org/en-US/firefox/', 'chrome')).toBe(false);
+    expect(isContentScriptBlockedUrl('https://accounts.firefox.com/signin', 'chrome')).toBe(false);
   });
 
   it('does not flag ordinary https hosts or subdomain lookalikes', () => {
-    expect(isContentScriptBlockedUrl('https://example.com/')).toBe(false);
-    expect(isContentScriptBlockedUrl('https://google.com/')).toBe(false);
-    // Exact-hostname comparison: a blocked hostname used as a subdomain of an
-    // attacker-controlled domain must NOT match.
-    expect(isContentScriptBlockedUrl('https://chromewebstore.google.com.evil.com/')).toBe(false);
-    expect(isContentScriptBlockedUrl('https://addons.mozilla.org.evil.com/')).toBe(false);
+    for (const browser of ['chrome', 'firefox'] as const) {
+      expect(isContentScriptBlockedUrl('https://example.com/', browser)).toBe(false);
+      expect(isContentScriptBlockedUrl('https://google.com/', browser)).toBe(false);
+      // Exact-hostname comparison: a blocked hostname used as a subdomain of
+      // an attacker-controlled domain must NOT match.
+      expect(isContentScriptBlockedUrl('https://chromewebstore.google.com.evil.com/', browser)).toBe(false);
+      expect(isContentScriptBlockedUrl('https://addons.mozilla.org.evil.com/', browser)).toBe(false);
+    }
   });
 
   it('returns false for non-string or unparseable input', () => {
-    expect(isContentScriptBlockedUrl(undefined)).toBe(false);
-    expect(isContentScriptBlockedUrl(null)).toBe(false);
-    expect(isContentScriptBlockedUrl('')).toBe(false);
-    expect(isContentScriptBlockedUrl('not a url')).toBe(false);
+    expect(isContentScriptBlockedUrl(undefined, 'chrome')).toBe(false);
+    expect(isContentScriptBlockedUrl(null, 'chrome')).toBe(false);
+    expect(isContentScriptBlockedUrl('', 'firefox')).toBe(false);
+    expect(isContentScriptBlockedUrl('not a url', 'firefox')).toBe(false);
   });
 });

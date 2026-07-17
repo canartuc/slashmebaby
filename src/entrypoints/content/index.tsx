@@ -148,12 +148,17 @@ export default defineContentScript({
     }, true);
 
     // Also listen for toggle from background (chrome.commands)
-    chrome.runtime.onMessage.addListener((message, sender) => {
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Only accept messages from our own extension's background.
       if (!sender || sender.id !== chrome.runtime.id) return;
       if (isToggleOverlayCommand(message)) {
         if (root) dismiss();
         else open();
+        // Ack so the background's sendMessage callback completes without
+        // "The message port closed before a response was received." — its
+        // popup-fallback logic distinguishes a live content script from a
+        // missing one by this response.
+        sendResponse?.({ ok: true });
       }
     });
   },

@@ -12,7 +12,7 @@ type UpdatedListener = (
 type ActivatedListener = (info: { tabId: number; windowId: number }) => void;
 
 interface MockOptions {
-  /** Tabs returned by the register() sweep's tabs.query. */
+  /** Tabs returned by the sweep's tabs.query. */
   tabs?: Array<Partial<chrome.tabs.Tab>>;
   /** Result of chrome.extension.isAllowedFileSchemeAccess (Chrome only). */
   fileAccess?: boolean;
@@ -20,15 +20,27 @@ interface MockOptions {
   firefox?: boolean;
   /** Neither chrome.action nor chrome.browserAction exists. */
   noActionApi?: boolean;
-  /** chrome.runtime.lastError is set during callbacks (counts reads). */
-  lastError?: boolean;
+  /** chrome.runtime.lastError message during callbacks (counts reads).
+   *  Chrome sets DIFFERENT messages for "no content script" vs the benign
+   *  "listener didn't respond" case — the routing must distinguish them. */
+  lastErrorMessage?: string;
+  /** Where lastError is set: only inside the sendMessage callback (default,
+   *  matches the real no-receiver case) or during every callback. */
+  lastErrorScope?: 'sendMessage' | 'always';
+  /** When true, isAllowedFileSchemeAccess never invokes its callback —
+   *  simulates the probe still being in flight on service-worker wake. */
+  fileProbeNeverResolves?: boolean;
 }
+
+const NO_RECEIVER_ERROR = 'Could not establish connection. Receiving end does not exist.';
+const PORT_CLOSED_ERROR = 'The message port closed before a response was received.';
 
 function makeActionChromeMock(opts: MockOptions = {}) {
   const clickListeners: ClickListener[] = [];
   const updatedListeners: UpdatedListener[] = [];
   const activatedListeners: ActivatedListener[] = [];
   let lastErrorReads = 0;
+  let inSendMessageCallback = false;
 
   const actionApi = {
     setPopup: vi.fn((_details: object, cb?: () => void) => cb?.()),
@@ -49,7 +61,10 @@ function makeActionChromeMock(opts: MockOptions = {}) {
       ),
       get lastError() {
         lastErrorReads += 1;
-        return opts.lastError ? { message: 'boom' } : undefined;
+        if (!opts.lastErrorMessage) return undefined;
+        const scoped = (opts.lastErrorScope ?? 'sendMessage') === 'sendMessage';
+        if (scoped && !inSendMessageCallback) return undefined;
+        return { message: opts.lastErrorMessage };
       },
     },
     tabs: {
@@ -61,14 +76,18 @@ function makeActionChromeMock(opts: MockOptions = {}) {
         const tab = queryTabs.find((t) => t.id === tabId);
         cb?.(tab);
       }),
-      sendMessage: vi.fn((_tabId: number, _msg: unknown, cb?: () => void) => cb?.()),
+      sendMessage: vi.fn((_tabId: number, _msg: unknown, cb?: () => void) => {
+        inSendMessageCallback = true;
+        cb?.();
+        inSendMessageCallback = false;
+      }),
       onUpdated: { addListener: vi.fn((fn: UpdatedListener) => updatedListeners.push(fn)) },
       onActivated: { addListener: vi.fn((fn: ActivatedListener) => activatedListeners.push(fn)) },
     },
     extension: {
-      isAllowedFileSchemeAccess: vi.fn((cb: (allowed: boolean) => void) =>
-        cb(opts.fileAccess ?? false)
-      ),
+      isAllowedFileSchemeAccess: vi.fn((cb: (allowed: boolean) => void) => {
+        if (!opts.fileProbeNeverResolves) cb(opts.fileAccess ?? false);
+      }),
     },
   };
 
@@ -92,6 +111,9 @@ function stubAndRegister(opts: MockOptions = {}) {
   vi.stubGlobal('chrome', mock.chromeMock);
   const routing = createActionRouting();
   routing.register();
+  // The initial sweep is triggered by onInstalled/onStartup in production;
+  // tests run it explicitly to exercise the same startup state.
+  routing.sweep();
   return { ...mock, routing };
 }
 
@@ -106,6 +128,16 @@ describe('createActionRouting > register', () => {
     const tabs = chromeMock.tabs as { onUpdated: { addListener: unknown }; onActivated: { addListener: unknown } };
     expect(tabs.onUpdated.addListener).toHaveBeenCalledTimes(1);
     expect(tabs.onActivated.addListener).toHaveBeenCalledTimes(1);
+  });
+
+  it('register alone does not sweep tabs (per-tab state survives worker wakes)', () => {
+    const mock = makeActionChromeMock({ tabs: [{ id: 1, url: 'https://example.com/' }] });
+    vi.stubGlobal('chrome', mock.chromeMock);
+    const routing = createActionRouting();
+    routing.register();
+    expect(mock.actionApi.setPopup).not.toHaveBeenCalled();
+    routing.sweep();
+    expect(mock.actionApi.setPopup).toHaveBeenCalledWith({ tabId: 1, popup: '' });
   });
 
   it('sweeps existing tabs and clears the per-tab popup for https tabs', () => {
@@ -226,7 +258,8 @@ describe('createActionRouting > popup routing via tab events', () => {
 
   it('swallows lastError when the activated tab is gone', () => {
     const { actionApi, activatedListeners, readLastErrorCount } = stubAndRegister({
-      lastError: true,
+      lastErrorMessage: 'No tab with id: 99.',
+      lastErrorScope: 'always',
     });
     actionApi.setPopup.mockClear();
     expect(() => activatedListeners[0]({ tabId: 99, windowId: 1 })).not.toThrow();
@@ -271,9 +304,9 @@ describe('createActionRouting > requestOverlayToggle', () => {
     expect(tabs.query).not.toHaveBeenCalled();
   });
 
-  it('recovers via default-popup restore + openPopup when sendMessage hits lastError', () => {
+  it('recovers via default-popup restore + openPopup when no receiver exists', () => {
     const { routing, actionApi, chromeMock, readLastErrorCount } = stubAndRegister({
-      lastError: true,
+      lastErrorMessage: NO_RECEIVER_ERROR,
     });
     const tabs = chromeMock.tabs as { sendMessage: ReturnType<typeof vi.fn> };
     routing.requestOverlayToggle({ id: 7, url: 'https://example.com/' } as chrome.tabs.Tab);
@@ -284,6 +317,24 @@ describe('createActionRouting > requestOverlayToggle', () => {
       expect.any(Function)
     );
     expect(actionApi.openPopup).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT recover on the benign port-closed lastError (listener ran, no response)', () => {
+    // Chrome sets this whenever a listener handles the message without
+    // calling sendResponse — it means the overlay DID toggle. Recovering
+    // here would open the popup on top of the overlay and wedge the
+    // per-tab popup onto popup.html.
+    const { routing, actionApi, chromeMock, readLastErrorCount } = stubAndRegister({
+      lastErrorMessage: PORT_CLOSED_ERROR,
+    });
+    const tabs = chromeMock.tabs as { sendMessage: ReturnType<typeof vi.fn> };
+    actionApi.setPopup.mockClear();
+    routing.requestOverlayToggle({ id: 7, url: 'https://example.com/' } as chrome.tabs.Tab);
+    expect(tabs.sendMessage).toHaveBeenCalledTimes(1);
+    // lastError must still be read (else Chrome logs "Unchecked runtime.lastError")
+    expect(readLastErrorCount()).toBeGreaterThan(0);
+    expect(actionApi.setPopup).not.toHaveBeenCalled();
+    expect(actionApi.openPopup).not.toHaveBeenCalled();
   });
 
   it('swallows openPopup rejections', async () => {
@@ -310,6 +361,56 @@ describe('createActionRouting > requestOverlayToggle', () => {
     const { routing, actionApi } = stubAndRegister();
     routing.requestOverlayToggle(undefined);
     expect(actionApi.openPopup).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('createActionRouting > file-access probe race', () => {
+  it('tries the content script on file:// tabs even before the probe resolves', () => {
+    // On service-worker wake the probe is async; a shortcut arriving first
+    // must not misroute a working file:// overlay to a popup that may have
+    // been cleared for that tab.
+    const { routing, chromeMock } = stubAndRegister({ fileProbeNeverResolves: true });
+    const tabs = chromeMock.tabs as { sendMessage: ReturnType<typeof vi.fn> };
+    routing.requestOverlayToggle({ id: 4, url: 'file:///Users/me/doc.html' } as chrome.tabs.Tab);
+    expect(tabs.sendMessage).toHaveBeenCalledWith(
+      4,
+      { type: 'TOGGLE_OVERLAY' },
+      expect.any(Function)
+    );
+  });
+});
+
+describe('createActionRouting > recovery re-arm protection', () => {
+  it('keeps the default popup on a recovered tab across activations until it navigates', () => {
+    const { routing, actionApi, activatedListeners, updatedListeners } = stubAndRegister({
+      tabs: [{ id: 7, url: 'https://example.com/' }],
+      lastErrorMessage: NO_RECEIVER_ERROR,
+    });
+    // First toggle: content script unreachable → recovery restores default.
+    routing.requestOverlayToggle({ id: 7, url: 'https://example.com/' } as chrome.tabs.Tab);
+    expect(actionApi.setPopup).toHaveBeenCalledWith(
+      { tabId: 7, popup: 'popup.html' },
+      expect.any(Function)
+    );
+
+    // Re-activating the tab must NOT re-clear the popup (that would re-arm
+    // the dead-first-click trap on Firefox pre-149).
+    actionApi.setPopup.mockClear();
+    activatedListeners[0]({ tabId: 7, windowId: 1 });
+    const cleared = actionApi.setPopup.mock.calls.some(
+      (c) => (c[0] as { tabId: number; popup: string }).popup === ''
+    );
+    expect(cleared).toBe(false);
+
+    // A completed navigation re-injects the content script → routing clears
+    // the per-tab popup again.
+    actionApi.setPopup.mockClear();
+    updatedListeners[0](
+      7,
+      { status: 'complete' },
+      { id: 7, url: 'https://example.com/other' } as chrome.tabs.Tab
+    );
+    expect(actionApi.setPopup).toHaveBeenCalledWith({ tabId: 7, popup: '' });
   });
 });
 

@@ -545,11 +545,20 @@ export function registerBackgroundListeners(): void {
   });
 
   chrome.runtime.onInstalled.addListener((details) => {
+    // Per-tab popup state can be stale after an install or update — apply
+    // routing to every open tab. Not done on plain worker wakes: the
+    // browser keeps per-tab popup state across suspensions and the
+    // tab-event listeners keep it current.
+    actionRouting.sweep();
     if (details.reason === 'install') {
       // WXT emits the onboarding entrypoint at the bundle root as
       // "onboarding.html" (see .output/*/onboarding.html).
       chrome.tabs.create({ url: chrome.runtime.getURL('/onboarding.html') });
     }
+  });
+
+  chrome.runtime.onStartup.addListener(() => {
+    actionRouting.sweep();
   });
 
   // Warm the router on startup so the first user interaction isn't delayed.

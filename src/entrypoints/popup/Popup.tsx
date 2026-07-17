@@ -14,6 +14,13 @@ export const Popup: React.FC = () => {
   const dismiss = useCallback(() => window.close(), []);
   usePopupKeySource(dismiss);
   return (
-    <CommandBar variant="popup" onDismiss={dismiss} resolveCopyUrl={getActiveTabUrl} />
+    <CommandBar
+      variant="popup"
+      // Type-to-search on open (the popup's historical entry behavior);
+      // '/' still toggles into jump-label mode.
+      initialMode="search"
+      onDismiss={dismiss}
+      resolveCopyUrl={getActiveTabUrl}
+    />
   );
 };

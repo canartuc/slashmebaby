@@ -18,11 +18,21 @@ export function usePopupKeySource(onDismiss: () => void): void {
           ? activeElement
           : null;
 
-      // Backspace-close matches the shipped popup's muscle memory: one key
-      // dismisses unless the user is mid-query (then it edits the query).
-      if (e.key === 'Backspace' && (!input || input.value.length === 0)) {
-        e.preventDefault();
-        onDismiss();
+      // Backspace-close matches the shipped popup's muscle memory: it only
+      // dismisses while the QUERY is empty — never mid-query, even when
+      // focus wandered off the input (then it just refocuses the query).
+      if (e.key === 'Backspace') {
+        const queryInput = document.querySelector<HTMLInputElement>('.smb-input');
+        const hasQuery = (queryInput?.value.length ?? 0) > 0;
+        if (!hasQuery) {
+          e.preventDefault();
+          onDismiss();
+          return;
+        }
+        if (!input) {
+          e.preventDefault();
+          queryInput?.focus();
+        }
         return;
       }
 

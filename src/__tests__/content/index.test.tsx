@@ -14,7 +14,11 @@ type ChangeListener = (
   changes: Record<string, chrome.storage.StorageChange>,
   area: string
 ) => void;
-type RuntimeListener = (message: unknown, sender: chrome.runtime.MessageSender) => void;
+type RuntimeListener = (
+  message: unknown,
+  sender: chrome.runtime.MessageSender,
+  sendResponse?: (response: unknown) => void
+) => void;
 type StorageGetCb = (result: Record<string, unknown>) => void;
 
 interface CapturedChrome {
@@ -436,6 +440,22 @@ describe('content script entrypoint', () => {
     );
     const host = document.getElementById('slashmebaby-root');
     expect(host?.shadowRoot?.children.length).toBe(2);
+  });
+
+  it('acks TOGGLE_OVERLAY with sendResponse so the background sees no lastError', async () => {
+    // Without the ack, Chrome sets "The message port closed before a
+    // response was received." in the background's sendMessage callback on
+    // EVERY successful toggle — indistinguishable from a missing content
+    // script without message filtering, and the reason the routing must see
+    // a response here.
+    const captured = buildChrome();
+    const cs = await loadContentMain();
+    cs.main();
+
+    const sender = { id: 'test-extension' } as chrome.runtime.MessageSender;
+    const sendResponse = vi.fn();
+    captured.runtimeListeners[0]({ type: 'TOGGLE_OVERLAY' }, sender, sendResponse);
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true });
   });
 
   it('ignores malformed TOGGLE_OVERLAY-ish messages via the shared type guard', async () => {

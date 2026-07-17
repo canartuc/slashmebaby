@@ -104,12 +104,26 @@ describe('Popup', () => {
     mockRawDataMessages();
   });
 
-  it('renders the palette surface: open tabs grid, bookmarks, jump placeholder', async () => {
+  it('renders the palette surface with a writable, type-to-search input', async () => {
     await renderPopup();
     expect(screen.getByText('Open Tabs')).toBeTruthy();
     expect(screen.getByText('Bookmarks Bar')).toBeTruthy();
-    const input = screen.getByPlaceholderText('Press / to search') as HTMLInputElement;
-    expect(input.readOnly).toBe(true);
+    const input = screen.getByPlaceholderText(
+      'Search tabs, bookmarks, actions...'
+    ) as HTMLInputElement;
+    expect(input.readOnly).toBe(false);
+  });
+
+  it('typing never triggers jump-label navigation on entry', async () => {
+    await renderPopup();
+    const input = screen.getByPlaceholderText(
+      'Search tabs, bookmarks, actions...'
+    ) as HTMLInputElement;
+    input.focus();
+    fireEvent.keyDown(document, { key: 'g' });
+    expect(findCall('SWITCH_TAB')).toBeUndefined();
+    expect(findCall('NAVIGATE')).toBeUndefined();
+    expect(mockClose).not.toHaveBeenCalled();
   });
 
   it('has no backdrop and uses the popup container variant', async () => {
@@ -125,8 +139,12 @@ describe('Popup', () => {
     expect(screen.getByRole('listbox')).toBeTruthy();
   });
 
-  it("native '/' keydown toggles search mode", async () => {
+  it("native '/' keydown toggles into jump mode and back", async () => {
     await renderPopup();
+    fireEvent.keyDown(document, { key: '/' });
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Press / to search')).toBeTruthy();
+    });
     fireEvent.keyDown(document, { key: '/' });
     await waitFor(() => {
       expect(screen.getByPlaceholderText('Search tabs, bookmarks, actions...')).toBeTruthy();
@@ -135,8 +153,7 @@ describe('Popup', () => {
 
   it('filters client-side and never sends SEARCH or SMART_SUGGESTIONS', async () => {
     await renderPopup();
-    fireEvent.keyDown(document, { key: '/' });
-    const input = await screen.findByPlaceholderText('Search tabs, bookmarks, actions...');
+    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
     fireEvent.input(input, { target: { value: 'github' } });
     await waitFor(() => {
       expect(screen.getByRole('listbox').textContent).toContain('GitHub');
@@ -156,8 +173,9 @@ describe('Popup', () => {
     });
   });
 
-  it('an action key sends EXECUTE_ACTION and closes on success', async () => {
+  it('an action key in jump mode sends EXECUTE_ACTION and closes on success', async () => {
     await renderPopup();
+    fireEvent.keyDown(document, { key: '/' }); // into jump mode
     fireEvent.keyDown(document, { key: 'c' });
     await waitFor(() => {
       expect(findCall('EXECUTE_ACTION')).toBeTruthy();
@@ -169,6 +187,7 @@ describe('Popup', () => {
     vi.mocked(chrome.runtime.sendMessage).mockReset();
     mockRawDataMessages({ executeActionResponse: { success: false, error: 'boom' } });
     await renderPopup();
+    fireEvent.keyDown(document, { key: '/' }); // into jump mode
     fireEvent.keyDown(document, { key: 'c' });
     await waitFor(() => {
       expect(screen.getByRole('status').textContent).toContain('boom');
@@ -182,33 +201,33 @@ describe('Popup', () => {
     expect(mockClose).toHaveBeenCalled();
   });
 
-  it('Backspace in jump mode closes the popup', async () => {
+  it('Backspace with an empty query closes the popup', async () => {
     await renderPopup();
     fireEvent.keyDown(document, { key: 'Backspace' });
     expect(mockClose).toHaveBeenCalled();
+  });
+
+  it('Backspace with a typed query but stray focus refocuses the input instead of closing', async () => {
+    await renderPopup();
+    const input = screen.getByPlaceholderText(
+      'Search tabs, bookmarks, actions...'
+    ) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'github' } });
+    (document.activeElement as HTMLElement | null)?.blur();
+    fireEvent.keyDown(document, { key: 'Backspace' });
+    expect(mockClose).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(input);
   });
 
   it('Backspace while typing in the search input does not close', async () => {
     await renderPopup();
-    fireEvent.keyDown(document, { key: '/' });
-    const input = (await screen.findByPlaceholderText(
+    const input = screen.getByPlaceholderText(
       'Search tabs, bookmarks, actions...'
-    )) as HTMLInputElement;
+    ) as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'abc' } });
     input.focus();
     fireEvent.keyDown(document, { key: 'Backspace' });
     expect(mockClose).not.toHaveBeenCalled();
-  });
-
-  it('Backspace on an empty search query closes the popup', async () => {
-    await renderPopup();
-    fireEvent.keyDown(document, { key: '/' });
-    const input = (await screen.findByPlaceholderText(
-      'Search tabs, bookmarks, actions...'
-    )) as HTMLInputElement;
-    input.focus();
-    fireEvent.keyDown(document, { key: 'Backspace' });
-    expect(mockClose).toHaveBeenCalled();
   });
 
   it('"u" copies the ACTIVE tab url (not the popup url) and closes', async () => {
@@ -223,6 +242,7 @@ describe('Popup', () => {
       ])) as unknown as typeof chrome.tabs.query);
 
     await renderPopup();
+    fireEvent.keyDown(document, { key: '/' }); // into jump mode
     fireEvent.keyDown(document, { key: 'u' });
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith('https://active.example/p?x=1');
@@ -232,8 +252,7 @@ describe('Popup', () => {
 
   it('Enter with no matching results neither acts nor closes', async () => {
     await renderPopup();
-    fireEvent.keyDown(document, { key: '/' });
-    const input = await screen.findByPlaceholderText('Search tabs, bookmarks, actions...');
+    const input = screen.getByPlaceholderText('Search tabs, bookmarks, actions...');
     fireEvent.input(input, { target: { value: 'zzz-no-match-zzz' } });
     fireEvent.keyDown(document, { key: 'Enter' });
     expect(findCall('SWITCH_TAB')).toBeUndefined();

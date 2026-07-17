@@ -63,14 +63,15 @@ export function validateNavigationUrl(value: unknown): UrlValidationResult {
 
 const INJECTABLE_SCHEMES = new Set(['http:', 'https:', 'file:']);
 
-// Hosts where browsers block content scripts by policy even though the
-// scheme is https. Compared by exact hostname, never by suffix.
-const CONTENT_SCRIPT_BLOCKED_HOSTS = new Set([
-  'chromewebstore.google.com',
-  'chrome.google.com',
-  'addons.mozilla.org',
-  'accounts.firefox.com',
-]);
+// Hosts where a browser blocks content scripts by policy even though the
+// scheme is https. Per-browser: each browser only protects ITS OWN store
+// and account pages — the other browser injects there fine, and treating
+// the lists as shared would route a working overlay to the popup.
+// Compared by exact hostname, never by suffix.
+const CONTENT_SCRIPT_BLOCKED_HOSTS: Record<'chrome' | 'firefox', Set<string>> = {
+  chrome: new Set(['chromewebstore.google.com', 'chrome.google.com']),
+  firefox: new Set(['addons.mozilla.org', 'accounts.firefox.com']),
+};
 
 export function isInjectableUrl(value: unknown): value is string {
   if (typeof value !== 'string' || value.length === 0) return false;
@@ -82,11 +83,14 @@ export function isInjectableUrl(value: unknown): value is string {
   }
 }
 
-export function isContentScriptBlockedUrl(value: unknown): boolean {
+export function isContentScriptBlockedUrl(
+  value: unknown,
+  browser: 'chrome' | 'firefox'
+): boolean {
   if (typeof value !== 'string' || value.length === 0) return false;
   try {
     const parsed = new URL(value);
-    return CONTENT_SCRIPT_BLOCKED_HOSTS.has(parsed.hostname.toLowerCase());
+    return CONTENT_SCRIPT_BLOCKED_HOSTS[browser].has(parsed.hostname.toLowerCase());
   } catch {
     return false;
   }

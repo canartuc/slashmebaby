@@ -30,9 +30,14 @@ interface ChromeWithActionApis {
 }
 
 export interface ActionRouting {
-  /** Registers all listeners synchronously (MV3 wake-safe) and kicks off the
-   *  initial popup-state sweep of existing tabs. */
+  /** Registers all listeners synchronously (MV3 wake-safe). Does NOT sweep —
+   *  per-tab popup state survives worker suspensions, so sweeping belongs to
+   *  onInstalled/onStartup (see sweep()). */
   register(): void;
+  /** Resolves the file-access setting and applies popup routing to every
+   *  open tab. Call on runtime.onInstalled and runtime.onStartup, when the
+   *  stored per-tab state can actually be stale. */
+  sweep(): void;
   /** Opens the palette for the given tab: in-page overlay when the content
    *  script can run there, action popup otherwise. Must be called
    *  synchronously from a user-action handler so the Firefox pre-149
@@ -45,8 +50,15 @@ const TOGGLE_OVERLAY_MESSAGE: ToggleOverlayCommand = { type: 'TOGGLE_OVERLAY' };
 export function createActionRouting(): ActionRouting {
   // file:// tabs only host content scripts once the user enables
   // "Allow access to file URLs" (Chrome). Until the probe resolves true,
-  // file tabs are routed to the popup, where the palette always works.
+  // file tabs keep the default popup, where the palette always works.
   let fileAccessAllowed = false;
+
+  // Tabs where a toggle found no content script (recovery restored the
+  // default popup). Kept on the default popup across activations — on
+  // Firefox pre-149 re-clearing would re-arm a dead first click, since the
+  // recovery openPopup call has no user-input context. Cleared when the tab
+  // finishes a navigation (fresh content script) or a message succeeds.
+  const unreachableTabs = new Set<number>();
 
   function getActionApi(): ActionApi | undefined {
     const c = chrome as unknown as ChromeWithActionApis;
@@ -57,6 +69,18 @@ export function createActionRouting(): ActionRouting {
     return (chrome as unknown as ChromeWithActionApis).action !== undefined;
   }
 
+  function browserKind(): 'chrome' | 'firefox' {
+    return isChromeActionNamespace() ? 'chrome' : 'firefox';
+  }
+
+  // Chrome/Firefox set this exact phrase when NO listener exists on the
+  // receiving end. Any other lastError (notably "The message port closed
+  // before a response was received.") means a listener ran — the overlay
+  // toggled — and recovering would stack the popup on top of it.
+  function isNoReceiverError(error: { message?: string } | undefined): boolean {
+    return !!error?.message?.includes('Receiving end does not exist');
+  }
+
   function getDefaultPopupPath(): string {
     const manifest = chrome.runtime.getManifest() as {
       action?: { default_popup?: string };
@@ -65,10 +89,18 @@ export function createActionRouting(): ActionRouting {
     return manifest.action?.default_popup ?? manifest.browser_action?.default_popup ?? '';
   }
 
+  // Whether the content script CAN exist on this URL at all — used by the
+  // toggle path, which asks the tab directly and falls back on failure.
+  function canHostContentScript(url: string | undefined): boolean {
+    return isInjectableUrl(url) && !isContentScriptBlockedUrl(url, browserKind());
+  }
+
+  // Stricter check for popup routing: also requires file-access opt-in,
+  // since a cleared popup on an unscripted file:// tab would leave the icon
+  // doing nothing.
   function isScriptableTabUrl(url: string | undefined): boolean {
-    if (!isInjectableUrl(url)) return false;
-    if (isContentScriptBlockedUrl(url)) return false;
-    if (url.toLowerCase().startsWith('file:') && !fileAccessAllowed) return false;
+    if (!canHostContentScript(url)) return false;
+    if ((url as string).toLowerCase().startsWith('file:') && !fileAccessAllowed) return false;
     return true;
   }
 
@@ -94,7 +126,7 @@ export function createActionRouting(): ActionRouting {
     // Only reachable through listeners registered when the action API
     // exists, hence the optional chain rather than a guard.
     const api = getActionApi();
-    if (isScriptableTabUrl(url)) {
+    if (isScriptableTabUrl(url) && !unreachableTabs.has(tabId)) {
       api?.setPopup({ tabId, popup: '' });
     } else if (mode === 'event') {
       // Explicit restore rather than relying on the browser's
@@ -108,16 +140,29 @@ export function createActionRouting(): ActionRouting {
   function requestOverlayToggle(tab: chrome.tabs.Tab | undefined): void {
     const api = getActionApi();
     if (!api) return;
-    if (tab?.id !== undefined && isScriptableTabUrl(tab.url)) {
+    // The content script's presence is the ground truth: try the message on
+    // every URL that can host one, including file:// tabs whose access
+    // probe hasn't resolved yet (a wrong popup-guess there would drop the
+    // keystroke entirely).
+    if (tab?.id !== undefined && canHostContentScript(tab.url)) {
       const tabId = tab.id;
       chrome.tabs.sendMessage(tabId, TOGGLE_OVERLAY_MESSAGE, () => {
-        if (chrome.runtime.lastError) {
-          // Content script unreachable despite a scriptable URL (races,
-          // frame not yet injected). Restore the popup for this tab and open
-          // it. On Firefox pre-149 the gesture is lost by now, so openPopup
-          // rejects and the popup simply opens on the next click.
+        const error = chrome.runtime.lastError;
+        if (isNoReceiverError(error)) {
+          // Genuinely no content script (file:// without access, tab from
+          // before install). Restore the popup for this tab — and keep it
+          // (unreachableTabs) so the icon works on the next click — then
+          // try to open it. On Firefox pre-149 the gesture is lost by now,
+          // so this openPopup rejects and the restored popup opens on the
+          // following click instead.
+          unreachableTabs.add(tabId);
           api.setPopup({ tabId, popup: getDefaultPopupPath() }, () => openPopupFallback(api));
+        } else if (!error) {
+          // The overlay answered — the tab is definitely reachable again.
+          unreachableTabs.delete(tabId);
         }
+        // Any other error (e.g. "message port closed") means the listener
+        // ran and the overlay toggled; reading lastError above swallows it.
       });
       return;
     }
@@ -135,6 +180,25 @@ export function createActionRouting(): ActionRouting {
     });
   }
 
+  function sweep(): void {
+    if (!getActionApi()) return;
+    // Resolve the file-access setting first so file:// tabs are classified
+    // correctly; Firefox matches file: through <all_urls> without a separate
+    // opt-in, so no probe is needed there.
+    const probe = isChromeActionNamespace()
+      ? chrome.extension?.isAllowedFileSchemeAccess
+      : undefined;
+    if (probe) {
+      probe((allowed) => {
+        fileAccessAllowed = allowed;
+        sweepAllTabs();
+      });
+    } else {
+      fileAccessAllowed = !isChromeActionNamespace();
+      sweepAllTabs();
+    }
+  }
+
   function register(): void {
     const api = getActionApi();
     if (!api) return;
@@ -143,6 +207,9 @@ export function createActionRouting(): ActionRouting {
 
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       if (changeInfo.status === 'complete') {
+        // A completed load means a fresh content script where one can run —
+        // any earlier "unreachable" verdict is stale.
+        unreachableTabs.delete(tabId);
         // Route only once the page finished loading: the content script
         // injects at document_idle, so clearing earlier would open a window
         // where icon clicks find no receiver.
@@ -161,22 +228,20 @@ export function createActionRouting(): ActionRouting {
       });
     });
 
-    // Initial sweep. On Chrome, resolve the file-access setting first so
-    // file:// tabs are classified correctly; Firefox matches file: through
-    // <all_urls> without a separate opt-in, so no probe is needed there.
+    // Resolve the file-access flag on every worker wake (cheap, no tab
+    // writes) so event-driven routing classifies file:// tabs correctly;
+    // the full sweep is reserved for sweep().
     const probe = isChromeActionNamespace()
       ? chrome.extension?.isAllowedFileSchemeAccess
       : undefined;
     if (probe) {
       probe((allowed) => {
         fileAccessAllowed = allowed;
-        sweepAllTabs();
       });
     } else {
       fileAccessAllowed = !isChromeActionNamespace();
-      sweepAllTabs();
     }
   }
 
-  return { register, requestOverlayToggle };
+  return { register, sweep, requestOverlayToggle };
 }
