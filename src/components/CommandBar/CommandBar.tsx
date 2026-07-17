@@ -37,9 +37,22 @@ function nextIndex(prev: number, len: number, dir: 1 | -1): number {
 
 export interface CommandBarProps {
   onDismiss: () => void;
+  /** 'overlay' (default): backdrop + viewport-positioned container.
+   *  'popup': container fills the extension-action popup window, no
+   *  backdrop, no position class — sizing comes from popup.css. */
+  variant?: 'overlay' | 'popup';
+  /** Resolves the URL 'copy-clean-link' should copy. When absent, the
+   *  synchronous window.location.href path is used (overlay: the host
+   *  page). The popup passes the active tab's URL — its own location is
+   *  the extension page. */
+  resolveCopyUrl?: () => Promise<string | null>;
 }
 
-export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
+export const CommandBar: React.FC<CommandBarProps> = ({
+  onDismiss,
+  variant = 'overlay',
+  resolveCopyUrl,
+}) => {
   const [mode, setMode] = useState<'jump' | 'search'>('jump');
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -334,8 +347,17 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     if (isActionKey(key)) {
       const actionId = getActionForKey(key);
       // copy-clean-link writes the stripped URL to the clipboard from the
-      // content-script context; MV3 service workers have no clipboard access.
+      // palette's own context; MV3 service workers have no clipboard access.
       if (actionId === 'copy-clean-link') {
+        if (resolveCopyUrl) {
+          resolveCopyUrl()
+            .then((href) =>
+              href ? navigator.clipboard?.writeText(cleanUrl(href)) : undefined
+            )
+            .catch(() => undefined)
+            .finally(() => onDismiss());
+          return;
+        }
         const cleaned = cleanUrl(window.location.href);
         Promise.resolve(navigator.clipboard?.writeText(cleaned))
           .catch(() => undefined)
@@ -438,46 +460,57 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     return () => el.removeEventListener('click', handler);
   }, [onDismiss]);
 
-  const positionClass = `smb-container--${settings.position}`;
+  // In the popup the window itself is the frame: no backdrop, no
+  // margin-based position class — popup.css sizes .smb-container--popup.
+  const containerClass =
+    variant === 'popup'
+      ? 'smb-container smb-container--popup'
+      : `smb-container smb-container--${settings.position}`;
+
+  const dialog = (
+    <div
+      ref={containerRef}
+      className={containerClass}
+      data-theme={theme}
+      role="dialog"
+      aria-label="Command palette"
+      aria-modal="true"
+    >
+      <SearchInput query={query} onQueryChange={setQuery} mode={mode} />
+      {/* Always mounted so aria-live announcements fire when text appears */}
+      <div
+        className={`smb-error-strip${actionError ? ' smb-error-strip--visible' : ''}`}
+        role="status"
+        aria-live="polite"
+      >
+        {actionError ?? ''}
+      </div>
+      <TreeView
+        pinnedTabs={pinnedTabs}
+        allTabs={allTabs}
+        visibleItems={filteredItems}
+        labels={labels}
+        selectedIndex={selectedIndex}
+        showFavicons={settings.showFavicons}
+        onSelectItem={handleItemSelect}
+        onPinnedTabSelect={handlePinnedTabSelect}
+        onTabGridSelect={handlePinnedTabSelect}
+        searchMode={mode === 'search'}
+        searchQuery={query}
+        emptyStateMessage={
+          actionMode && actionsLoadFailed && filteredItems.length === 0
+            ? "Couldn't load actions"
+            : undefined
+        }
+      />
+    </div>
+  );
+
+  if (variant === 'popup') return dialog;
 
   return (
     <div ref={backdropRef} className="smb-backdrop">
-      <div
-        ref={containerRef}
-        className={`smb-container ${positionClass}`}
-        data-theme={theme}
-        role="dialog"
-        aria-label="Command palette"
-        aria-modal="true"
-      >
-        <SearchInput query={query} onQueryChange={setQuery} mode={mode} />
-        {/* Always mounted so aria-live announcements fire when text appears */}
-        <div
-          className={`smb-error-strip${actionError ? ' smb-error-strip--visible' : ''}`}
-          role="status"
-          aria-live="polite"
-        >
-          {actionError ?? ''}
-        </div>
-        <TreeView
-          pinnedTabs={pinnedTabs}
-          allTabs={allTabs}
-          visibleItems={filteredItems}
-          labels={labels}
-          selectedIndex={selectedIndex}
-          showFavicons={settings.showFavicons}
-          onSelectItem={handleItemSelect}
-          onPinnedTabSelect={handlePinnedTabSelect}
-          onTabGridSelect={handlePinnedTabSelect}
-          searchMode={mode === 'search'}
-          searchQuery={query}
-          emptyStateMessage={
-            actionMode && actionsLoadFailed && filteredItems.length === 0
-              ? "Couldn't load actions"
-              : undefined
-          }
-        />
-      </div>
+      {dialog}
     </div>
   );
 };

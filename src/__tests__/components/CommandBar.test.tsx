@@ -1465,3 +1465,87 @@ describe('CommandBar — EXECUTE_ACTION failure feedback', () => {
     expect(onDismiss).not.toHaveBeenCalled();
   });
 });
+
+// ─── Popup variant ──────────────────────────────────────────────────────────
+// The action popup renders the same CommandBar without the overlay framing:
+// no backdrop, no position class, fixed window sizing from popup.css.
+
+describe('CommandBar — popup variant', () => {
+  beforeEach(() => setupOverlayMock());
+
+  function fireSmbKey(key: string, shiftKey = false) {
+    document.dispatchEvent(
+      new CustomEvent('smb-keydown', { detail: { key, shiftKey } })
+    );
+  }
+
+  it("variant='popup' renders no .smb-backdrop", async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} variant="popup" />);
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+    expect(container.querySelector('.smb-backdrop')).toBeNull();
+  });
+
+  it("variant='popup' renders .smb-container--popup without a position class", async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} variant="popup" />);
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+    const el = container.querySelector('.smb-container');
+    expect(el).not.toBeNull();
+    expect(el?.classList.contains('smb-container--popup')).toBe(true);
+    expect(el?.classList.contains('smb-container--center')).toBe(false);
+    expect(el?.classList.contains('smb-container--top')).toBe(false);
+    expect(el?.classList.contains('smb-container--bottom')).toBe(false);
+  });
+
+  it("variant='popup' keeps the dialog role, error strip and TreeView listbox", async () => {
+    render(<CommandBar onDismiss={() => {}} variant="popup" />);
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByRole('status')).toBeTruthy();
+    expect(screen.getByRole('listbox')).toBeTruthy();
+  });
+
+  it('uses resolveCopyUrl for the "u" copy action, writes the cleaned URL, then dismisses', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const resolveCopyUrl = vi
+      .fn()
+      .mockResolvedValue('https://active-tab.example/page?utm_source=x&id=7');
+    const onDismiss = vi.fn();
+
+    render(
+      <CommandBar onDismiss={onDismiss} variant="popup" resolveCopyUrl={resolveCopyUrl} />
+    );
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+
+    fireSmbKey('u');
+    await waitFor(() => {
+      expect(resolveCopyUrl).toHaveBeenCalled();
+      expect(writeText).toHaveBeenCalledWith('https://active-tab.example/page?id=7');
+      expect(onDismiss).toHaveBeenCalled();
+    });
+  });
+
+  it('a null resolveCopyUrl result writes nothing but still dismisses', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const resolveCopyUrl = vi.fn().mockResolvedValue(null);
+    const onDismiss = vi.fn();
+
+    render(
+      <CommandBar onDismiss={onDismiss} variant="popup" resolveCopyUrl={resolveCopyUrl} />
+    );
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+
+    fireSmbKey('u');
+    await waitFor(() => {
+      expect(onDismiss).toHaveBeenCalled();
+    });
+    expect(writeText).not.toHaveBeenCalled();
+  });
+});
