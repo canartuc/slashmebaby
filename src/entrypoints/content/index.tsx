@@ -4,6 +4,7 @@ import styles from '../../styles/command-bar.css?inline';
 import { App } from './App';
 import { DEFAULT_SETTINGS, isToggleOverlayCommand } from '../../lib/messaging';
 import { isInjectableUrl } from '../../lib/url-safety';
+import { routePaletteKey } from '../../lib/palette-keys';
 
 function parseShortcut(shortcut: string) {
   const parts = shortcut.toLowerCase().split('+');
@@ -129,37 +130,20 @@ export default defineContentScript({
       // Everything below only applies when overlay is open
       if (!root) return;
 
-      if (e.key === 'Escape') {
+      const decision = routePaletteKey(e, { activeElement: shadow.activeElement });
+      if (decision.kind === 'dismiss') {
         e.preventDefault();
         dismiss();
         return;
       }
-
-      // Forward to the shadow root. Don't intercept if a writable input is focused (search mode).
-      const activeEl = shadow.activeElement as HTMLInputElement | null;
-      const isSearchInputActive = activeEl?.tagName === 'INPUT' && !activeEl?.readOnly;
-
-      // '/' toggles jump/search mode, but while a non-empty query is being
-      // typed it must stay typeable as literal text — path-bearing go-to-URL
-      // queries like "example.com/admin" (F10) die at the '/' otherwise. So
-      // it only acts as the toggle when the search input isn't focused or is
-      // still empty; in every other case it falls through to the native input.
-      const slashTogglesMode =
-        e.key === '/' && (!isSearchInputActive || (activeEl?.value.length ?? 0) === 0);
-
-      // Always forward special keys
-      const specialKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Tab'];
-      const isSpecialKey = specialKeys.includes(e.key) || slashTogglesMode;
-
-      if (isSpecialKey || !isSearchInputActive) {
+      if (decision.kind === 'forward') {
         e.preventDefault();
         e.stopPropagation();
-        // Normalize key to lowercase so label matching works with Shift held
-        const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
         shadow.dispatchEvent(new CustomEvent('smb-keydown', {
-          detail: { key, shiftKey: e.shiftKey },
+          detail: { key: decision.key, shiftKey: decision.shiftKey },
         }));
       }
+      // 'pass': let the native <input> handle the keystroke.
     }, true);
 
     // Also listen for toggle from background (chrome.commands)
