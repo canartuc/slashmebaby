@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { OnboardingWizard } from '../../components/Onboarding/OnboardingWizard';
 import { ShortcutPicker } from '../../components/Onboarding/ShortcutPicker';
 import { TryItStep } from '../../components/Onboarding/TryItStep';
 import { NavigationGuide } from '../../components/Onboarding/NavigationGuide';
 import { CompletionStep } from '../../components/Onboarding/CompletionStep';
+import { PinToToolbarStep } from '../../components/Onboarding/PinToToolbarStep';
 
 // Stub window.close
 const mockClose = vi.fn();
@@ -66,14 +67,98 @@ describe('TryItStep', () => {
     expect(screen.getByText('Try it out!')).toBeTruthy();
   });
 
-  it('warns that the shortcut does not work on this page', () => {
+  it('explains the popup fallback on restricted pages', () => {
     render(<TryItStep shortcut="Ctrl+Shift+Space" />);
-    expect(screen.getByText(/won't work on this page/)).toBeTruthy();
+    expect(screen.getByText(/opens the palette in a toolbar popup/)).toBeTruthy();
   });
 
   it('asks the user to try it on a regular website tab', () => {
     render(<TryItStep shortcut="Ctrl+Shift+Space" />);
     expect(screen.getByText(/switch to a regular website/i)).toBeTruthy();
+  });
+});
+
+describe('PinToToolbarStep', () => {
+  // The installed @types/chrome types getUserSettings in its callback form,
+  // so the promise-form mock needs a cast.
+  const getUserSettingsMock = () =>
+    chrome.action.getUserSettings as unknown as ReturnType<typeof vi.fn>;
+
+  function mockPinState(isOnToolbar: boolean) {
+    getUserSettingsMock().mockImplementation(() => Promise.resolve({ isOnToolbar }));
+  }
+
+  beforeEach(() => {
+    getUserSettingsMock().mockReset();
+    mockPinState(false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.useRealTimers();
+  });
+
+  it('renders the step title', () => {
+    render(<PinToToolbarStep />);
+    expect(screen.getByText('Pin it to your toolbar')).toBeTruthy();
+  });
+
+  it('renders the extension icon', () => {
+    render(<PinToToolbarStep />);
+    expect(screen.getByAltText('SlashMeBaby icon')).toBeTruthy();
+  });
+
+  it('shows Chrome pin instructions by default', () => {
+    render(<PinToToolbarStep />);
+    expect(screen.getByText(/puzzle-piece Extensions button/)).toBeTruthy();
+    expect(screen.getByText(/pushpin/)).toBeTruthy();
+  });
+
+  it('shows Firefox pin instructions on the firefox build', () => {
+    vi.stubEnv('BROWSER', 'firefox');
+    render(<PinToToolbarStep />);
+    expect(screen.getByText(/Pin to Toolbar/)).toBeTruthy();
+    expect(screen.getByText(/Extensions panel/)).toBeTruthy();
+  });
+
+  it('shows a live Pinned confirmation when the icon is on the toolbar', async () => {
+    mockPinState(true);
+    render(<PinToToolbarStep />);
+    await waitFor(() => {
+      expect(screen.getByText(/Pinned/)).toBeTruthy();
+    });
+  });
+
+  it('does not show the Pinned confirmation when the icon is not on the toolbar', async () => {
+    render(<PinToToolbarStep />);
+    await waitFor(() => {
+      expect(getUserSettingsMock()).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(/Pinned/)).toBeNull();
+  });
+
+  it('renders without a pinned status when getUserSettings is unsupported', () => {
+    const chromeWithAction = chrome as unknown as { action?: unknown };
+    const saved = chromeWithAction.action;
+    delete chromeWithAction.action;
+    try {
+      render(<PinToToolbarStep />);
+      expect(screen.getByText(/puzzle-piece Extensions button/)).toBeTruthy();
+      expect(screen.queryByText(/Pinned/)).toBeNull();
+    } finally {
+      chromeWithAction.action = saved;
+    }
+  });
+
+  it('stops polling getUserSettings after unmount', async () => {
+    vi.useFakeTimers();
+    const { unmount } = render(<PinToToolbarStep />);
+    await vi.advanceTimersByTimeAsync(4000);
+    const callsBeforeUnmount = getUserSettingsMock().mock.calls.length;
+    expect(callsBeforeUnmount).toBeGreaterThan(1);
+    unmount();
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(getUserSettingsMock().mock.calls.length).toBe(callsBeforeUnmount);
   });
 });
 
@@ -172,12 +257,12 @@ describe('OnboardingWizard', () => {
     });
   });
 
-  it('renders 4 progress dots', async () => {
+  it('renders 5 progress dots', async () => {
     const { container } = render(<OnboardingWizard />);
 
     await waitFor(() => {
       const dots = container.querySelectorAll('.smb-onboarding-dot');
-      expect(dots.length).toBe(4);
+      expect(dots.length).toBe(5);
     });
   });
 
@@ -233,6 +318,10 @@ describe('OnboardingWizard', () => {
 
     // Step 2 -> 3
     fireEvent.click(screen.getByText('Next'));
+    expect(screen.getByText('Pin it to your toolbar')).toBeTruthy();
+
+    // Step 3 -> 4
+    fireEvent.click(screen.getByText('Next'));
     expect(screen.getByText("You're all set!")).toBeTruthy();
   });
 
@@ -243,7 +332,8 @@ describe('OnboardingWizard', () => {
       expect(screen.getByText('Pick your shortcut')).toBeTruthy();
     });
 
-    // Advance to step 3
+    // Advance to step 4
+    fireEvent.click(screen.getByText('Next'));
     fireEvent.click(screen.getByText('Next'));
     fireEvent.click(screen.getByText('Next'));
     fireEvent.click(screen.getByText('Next'));
@@ -251,7 +341,7 @@ describe('OnboardingWizard', () => {
     fireEvent.click(screen.getByText('Start Browsing'));
 
     expect(chrome.storage.local.set).toHaveBeenCalledWith(
-      { onboarding: { completedStep: 4, completed: true } },
+      { onboarding: { completedStep: 5, completed: true } },
       expect.any(Function)
     );
   });
@@ -282,7 +372,7 @@ describe('OnboardingWizard', () => {
   it('does not show Next button on the last step', async () => {
     vi.mocked(chrome.storage.local.get).mockImplementation(
       (_keys: unknown, cb: (result: Record<string, unknown>) => void) => {
-        cb({ onboarding: { completedStep: 3, completed: false } });
+        cb({ onboarding: { completedStep: 4, completed: false } });
       }
     );
 
@@ -293,5 +383,35 @@ describe('OnboardingWizard', () => {
     });
 
     expect(screen.queryByText('Next')).toBeNull();
+  });
+
+  it('shows the pin step when resuming at step 3', async () => {
+    // Also covers users who saved completedStep 3 under the 4-step wizard:
+    // they resume onto the new pin step instead of the completion screen.
+    vi.mocked(chrome.storage.local.get).mockImplementation(
+      (_keys: unknown, cb: (result: Record<string, unknown>) => void) => {
+        cb({ onboarding: { completedStep: 3, completed: false } });
+      }
+    );
+
+    render(<OnboardingWizard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Pin it to your toolbar')).toBeTruthy();
+    });
+  });
+
+  it('falls back to the completion step for out-of-range saved steps', async () => {
+    vi.mocked(chrome.storage.local.get).mockImplementation(
+      (_keys: unknown, cb: (result: Record<string, unknown>) => void) => {
+        cb({ onboarding: { completedStep: 9, completed: false } });
+      }
+    );
+
+    render(<OnboardingWizard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("You're all set!")).toBeTruthy();
+    });
   });
 });

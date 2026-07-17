@@ -5,9 +5,10 @@ import { saveSettings, getSettings } from '../../lib/storage';
 import { ShortcutPicker } from './ShortcutPicker';
 import { TryItStep } from './TryItStep';
 import { NavigationGuide } from './NavigationGuide';
+import { PinToToolbarStep } from './PinToToolbarStep';
 import { CompletionStep } from './CompletionStep';
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 export const OnboardingWizard: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(0);
@@ -72,6 +73,8 @@ export const OnboardingWizard: React.FC = () => {
       case 2:
         return <NavigationGuide />;
       case 3:
+        return <PinToToolbarStep />;
+      case 4:
         return <CompletionStep onComplete={handleComplete} />;
       default:
         return <CompletionStep onComplete={handleComplete} />;
