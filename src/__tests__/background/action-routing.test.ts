@@ -2,12 +2,14 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createActionRouting } from '../../entrypoints/background/action-routing';
 
 type ClickListener = (tab: chrome.tabs.Tab) => void;
+// Structural stand-ins for the onUpdated/onActivated payloads — the
+// installed @types/chrome doesn't export names for them.
 type UpdatedListener = (
   tabId: number,
-  changeInfo: chrome.tabs.TabChangeInfo,
+  changeInfo: { status?: string; url?: string },
   tab: chrome.tabs.Tab
 ) => void;
-type ActivatedListener = (info: chrome.tabs.TabActiveInfo) => void;
+type ActivatedListener = (info: { tabId: number; windowId: number }) => void;
 
 interface MockOptions {
   /** Tabs returned by the register() sweep's tabs.query. */

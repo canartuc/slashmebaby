@@ -91,16 +91,17 @@ export function createActionRouting(): ActionRouting {
   }
 
   function applyPopupRouting(tabId: number, url: string | undefined, mode: 'sweep' | 'event'): void {
+    // Only reachable through listeners registered when the action API
+    // exists, hence the optional chain rather than a guard.
     const api = getActionApi();
-    if (!api) return;
     if (isScriptableTabUrl(url)) {
-      api.setPopup({ tabId, popup: '' });
+      api?.setPopup({ tabId, popup: '' });
     } else if (mode === 'event') {
       // Explicit restore rather than relying on the browser's
       // navigation-reset of per-tab popup state, which is not guaranteed by
       // Chrome's documentation. During the sweep restricted tabs are left
       // untouched — they already show the manifest default.
-      api.setPopup({ tabId, popup: getDefaultPopupPath() });
+      api?.setPopup({ tabId, popup: getDefaultPopupPath() });
     }
   }
 

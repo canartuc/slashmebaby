@@ -420,7 +420,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({
       : bkItems[result.targetIndex - tabs.length];
     if (!item) return;
     if (!activate(item, shiftKey)) setSelectedIndex(result.targetIndex);
-  }, [toggleExpand, onDismiss, handleKeyPress, activate, switchTab, dispatchAction]);
+  }, [toggleExpand, onDismiss, handleKeyPress, activate, switchTab, dispatchAction, resolveCopyUrl]);
 
   // Listen for smb-keydown custom events from the content script
   useEffect(() => {

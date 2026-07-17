@@ -108,6 +108,9 @@ export async function createMessageRouter(): Promise<MessageRouter> {
   // ─── Message Handler ────────────────────────────────────────────────────
 
   return async function router(message: unknown, sender?: chrome.runtime.MessageSender): Promise<unknown> {
+    // SEARCH and SMART_SUGGESTIONS are kept as a stable message API even
+    // though no shipped surface calls them anymore (the popup moved to the
+    // overlay's raw-data pipeline in the 2026-07 unification).
     if (isSearchRequest(message)) {
       const { query, sources } = message.payload;
 
