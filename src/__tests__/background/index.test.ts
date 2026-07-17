@@ -90,7 +90,16 @@ function makeChromeMock() {
     runtime: {
       openOptionsPage: vi.fn((cb?: () => void) => cb?.()),
       getURL: vi.fn((path: string) => `chrome-extension://fake/${path}`),
+      getManifest: vi.fn(() => ({ action: { default_popup: 'popup.html' } })),
       onMessage: { addListener: vi.fn() },
+    },
+    action: {
+      setPopup: vi.fn((_: object, cb?: () => void) => cb?.()),
+      openPopup: vi.fn(() => Promise.resolve()),
+      onClicked: { addListener: vi.fn() },
+    },
+    extension: {
+      isAllowedFileSchemeAccess: vi.fn((cb: (allowed: boolean) => void) => cb(false)),
     },
     storage: {
       sync: {
@@ -1537,34 +1546,48 @@ describe('registerBackgroundListeners', () => {
     expect(responses[0]).toEqual({ error: 'forbidden sender' });
   });
 
-  it('toggle-command-bar command sends TOGGLE_OVERLAY to the active tab', async () => {
-    const commandListeners: Array<(cmd: string) => void> = [];
-    // Simulate a page without a content script (e.g. chrome://): the message
-    // callback fires with chrome.runtime.lastError set. Count reads so we can
-    // assert the callback checks it (otherwise Chrome logs
-    // "Unchecked runtime.lastError").
+  // Harness for the command/action-routing wiring tests: captures the
+  // onCommand listener and provides the action + extension APIs the routing
+  // module needs. `lastError` controls whether callbacks see a runtime error.
+  function makeCommandHarness(opts: { lastError?: boolean } = {}) {
+    const commandListeners: Array<(cmd: string, tab?: chrome.tabs.Tab) => void> = [];
     let lastErrorReads = 0;
-    const tabsSendMessage = vi.fn((_tabId: number, _msg: unknown, cb?: () => void) => cb?.());
+    const actionApi = {
+      setPopup: vi.fn((_: object, cb?: () => void) => cb?.()),
+      openPopup: vi.fn(() => Promise.resolve()),
+      onClicked: { addListener: vi.fn() },
+    };
+    const activeTab = makeFakeTab({ id: 7, url: 'https://one.com' });
     const chromeMock = {
       runtime: {
         id: 'real-ext-id',
         onMessage: { addListener: vi.fn() },
         onInstalled: { addListener: vi.fn() },
         getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
+        getManifest: vi.fn(() => ({ action: { default_popup: 'popup.html' } })),
         get lastError() {
           lastErrorReads += 1;
-          return { message: 'Could not establish connection.' };
+          return opts.lastError ? { message: 'Could not establish connection.' } : undefined;
         },
       },
       commands: {
-        onCommand: { addListener: vi.fn((cb: (cmd: string) => void) => commandListeners.push(cb)) },
+        onCommand: {
+          addListener: vi.fn((cb: (cmd: string, tab?: chrome.tabs.Tab) => void) =>
+            commandListeners.push(cb)
+          ),
+        },
+      },
+      action: actionApi,
+      extension: {
+        isAllowedFileSchemeAccess: vi.fn((cb: (allowed: boolean) => void) => cb(false)),
       },
       tabs: {
         query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
-          cb?.([{ id: 7 } as chrome.tabs.Tab]);
-          return Promise.resolve([{ id: 7 } as chrome.tabs.Tab]);
+          cb?.([activeTab]);
+          return Promise.resolve([activeTab]);
         }),
-        sendMessage: tabsSendMessage,
+        get: vi.fn((_: number, cb?: (tab?: chrome.tabs.Tab) => void) => cb?.(activeTab)),
+        sendMessage: vi.fn((_tabId: number, _msg: unknown, cb?: () => void) => cb?.()),
         onCreated: { addListener: vi.fn() },
         onRemoved: { addListener: vi.fn() },
         onUpdated: { addListener: vi.fn() },
@@ -1586,23 +1609,86 @@ describe('registerBackgroundListeners', () => {
       alarms: { create: vi.fn(), clear: vi.fn(), onAlarm: { addListener: vi.fn() } },
     };
     vi.stubGlobal('chrome', chromeMock);
-
     registerBackgroundListeners();
+    // The register() sweep touches setPopup/query; clear so tests assert
+    // only what the command handler itself does.
+    actionApi.setPopup.mockClear();
+    chromeMock.tabs.query.mockClear();
+    return {
+      chromeMock,
+      actionApi,
+      commandListeners,
+      readLastErrorCount: () => lastErrorReads,
+    };
+  }
+
+  it('registers action click routing synchronously', () => {
+    const { actionApi, chromeMock } = makeCommandHarness();
+    expect(actionApi.onClicked.addListener).toHaveBeenCalledTimes(1);
+    expect(chromeMock.tabs.onUpdated.addListener).toHaveBeenCalled();
+    expect(chromeMock.tabs.onActivated.addListener).toHaveBeenCalled();
+  });
+
+  it('toggle-command-bar with a scriptable tab arg sends typed TOGGLE_OVERLAY without tabs.query', () => {
+    const { chromeMock, commandListeners } = makeCommandHarness();
     expect(commandListeners).toHaveLength(1);
 
-    commandListeners[0]('toggle-command-bar');
-    expect(tabsSendMessage).toHaveBeenCalledWith(
+    commandListeners[0]('toggle-command-bar', makeFakeTab({ id: 7, url: 'https://one.com' }));
+    expect(chromeMock.tabs.sendMessage).toHaveBeenCalledWith(
       7,
       { type: 'TOGGLE_OVERLAY' },
       expect.any(Function)
     );
-    // The sendMessage callback swallowed the "no receiver" error by reading
-    // chrome.runtime.lastError.
-    expect(lastErrorReads).toBeGreaterThan(0);
+    expect(chromeMock.tabs.query).not.toHaveBeenCalled();
+  });
 
-    // Unknown command — should be a no-op.
-    commandListeners[0]('something-else');
-    expect(tabsSendMessage).toHaveBeenCalledTimes(1);
+  it('toggle-command-bar with a restricted tab arg calls action.openPopup synchronously', () => {
+    const { chromeMock, actionApi, commandListeners } = makeCommandHarness();
+
+    commandListeners[0]('toggle-command-bar', makeFakeTab({ id: 8, url: 'chrome://newtab/' }));
+    expect(actionApi.openPopup).toHaveBeenCalledTimes(1);
+    expect(chromeMock.tabs.sendMessage).not.toHaveBeenCalled();
+    expect(chromeMock.tabs.query).not.toHaveBeenCalled();
+  });
+
+  it('toggle-command-bar without a tab arg falls back to tabs.query (legacy Chrome)', () => {
+    const { chromeMock, commandListeners } = makeCommandHarness();
+
+    commandListeners[0]('toggle-command-bar');
+    expect(chromeMock.tabs.query).toHaveBeenCalledWith(
+      { active: true, currentWindow: true },
+      expect.any(Function)
+    );
+    expect(chromeMock.tabs.sendMessage).toHaveBeenCalledWith(
+      7,
+      { type: 'TOGGLE_OVERLAY' },
+      expect.any(Function)
+    );
+  });
+
+  it('toggle-command-bar recovers through the default popup when the content script is unreachable', () => {
+    const { chromeMock, actionApi, commandListeners, readLastErrorCount } = makeCommandHarness({
+      lastError: true,
+    });
+
+    commandListeners[0]('toggle-command-bar', makeFakeTab({ id: 7, url: 'https://one.com' }));
+    expect(chromeMock.tabs.sendMessage).toHaveBeenCalledTimes(1);
+    // The sendMessage callback must read chrome.runtime.lastError (otherwise
+    // Chrome logs "Unchecked runtime.lastError").
+    expect(readLastErrorCount()).toBeGreaterThan(0);
+    expect(actionApi.setPopup).toHaveBeenCalledWith(
+      { tabId: 7, popup: 'popup.html' },
+      expect.any(Function)
+    );
+    expect(actionApi.openPopup).toHaveBeenCalledTimes(1);
+  });
+
+  it('unknown command is a no-op', () => {
+    const { chromeMock, actionApi, commandListeners } = makeCommandHarness();
+
+    commandListeners[0]('something-else', makeFakeTab({ id: 7, url: 'https://one.com' }));
+    expect(chromeMock.tabs.sendMessage).not.toHaveBeenCalled();
+    expect(actionApi.openPopup).not.toHaveBeenCalled();
   });
 
   it('onInstalled with reason "install" opens the onboarding tab', async () => {

@@ -2,6 +2,7 @@ import { TabCache } from './tabs';
 import { BookmarkCache } from './bookmarks';
 import { HistoryCache } from './history';
 import { ActionRegistry } from './actions';
+import { createActionRouting } from './action-routing';
 import { createSearchEngine } from '../../lib/search';
 import { getSettings } from '../../lib/storage';
 import { getFaviconDataUrl } from './favicon';
@@ -519,19 +520,25 @@ export function registerBackgroundListeners(): void {
     return true;
   });
 
-  chrome.commands.onCommand.addListener((command) => {
-    if (command === 'toggle-command-bar') {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const tabId = tabs[0]?.id;
-        if (typeof tabId === 'number') {
-          chrome.tabs.sendMessage(tabId, { type: 'TOGGLE_OVERLAY' }, () => {
-            // Swallow lastError — expected on chrome:// pages where the
-            // content script cannot run. The popup is the fallback there.
-            void chrome.runtime.lastError;
-          });
-        }
-      });
+  // Per-tab action-popup routing: overlay on normal pages, popup on
+  // restricted ones. Registered synchronously for MV3 wake-safety.
+  const actionRouting = createActionRouting();
+  actionRouting.register();
+
+  chrome.commands.onCommand.addListener((command, tab) => {
+    if (command !== 'toggle-command-bar') return;
+    if (tab) {
+      // The tab argument (Chrome, Firefox 126+) lets the restricted-page
+      // branch call action.openPopup() synchronously inside this handler,
+      // which Firefox pre-149 requires for the user-input context.
+      actionRouting.requestOverlayToggle(tab);
+      return;
     }
+    // Legacy path without a tab argument — Chrome only, where openPopup
+    // needs no user gesture, so the async query is fine.
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      actionRouting.requestOverlayToggle(tabs[0]);
+    });
   });
 
   chrome.runtime.onInstalled.addListener((details) => {
