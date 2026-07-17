@@ -55,6 +55,43 @@ export function validateNavigationUrl(value: unknown): UrlValidationResult {
   return { ok: true };
 }
 
+// ─── Content-script injectability ──────────────────────────────────────────
+// Where the palette overlay can exist. The content script matches <all_urls>
+// but self-excludes everything except these schemes; the background's per-tab
+// action routing and the e2e helpers must agree with it, so all three share
+// this predicate.
+
+const INJECTABLE_SCHEMES = new Set(['http:', 'https:', 'file:']);
+
+// Hosts where browsers block content scripts by policy even though the
+// scheme is https. Compared by exact hostname, never by suffix.
+const CONTENT_SCRIPT_BLOCKED_HOSTS = new Set([
+  'chromewebstore.google.com',
+  'chrome.google.com',
+  'addons.mozilla.org',
+  'accounts.firefox.com',
+]);
+
+export function isInjectableUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  try {
+    const parsed = new URL(value);
+    return INJECTABLE_SCHEMES.has(parsed.protocol.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+export function isContentScriptBlockedUrl(value: unknown): boolean {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  try {
+    const parsed = new URL(value);
+    return CONTENT_SCRIPT_BLOCKED_HOSTS.has(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 // ─── SSRF guard for favicon fetches ────────────────────────────────────────
 // The background worker fetches favicon URLs supplied by page-controlled data,
 // so literal-IP hosts in loopback/private/link-local ranges (and "localhost")

@@ -3,6 +3,8 @@ import {
   isNavigableUrl,
   validateNavigationUrl,
   isSafeFaviconUrl,
+  isInjectableUrl,
+  isContentScriptBlockedUrl,
 } from '../../lib/url-safety';
 
 describe('validateNavigationUrl', () => {
@@ -148,5 +150,65 @@ describe('validateNavigationUrl — disallowed-but-not-blocked schemes', () => {
     const r = validateNavigationUrl('gopher://example.com/');
     expect(r.ok).toBe(false);
     expect(r.reason).toContain('disallowed');
+  });
+});
+
+describe('isInjectableUrl', () => {
+  it('accepts http, https and file URLs', () => {
+    expect(isInjectableUrl('http://example.com/')).toBe(true);
+    expect(isInjectableUrl('https://example.com/a?b=1#x')).toBe(true);
+    expect(isInjectableUrl('file:///Users/me/doc.html')).toBe(true);
+  });
+
+  it('rejects browser-internal and extension URLs', () => {
+    expect(isInjectableUrl('chrome://newtab/')).toBe(false);
+    expect(isInjectableUrl('chrome://extensions/')).toBe(false);
+    expect(isInjectableUrl('about:newtab')).toBe(false);
+    expect(isInjectableUrl('about:blank')).toBe(false);
+    expect(isInjectableUrl('chrome-extension://abcdef/popup.html')).toBe(false);
+    expect(isInjectableUrl('moz-extension://abcdef/page.html')).toBe(false);
+    expect(isInjectableUrl('edge://settings/')).toBe(false);
+    expect(isInjectableUrl('view-source:https://example.com/')).toBe(false);
+  });
+
+  it('rejects undefined, null, non-string, empty and unparseable values', () => {
+    expect(isInjectableUrl(undefined)).toBe(false);
+    expect(isInjectableUrl(null)).toBe(false);
+    expect(isInjectableUrl(42)).toBe(false);
+    expect(isInjectableUrl('')).toBe(false);
+    expect(isInjectableUrl('not a url')).toBe(false);
+  });
+
+  it('is case-insensitive for the scheme', () => {
+    expect(isInjectableUrl('HTTPS://example.com/')).toBe(true);
+    expect(isInjectableUrl('HTTP://example.com/')).toBe(true);
+  });
+});
+
+describe('isContentScriptBlockedUrl', () => {
+  it('flags the Chrome Web Store hosts', () => {
+    expect(isContentScriptBlockedUrl('https://chromewebstore.google.com/detail/x')).toBe(true);
+    expect(isContentScriptBlockedUrl('https://chrome.google.com/webstore/detail/x')).toBe(true);
+  });
+
+  it('flags Firefox-protected hosts', () => {
+    expect(isContentScriptBlockedUrl('https://addons.mozilla.org/en-US/firefox/')).toBe(true);
+    expect(isContentScriptBlockedUrl('https://accounts.firefox.com/signin')).toBe(true);
+  });
+
+  it('does not flag ordinary https hosts or subdomain lookalikes', () => {
+    expect(isContentScriptBlockedUrl('https://example.com/')).toBe(false);
+    expect(isContentScriptBlockedUrl('https://google.com/')).toBe(false);
+    // Exact-hostname comparison: a blocked hostname used as a subdomain of an
+    // attacker-controlled domain must NOT match.
+    expect(isContentScriptBlockedUrl('https://chromewebstore.google.com.evil.com/')).toBe(false);
+    expect(isContentScriptBlockedUrl('https://addons.mozilla.org.evil.com/')).toBe(false);
+  });
+
+  it('returns false for non-string or unparseable input', () => {
+    expect(isContentScriptBlockedUrl(undefined)).toBe(false);
+    expect(isContentScriptBlockedUrl(null)).toBe(false);
+    expect(isContentScriptBlockedUrl('')).toBe(false);
+    expect(isContentScriptBlockedUrl('not a url')).toBe(false);
   });
 });
