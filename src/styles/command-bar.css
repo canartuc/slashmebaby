@@ -5,11 +5,15 @@
 /* ─── CSS Custom Properties ──────────────────────────────────────────────── */
 
 :host {
-  /* Reset everything so host page styles cannot bleed in */
-  all: initial;
-  display: block;
+  /* Reset everything so host page styles cannot bleed in. !important is
+     load-bearing: document rules that hit the host element (e.g. a hostile
+     `div { all: revert !important }`) beat normal :host declarations, but
+     important declarations inside the shadow tree beat important document
+     ones (CSS Scoping §3.3). Custom properties are exempt from `all`. */
+  all: initial !important;
+  display: block !important;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    Oxygen, Ubuntu, sans-serif;
+    Oxygen, Ubuntu, sans-serif !important;
 
   /* ── Spacing ── */
   --space-1: 4px;

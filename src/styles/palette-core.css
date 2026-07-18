@@ -209,16 +209,6 @@
   text-overflow: ellipsis;
 }
 
-.smb-url {
-  font-size: var(--text-sm);
-  font-weight: 400;
-  line-height: 1.5;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* ─── Keyboard Hint Badge ────────────────────────────────────────────────── */
 
 .smb-kbd {

@@ -327,7 +327,7 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 | TS-163 | P0 | Command bar opens and shows results gracefully when there are no bookmarks |
 | TS-164 | P0 | Command bar opens and shows results gracefully when there is no browsing history |
 | TS-165 | P0 | Tab titles longer than the result row width are truncated with ellipsis (no wrapping) |
-| TS-166 | P0 | URLs longer than the result row width are truncated with ellipsis (no wrapping) |
+| TS-166 | P0 | ~~URLs longer than the result row width are truncated with ellipsis~~ Superseded: the jump-first design shows no URL text in rows (see TS-046); title truncation is covered by TS-165 |
 | TS-167 | P0 | Tabs with no favicon show the globe fallback icon without breaking the layout |
 | TS-168 | P0 | Rapidly opening and closing the command bar in quick succession does not leave stale overlays or errors |
 | TS-169 | P0 | Typing very fast (burst of keystrokes) returns correct results for the final query state |

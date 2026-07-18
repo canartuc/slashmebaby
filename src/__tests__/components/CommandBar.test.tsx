@@ -1976,3 +1976,187 @@ describe('CommandBar — sleep badge on hibernated tabs', () => {
     });
   });
 });
+
+
+// ─── Coverage-map gap closures (audit 3) ────────────────────────────────────
+
+describe('CommandBar — coverage gap pins', () => {
+  function fireSmbKey(key: string, shiftKey = false) {
+    document.dispatchEvent(new CustomEvent('smb-keydown', { detail: { key, shiftKey } }));
+  }
+
+  it('matches a query that only appears in a URL field (TS-038)', async () => {
+    makeTabJumpMock({
+      tabs: [{ id: 1, title: 'Gmail' }],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [
+            // 'xylophone' appears ONLY in the URL, never in a title.
+            { id: '2', title: 'Weird Site', url: 'https://xylophone.example/deep' },
+          ],
+        },
+      ],
+    });
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+    fireSmbKey('/');
+    const input = (await waitFor(() => {
+      const el = container.querySelector('.smb-input') as HTMLInputElement;
+      expect(el.readOnly).toBe(false);
+      return el;
+    })) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'xylophone' } });
+    await waitFor(() => {
+      expect(screen.getByRole('listbox').textContent).toContain('Weird Site');
+    });
+  });
+
+  it('ArrowDown crosses from the last tab into the first bookmark section (TS-060)', async () => {
+    makeTabJumpMock({
+      tabs: [
+        { id: 1, title: 'Alpha Docs' },
+        { id: 2, title: 'Alpha Blog' },
+      ],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'Alpha Reference', url: 'https://alpha.ref/' }],
+        },
+      ],
+    });
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText(/Alpha Docs/)).toBeTruthy());
+    fireSmbKey('/');
+    const input = (await waitFor(() => {
+      const el = container.querySelector('.smb-input') as HTMLInputElement;
+      expect(el.readOnly).toBe(false);
+      return el;
+    })) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'alpha' } });
+    await waitFor(() => expect(screen.getByText('Alpha Reference')).toBeTruthy());
+
+    const selected = () =>
+      container.querySelector('.smb-tree-item--selected')?.textContent ?? '';
+    fireSmbKey('ArrowDown'); // second tab
+    await waitFor(() => expect(selected()).toMatch(/Alpha (Docs|Blog)/));
+    fireSmbKey('ArrowDown'); // crosses into bookmarks
+    await waitFor(() => expect(selected()).toContain('Alpha Reference'));
+
+    // TS-061: ArrowUp crosses back into the previous section's last item.
+    fireSmbKey('ArrowUp');
+    await waitFor(() => expect(selected()).toMatch(/Alpha (Docs|Blog)/));
+  });
+
+  it('renders HTML-special characters in titles as literal text (TS-171)', async () => {
+    makeTabJumpMock({
+      tabs: [{ id: 1, title: '<b>Tags & Ampersands</b>' }],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'Safe', url: 'https://safe.example' }],
+        },
+      ],
+    });
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('<b>Tags & Ampersands</b>')).toBeTruthy());
+    // The literal text renders; no <b> element was injected anywhere.
+    expect(container.querySelector('b')).toBeNull();
+  });
+
+  it('rows expose the title via tooltip and aria-label, no visible URL (TS-046)', async () => {
+    makeTabJumpMock({
+      tabs: [{ id: 1, title: 'Gmail' }],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'Weird Site', url: 'https://xylophone.example/deep' }],
+        },
+      ],
+    });
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+    const gridRow = container.querySelector('[aria-label="Gmail"]');
+    expect(gridRow).toBeTruthy();
+    expect(gridRow!.getAttribute('title')).toBe('Gmail');
+    // Jump-first design: URLs never render as visible row text.
+    expect(container.textContent).not.toContain('xylophone.example');
+  });
+
+  it('a no-match query renders an empty list and Enter is a no-op (TS-170)', async () => {
+    makeTabJumpMock({
+      tabs: [{ id: 1, title: 'Gmail' }],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'Docs', url: 'https://docs.example/' }],
+        },
+      ],
+    });
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+    fireSmbKey('/');
+    const input = (await waitFor(() => {
+      const el = container.querySelector('.smb-input') as HTMLInputElement;
+      expect(el.readOnly).toBe(false);
+      return el;
+    })) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'zzznomatchzzz' } });
+    await waitFor(() => {
+      expect(container.querySelectorAll('.smb-tree-item').length).toBe(0);
+    });
+    expect(container.querySelector('.smb-tree-item--selected')).toBeNull();
+
+    vi.mocked(chrome.runtime.sendMessage).mockClear();
+    fireSmbKey('Enter');
+    // No activation message of any kind leaves the palette.
+    expect(vi.mocked(chrome.runtime.sendMessage)).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('CommandBar — shipped CSS contract pins (audit 3)', () => {
+  async function loadPaletteCss(): Promise<string> {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { resolve, dirname } = await import('node:path');
+    const here = dirname(fileURLToPath(import.meta.url));
+    return (
+      readFileSync(resolve(here, '../../styles/palette-core.css'), 'utf8') +
+      '\n' +
+      readFileSync(resolve(here, '../../styles/command-bar.css'), 'utf8')
+    );
+  }
+
+  function ruleBody(css: string, selector: string): string {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`).exec(css);
+    expect(match, `rule "${selector}" must exist`).toBeTruthy();
+    return (match as RegExpExecArray)[1];
+  }
+
+  it('open/close animation duration token is 150ms (TS-160)', async () => {
+    const css = await loadPaletteCss();
+    expect(css).toContain('--duration-base: 150ms');
+    expect(ruleBody(css, '.smb-container')).toContain('var(--duration-base)');
+  });
+
+  it('long titles truncate on a single line with an ellipsis (TS-165)', async () => {
+    const body = ruleBody(await loadPaletteCss(), '.smb-title');
+    expect(body).toContain('white-space: nowrap');
+    expect(body).toContain('overflow: hidden');
+    expect(body).toContain('text-overflow: ellipsis');
+  });
+
+  it('long grid titles truncate on a single line with an ellipsis (TS-165)', async () => {
+    const body = ruleBody(await loadPaletteCss(), '.smb-tab-col-title');
+    expect(body).toContain('white-space: nowrap');
+    expect(body).toContain('overflow: hidden');
+    expect(body).toContain('text-overflow: ellipsis');
+  });
+});

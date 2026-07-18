@@ -65,6 +65,12 @@ test('disabling the bookmarks source removes the Bookmarks section live', async 
   // Tabs stay searchable.
   expect((await getSectionedResults(page)).map(s => s.header)).toContain('Open Tabs');
 
+  // TS-115: re-enabling the source brings its results back live.
+  await setSetting(context, { searchSources: { bookmarks: true } });
+  await expect
+    .poll(async () => (await getSectionedResults(page)).map(s => s.header), { timeout: 5000 })
+    .toContain('Bookmarks');
+
   await context.close();
 });
 
