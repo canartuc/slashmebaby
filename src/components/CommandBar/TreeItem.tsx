@@ -75,6 +75,16 @@ export const TreeItem: React.FC<TreeItemProps> = React.memo(({
 
       <span className="smb-title">{item.title}</span>
 
+      {item.type === 'tab' && item.discarded && (
+        <span
+          className="smb-sleep-badge"
+          title="Sleeping tab — wakes on switch"
+          aria-hidden="true"
+        >
+          {'\u23FE'}
+        </span>
+      )}
+
       {isFolder && (
         <span className="smb-child-count">({item.childCount})</span>
       )}

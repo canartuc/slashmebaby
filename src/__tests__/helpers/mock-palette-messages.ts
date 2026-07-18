@@ -18,6 +18,8 @@ export interface MockPaletteOptions {
   /** Appends N generated unpinned tabs 'Tab 01'.. (ids 101..) AFTER the
    *  default Gmail/GitHub pair — used to push labels into two-char range. */
   extraTabs?: number;
+  /** Appends one hibernated tab (id 3, 'Sleeping Docs', discarded: true). */
+  withDiscardedTab?: boolean;
   actions?: Array<{ id: string; title: string }>;
 }
 
@@ -40,7 +42,13 @@ export function mockRawDataMessages(options: MockPaletteOptions = {}) {
           },
         } satisfies GetSettingsResponse);
       } else if (message.type === 'GET_ALL_TABS' && callback) {
-        const makeTab = (id: number, title: string, url: string, pinned = false) => ({
+        const makeTab = (
+          id: number,
+          title: string,
+          url: string,
+          pinned = false,
+          discarded = false
+        ) => ({
           id,
           title,
           url,
@@ -49,6 +57,7 @@ export function mockRawDataMessages(options: MockPaletteOptions = {}) {
           pinned,
           audible: false,
           muted: false,
+          discarded,
         });
         const extra = Array.from({ length: options.extraTabs ?? 0 }, (_, i) =>
           makeTab(101 + i, `Tab ${String(i + 1).padStart(2, '0')}`, `https://tab-${101 + i}.example/`)
@@ -64,6 +73,9 @@ export function mockRawDataMessages(options: MockPaletteOptions = {}) {
                   : []),
                 makeTab(1, 'Gmail', 'https://mail.google.com'),
                 makeTab(2, 'GitHub', 'https://github.com'),
+                ...(options.withDiscardedTab
+                  ? [makeTab(3, 'Sleeping Docs', 'https://sleep.example', false, true)]
+                  : []),
                 ...extra,
               ],
             },

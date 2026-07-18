@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { CommandBar } from '../../components/CommandBar/CommandBar';
+import { mockRawDataMessages } from '../helpers/mock-palette-messages';
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -1940,5 +1941,38 @@ describe('CommandBar — rapid input robustness', () => {
     // surfaces: it must refocus the input instead of dying.
     fireSmbKey('Backspace');
     await waitFor(() => expect(document.activeElement).toBe(input));
+  });
+});
+
+
+// ─── Sleep badge on hibernated tabs ─────────────────────────────────────────
+
+describe('CommandBar — sleep badge on hibernated tabs', () => {
+  beforeEach(() => {
+    mockRawDataMessages({ withDiscardedTab: true });
+  });
+
+  it('renders the sleep badge for a discarded tab in jump mode', async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Sleeping Docs')).toBeTruthy());
+    const badges = container.querySelectorAll('.smb-sleep-badge');
+    expect(badges).toHaveLength(1);
+    expect(badges[0].closest('.smb-tab-col-item')?.textContent).toContain('Sleeping Docs');
+  });
+
+  it('search results retain the sleep badge on discarded tabs', async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Sleeping Docs')).toBeTruthy());
+    document.dispatchEvent(new CustomEvent('smb-keydown', { detail: { key: '/', shiftKey: false } }));
+    const input = (await waitFor(() => {
+      const el = container.querySelector('.smb-input') as HTMLInputElement;
+      expect(el.readOnly).toBe(false);
+      return el;
+    })) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'Sleeping' } });
+    await waitFor(() => {
+      const row = container.querySelector('.smb-tree-item .smb-sleep-badge');
+      expect(row).not.toBeNull();
+    });
   });
 });

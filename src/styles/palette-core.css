@@ -452,6 +452,15 @@
   opacity: 0.3;
 }
 
+/* ─── Sleep Badge (hibernated tabs) ─────────────────────────────────────── */
+
+.smb-sleep-badge {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1;
+}
+
 /* ─── Folder Indicator ──────────────────────────────────────────────────── */
 
 .smb-folder-indicator {

@@ -308,3 +308,58 @@ describe('TreeItem', () => {
     expect(el.getAttribute('aria-label')).toBe('Gmail');
   });
 });
+
+
+describe('TreeItem — sleep badge', () => {
+  it('shows a sleep badge on a discarded tab row in search mode', () => {
+    const { container } = render(
+      <TreeItem
+        item={{
+          id: 'tab-103',
+          title: 'Sleeping Docs',
+          url: 'https://sleep.example',
+          type: 'tab',
+          depth: 0,
+          isExpanded: false,
+          childCount: 0,
+          tabId: 103,
+          discarded: true,
+        }}
+        index={0}
+        label=""
+        isSelected={false}
+        showFavicons={false}
+        onSelect={() => {}}
+        searchMode={true}
+      />
+    );
+    expect(container.querySelectorAll('.smb-sleep-badge')).toHaveLength(1);
+  });
+
+  it('never shows a sleep badge on bookmark or folder rows', () => {
+    for (const type of ['bookmark', 'folder'] as const) {
+      const { container, unmount } = render(
+        <TreeItem
+          item={{
+            id: `x-${type}`,
+            title: 'Not a tab',
+            type,
+            depth: 0,
+            isExpanded: false,
+            childCount: 0,
+            // Even if discarded leaks onto a non-tab item, no badge.
+            discarded: true,
+          }}
+          index={0}
+          label=""
+          isSelected={false}
+          showFavicons={false}
+          onSelect={() => {}}
+          searchMode={false}
+        />
+      );
+      expect(container.querySelectorAll('.smb-sleep-badge')).toHaveLength(0);
+      unmount();
+    }
+  });
+});

@@ -259,6 +259,20 @@ describe('surface parity — popup is the overlay in a different frame', () => {
     expect(overlay).toEqual({ actionId: 'action-close-tab' });
   });
 
+  it('popup and overlay render identical sleep badges on discarded tab rows', async () => {
+    const fixture: MockPaletteOptions = { withDiscardedTab: true };
+    const [overlay, popup] = await runOnBoth(fixture, async ({ container }) => {
+      await waitFor(() =>
+        expect(container.querySelectorAll('.smb-sleep-badge').length).toBeGreaterThan(0)
+      );
+      return Array.from(container.querySelectorAll('.smb-tab-col-item'))
+        .filter((row) => row.querySelector('.smb-sleep-badge'))
+        .map((row) => row.querySelector('.smb-tab-col-title')?.textContent ?? '');
+    });
+    expect(popup).toEqual(overlay);
+    expect(overlay).toEqual(['Sleeping Docs']);
+  });
+
   it('modifier chords never trigger palette actions on either surface', async () => {
     const [overlay, popup] = await runOnBoth(PINNED_FIXTURE, async ({ container }) => {
       // Ctrl+C / Cmd+C must be inert (browser copy chords, not palette keys).

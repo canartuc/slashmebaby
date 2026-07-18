@@ -138,6 +138,15 @@ export const TreeView: React.FC<TreeViewProps> = ({
                   {label && <span className="smb-tab-col-label">{label}</span>}
                   {showFavicons && <Favicon src={tab.icon} size={14} />}
                   <span className="smb-tab-col-title">{tab.title}</span>
+                  {tab.discarded && (
+                    <span
+                      className="smb-sleep-badge"
+                      title="Sleeping tab — wakes on switch"
+                      aria-hidden="true"
+                    >
+                      {'\u23FE'}
+                    </span>
+                  )}
                 </div>
               );
             })}
