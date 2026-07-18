@@ -9,6 +9,8 @@ import {
   seedBookmarks,
   setSetting,
   getGroupHeaders,
+  STATIC_NORMALIZE_CSS,
+  injectNormalizationCss,
 } from './helpers';
 
 // Pixel-level surface parity of the RESULTS REGION. Geometry is normalized
@@ -22,29 +24,19 @@ import {
 // A dimension mismatch means the normalization broke — not product drift —
 // and fails with its own message.
 
-const NORMALIZE_CSS = `
+// Cross-surface geometry equalization ON TOP of the shared static
+// normalization: the overlay caps results at 400px while the popup flexes —
+// pin both so element screenshots share dimensions. This pin is
+// deliberately NOT in the shared CSS (absolute design baselines must show
+// the true designed layout).
+const NORMALIZE_CSS = STATIC_NORMALIZE_CSS + `
   .smb-results { height: 400px !important; max-height: 400px !important;
                  flex: none !important; overflow: hidden !important;
                  scroll-behavior: auto !important; }
-  * { animation: none !important; transition: none !important;
-      caret-color: transparent !important; }
-  .smb-favicon, .smb-pinned-icon { visibility: hidden !important; }
 `;
 
-async function injectNormalization(page: import('@playwright/test').Page) {
-  await page.evaluate((css: string) => {
-    const host = document.getElementById('slashmebaby-root');
-    const root: ParentNode & { appendChild: (n: Node) => unknown } =
-      host?.shadowRoot ?? document.head;
-    const style = document.createElement('style');
-    style.textContent = css;
-    root.appendChild(style);
-  }, NORMALIZE_CSS);
-  // Two frames so the style lands before capture.
-  await page.evaluate(
-    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
-  );
-}
+const injectNormalization = (page: import('@playwright/test').Page) =>
+  injectNormalizationCss(page, NORMALIZE_CSS);
 
 test('the results region renders pixel-identical (within tolerance) in popup and overlay', async ({}, testInfo) => {
   const context = await launchWithExtension();

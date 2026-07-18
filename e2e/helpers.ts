@@ -321,7 +321,16 @@ export async function seedHistory(context: BrowserContext, urls: string[]): Prom
 
 export async function getTabs(
   context: BrowserContext
-): Promise<Array<{ url: string; pinned: boolean; active: boolean; windowId: number }>> {
+): Promise<
+  Array<{
+    url: string;
+    pinned: boolean;
+    active: boolean;
+    windowId: number;
+    discarded: boolean;
+    status: string;
+  }>
+> {
   const sw = await getServiceWorker(context);
   return sw.evaluate(async () => {
     const tabs = await chrome.tabs.query({});
@@ -544,4 +553,70 @@ export async function openPopupPage(context: BrowserContext): Promise<Page> {
     { timeout: 10000 }
   );
   return page;
+}
+
+
+// ─── Screenshot determinism ──────────────────────────────────────────────────
+
+/** Static normalization for pixel captures: kills motion and network-adjacent
+ *  pixels without touching designed geometry. */
+export const STATIC_NORMALIZE_CSS = `
+  * { animation: none !important; transition: none !important;
+      caret-color: transparent !important; }
+  .smb-favicon, .smb-pinned-icon { visibility: hidden !important; }
+`;
+
+/** Injects normalization CSS into the palette root (overlay shadow root or
+ *  plain document) and settles two frames. */
+export async function injectNormalizationCss(
+  page: Page,
+  css: string = STATIC_NORMALIZE_CSS
+): Promise<void> {
+  await page.evaluate((cssText: string) => {
+    const host = document.getElementById('slashmebaby-root');
+    const root: ParentNode & { appendChild: (n: Node) => unknown } =
+      host?.shadowRoot ?? document.head;
+    const style = document.createElement('style');
+    style.textContent = cssText;
+    root.appendChild(style);
+  }, css);
+  await page.evaluate(
+    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+  );
+}
+
+/** Fresh installs auto-open the onboarding tab (runtime.onInstalled) — close
+ *  it (and the initial about:blank page) so jump-view tab grids are
+ *  deterministic. */
+export async function closeOnboardingTab(context: BrowserContext): Promise<void> {
+  const sw = await getServiceWorker(context);
+  await sw.evaluate(async () => {
+    const deadline = Date.now() + 5000;
+    for (;;) {
+      const tabs = await chrome.tabs.query({});
+      const onboarding = tabs.find(t => (t.url ?? '').includes('onboarding.html'));
+      if (onboarding?.id !== undefined) {
+        await chrome.tabs.remove(onboarding.id);
+        return;
+      }
+      if (Date.now() > deadline) return; // never appeared — nothing to close
+      await new Promise(r => setTimeout(r, 200));
+    }
+  });
+  const blank = context.pages().find(p => p.url() === 'about:blank');
+  await blank?.close().catch(() => {});
+}
+
+/** Waits until two consecutive sectioned-results reads are identical —
+ *  the settled-state gate before any pixel capture. */
+export async function waitForStableSections(page: Page): Promise<void> {
+  let previous = '';
+  const deadline = Date.now() + 10000;
+  for (;;) {
+    const current = JSON.stringify(await getSectionedResults(page));
+    if (current === previous && current !== '[]') return;
+    if (Date.now() > deadline) throw new Error('palette sections never stabilized');
+    previous = current;
+    await new Promise(r => setTimeout(r, 250));
+  }
 }
