@@ -45,9 +45,9 @@ export interface CommandBarProps {
    *  'popup': container fills the extension-action popup window, no
    *  backdrop, no position class — sizing comes from popup.css. */
   variant?: 'overlay' | 'popup';
-  /** Mode on mount. The overlay opens in 'jump' (labels); the popup opens
-   *  in 'search' so first keystrokes type into the query — its historical
-   *  behavior, and typing must never trigger label navigation there. */
+  /** Mode on mount. BOTH production surfaces open in 'jump' (surface
+   *  parity); retained as a prop so tests can mount directly in search
+   *  mode. */
   initialMode?: 'jump' | 'search';
   /** Resolves the URL 'copy-clean-link' should copy. When absent, the
    *  synchronous window.location.href path is used (overlay: the host
