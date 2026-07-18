@@ -119,6 +119,13 @@ test("action key 't' in jump mode opens a new tab", async () => {
   const tabCountBefore = (await getTabs(context)).length;
 
   await popup.keyboard.press('/'); // jump mode
+  // The action chips render once GET_ACTIONS resolves — pressing earlier
+  // is a no-op.
+  await popup.waitForFunction(
+    () => document.querySelectorAll('.smb-action-chip').length > 0,
+    undefined,
+    { timeout: 5000 }
+  );
   await popup.keyboard.press('t'); // New Tab action
 
   await expect
