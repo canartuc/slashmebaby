@@ -79,11 +79,29 @@ export async function isOverlayOpen(page: Page): Promise<boolean> {
 
 export async function getSelectedItemTitle(page: Page): Promise<string> {
   return page.evaluate(() => {
-    const host = document.getElementById('slashmebaby-root');
-    // Try new tree view selector first, fall back to old result item selector
-    const selected = host?.shadowRoot?.querySelector('.smb-tree-item--selected')
-      || host?.shadowRoot?.querySelector('.smb-result-item--selected');
+    // Palette root: the overlay's shadow root, or the popup's document.
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const selected =
+      root.querySelector('.smb-tree-item--selected') ||
+      root.querySelector('.smb-result-item--selected');
     return selected?.querySelector('.smb-title')?.textContent || '';
+  });
+}
+
+/** Input state of the palette on either surface (overlay shadow or popup document). */
+export async function getPaletteInputState(
+  page: Page
+): Promise<{ readOnly: boolean; placeholder: string; value: string }> {
+  return page.evaluate(() => {
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const input = root.querySelector('.smb-input') as HTMLInputElement | null;
+    return {
+      readOnly: input?.readOnly ?? false,
+      placeholder: input?.placeholder ?? '',
+      value: input?.value ?? '',
+    };
   });
 }
 
@@ -120,10 +138,11 @@ export async function getResultCount(page: Page): Promise<number> {
 
 export async function getGroupHeaders(page: Page): Promise<string[]> {
   return page.evaluate(() => {
-    const host = document.getElementById('slashmebaby-root');
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
     // Check for action dividers (new UI) or group headers (old UI)
-    const headers = host?.shadowRoot?.querySelectorAll('.smb-group-header, .smb-action-divider');
-    return Array.from(headers || []).map(h => h.textContent || '');
+    const headers = root.querySelectorAll('.smb-group-header, .smb-action-divider');
+    return Array.from(headers).map(h => h.textContent || '');
   });
 }
 
@@ -370,8 +389,9 @@ export interface SectionedResults {
 /** DOM-order sections (headers + tree rows) inside the overlay results. */
 export async function getSectionedResults(page: Page): Promise<SectionedResults[]> {
   return page.evaluate(() => {
-    const host = document.getElementById('slashmebaby-root');
-    const results = host?.shadowRoot?.querySelector('.smb-results');
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const results = root.querySelector('.smb-results');
     if (!results) return [];
     const sections: Array<{ header: string; items: Array<{ title: string; selected: boolean; label: string }> }> = [];
     for (const child of Array.from(results.children)) {
@@ -430,8 +450,9 @@ export async function getFaviconCount(page: Page): Promise<number> {
 
 export async function getTabGridLabelForTitle(page: Page, title: string): Promise<string> {
   return page.evaluate((t: string) => {
-    const host = document.getElementById('slashmebaby-root');
-    const items = host?.shadowRoot?.querySelectorAll('.smb-tab-col-item') ?? [];
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const items = root.querySelectorAll('.smb-tab-col-item');
     for (const item of Array.from(items)) {
       if ((item.querySelector('.smb-tab-col-title')?.textContent ?? '').includes(t)) {
         return item.querySelector('.smb-tab-col-label')?.textContent ?? '';
@@ -446,8 +467,9 @@ export async function getFirstTwoCharTreeLabel(
   page: Page
 ): Promise<{ label: string; title: string } | null> {
   return page.evaluate(() => {
-    const host = document.getElementById('slashmebaby-root');
-    const rows = host?.shadowRoot?.querySelectorAll('.smb-tree-item') ?? [];
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const rows = root.querySelectorAll('.smb-tree-item');
     for (const row of Array.from(rows)) {
       const label = row.querySelector('.smb-label-badge')?.textContent ?? '';
       if (label.length === 2) {

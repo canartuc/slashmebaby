@@ -9,15 +9,42 @@ import {
 } from './helpers';
 
 // Keyboard flows on the action-popup page (reached by direct navigation —
-// Playwright cannot click the toolbar icon). The popup opens in search
-// mode: typing filters immediately; '/' toggles jump labels.
+// Playwright cannot click the toolbar icon). The popup opens in JUMP MODE
+// identical to the overlay (surface parity): labels pressable on entry,
+// '/' enters typed search.
 
-test('type-to-search filters immediately on open', async () => {
+test("opens in jump mode; '/' enters typed search which filters immediately", async () => {
   const context = await launchWithExtension();
   await seedBookmarks(context);
   await openPage(context, 'https://example.com');
   const popup = await openPopupPage(context);
 
+  // Jump-first entry: read-only input, labels visible.
+  await expect
+    .poll(async () =>
+      popup.evaluate(
+        () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? false
+      ), { timeout: 5000 })
+    .toBe(true);
+  await expect
+    .poll(
+      () => popup.evaluate(() => document.querySelectorAll('.smb-tab-col-label').length),
+      { timeout: 5000 }
+    )
+    .toBeGreaterThan(0);
+
+  // Enter search mode with a pipeline-proof retry: pressing before the
+  // key listeners attach would leave jump mode live, where 'm' is the
+  // mute action.
+  await expect
+    .poll(async () => {
+      const ro = await popup.evaluate(
+        () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? true
+      );
+      if (ro) await popup.keyboard.press('/');
+      return ro;
+    }, { timeout: 5000 })
+    .toBe(false);
   await popup.keyboard.type('mozilla');
   await expect
     .poll(async () =>
@@ -35,7 +62,7 @@ test('type-to-search filters immediately on open', async () => {
   await context.close();
 });
 
-test("'/' toggles jump labels and back", async () => {
+test("opens with jump labels; '/' toggles typed search and back", async () => {
   const context = await launchWithExtension();
   await openPage(context, 'https://example.com');
   const popup = await openPopupPage(context);
@@ -45,11 +72,8 @@ test("'/' toggles jump labels and back", async () => {
       () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? false
     );
 
-  expect(await isReadOnly()).toBe(false);
-
-  await popup.keyboard.press('/');
+  // Jump-first: read-only with labels on entry.
   await expect.poll(isReadOnly, { timeout: 5000 }).toBe(true);
-  // Jump labels appear in the tab grid.
   await expect
     .poll(
       () =>
@@ -63,6 +87,9 @@ test("'/' toggles jump labels and back", async () => {
   await popup.keyboard.press('/');
   await expect.poll(isReadOnly, { timeout: 5000 }).toBe(false);
 
+  await popup.keyboard.press('/');
+  await expect.poll(isReadOnly, { timeout: 5000 }).toBe(true);
+
   await context.close();
 });
 
@@ -73,7 +100,7 @@ test('jump label in the popup switches the active tab', async () => {
   await openPage(context, 'https://example.com');
   const popup = await openPopupPage(context);
 
-  await popup.keyboard.press('/'); // jump mode
+  // Already in jump mode on entry — no '/' needed.
   await expect
     .poll(
       () =>
@@ -119,17 +146,20 @@ test("action key 't' in jump mode opens a new tab", async () => {
   const tabCountBefore = (await getTabs(context)).length;
 
   // Prove the keyboard pipeline (usePopupKeySource → CommandBar) is live:
-  // the '/' toggle only takes effect once the effect listeners attached,
-  // which is exactly what the following press needs.
+  // '/' flips readOnly only once the effect listeners attached. Toggle
+  // into search and back so the press below runs in jump mode.
+  const readOnly = () =>
+    popup.evaluate(
+      () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? false
+    );
   await expect
     .poll(async () => {
-      const readOnly = await popup.evaluate(
-        () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? false
-      );
-      if (!readOnly) await popup.keyboard.press('/');
-      return readOnly;
+      if (await readOnly()) await popup.keyboard.press('/');
+      return readOnly();
     }, { timeout: 5000 })
-    .toBe(true);
+    .toBe(false);
+  await popup.keyboard.press('/');
+  await expect.poll(readOnly, { timeout: 5000 }).toBe(true);
   await popup.keyboard.press('t'); // New Tab action
 
   await expect
@@ -139,12 +169,25 @@ test("action key 't' in jump mode opens a new tab", async () => {
   await context.close();
 });
 
-test('Backspace edits mid-query and closes on empty; Escape closes', async () => {
+test('Backspace never closes the popup; Escape does', async () => {
   const context = await launchWithExtension();
   await openPage(context, 'https://example.com');
 
-  // Backspace behavior.
   const popup = await openPopupPage(context);
+  const readOnly = () =>
+    popup.evaluate(
+      () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? false
+    );
+
+  // Backspace on jump-mode entry: inert (strict overlay parity).
+  await expect.poll(readOnly, { timeout: 5000 }).toBe(true);
+  await popup.keyboard.press('Backspace');
+  // Alive-proof: the keyboard pipeline still responds ('/' flips modes).
+  await popup.keyboard.press('/');
+  await expect.poll(readOnly, { timeout: 5000 }).toBe(false);
+  expect(popup.isClosed()).toBe(false);
+
+  // Mid-query editing preserved.
   await popup.keyboard.type('exa');
   await popup.keyboard.press('Backspace');
   await expect
@@ -156,20 +199,18 @@ test('Backspace edits mid-query and closes on empty; Escape closes', async () =>
       { timeout: 5000 }
     )
     .toBe('ex');
+
+  // Empty the query, press Backspace again — the popup must STAY open.
+  await popup.keyboard.press('Backspace');
+  await popup.keyboard.press('Backspace');
+  await popup.keyboard.press('Backspace');
+  await new Promise(r => setTimeout(r, 400));
   expect(popup.isClosed()).toBe(false);
 
-  // 'ex' → 'e' → '' — then the press that finds the query empty closes the
-  // popup window. window.close() lands mid-keystroke, so the closing press
-  // can throw 'Target page has been closed' — that IS the success signal.
-  await popup.keyboard.press('Backspace');
-  await popup.keyboard.press('Backspace');
-  await popup.keyboard.press('Backspace').catch(() => {});
+  // Escape still closes; window.close() can land mid-keystroke and make
+  // the press throw 'Target page has been closed' — that IS success.
+  await popup.keyboard.press('Escape').catch(() => {});
   await expect.poll(() => popup.isClosed(), { timeout: 5000 }).toBe(true);
-
-  // Escape closes a fresh popup.
-  const popup2 = await openPopupPage(context);
-  await popup2.keyboard.press('Escape').catch(() => {});
-  await expect.poll(() => popup2.isClosed(), { timeout: 5000 }).toBe(true);
 
   await context.close();
 });
