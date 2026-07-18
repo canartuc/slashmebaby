@@ -140,7 +140,14 @@ describe('content script entrypoint', () => {
     );
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Drain React's concurrent scheduler while the jsdom window is still
+    // alive: clearBody() rips the DOM without unmounting React roots, and a
+    // queued render task (Immediate.performWorkUntilDeadline) firing after
+    // environment teardown crashes the whole run with "window is not
+    // defined" on slow CI runners.
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
     clearBody();
     vi.unstubAllGlobals();
   });
@@ -486,7 +493,14 @@ describe('activation shortcut presets', () => {
     );
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Drain React's concurrent scheduler while the jsdom window is still
+    // alive: clearBody() rips the DOM without unmounting React roots, and a
+    // queued render task (Immediate.performWorkUntilDeadline) firing after
+    // environment teardown crashes the whole run with "window is not
+    // defined" on slow CI runners.
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
     clearBody();
     vi.unstubAllGlobals();
   });
