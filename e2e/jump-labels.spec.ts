@@ -81,8 +81,11 @@ test('two-char labels appear beyond the label pool and jump correctly', async ()
   const match = combo.title.match(/Seed (\d\d)/);
   expect(match).not.toBeNull();
 
-  // Two-char jump: first char arms the prefix, second activates.
+  // Two-char jump: first char arms the prefix, second activates. The
+  // prefix is React state — give it a frame to commit before the second
+  // press (human typing cadence).
   await page.keyboard.press(combo.label[0]);
+  await new Promise(r => setTimeout(r, 150));
   await page.keyboard.press(combo.label[1]);
 
   await expect
