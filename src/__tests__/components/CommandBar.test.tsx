@@ -1066,6 +1066,20 @@ describe('CommandBar — go-to-URL fallback (F10)', () => {
     });
   });
 
+  it('renders the Go-to row under a "Navigate" section header', async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+
+    await typeOverlayQuery('example.com');
+    await waitFor(() => {
+      const headers = Array.from(container.querySelectorAll('.smb-group-header')).map(
+        (el) => el.textContent
+      );
+      // The synthetic goto row is always last, under its own header.
+      expect(headers[headers.length - 1]).toBe('Navigate');
+    });
+  });
+
   it('does not append a "Go to" row for a plain-word query', async () => {
     render(<CommandBar onDismiss={() => {}} />);
     await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());

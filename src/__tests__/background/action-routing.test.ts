@@ -381,6 +381,43 @@ describe('createActionRouting > file-access probe race', () => {
 });
 
 describe('createActionRouting > recovery re-arm protection', () => {
+  it('a successful TOGGLE_OVERLAY response clears the unreachable flag so the next activation re-clears the popup', () => {
+    const mock = makeActionChromeMock({
+      tabs: [{ id: 7, url: 'https://example.com/' }],
+      lastErrorMessage: NO_RECEIVER_ERROR,
+    });
+    vi.stubGlobal('chrome', mock.chromeMock);
+    const routing = createActionRouting();
+    routing.register();
+    routing.sweep();
+
+    // First toggle fails → tab marked unreachable, default popup restored.
+    routing.requestOverlayToggle({ id: 7, url: 'https://example.com/' } as chrome.tabs.Tab);
+    mock.actionApi.setPopup.mockClear();
+
+    // Content script comes back (no lastError this time): swap the mock's
+    // error off by re-stubbing sendMessage behavior via the scope flag —
+    // easiest is a fresh toggle with lastError suppressed.
+    // makeActionChromeMock scopes lastError to the sendMessage callback, so
+    // clear the message by mutating the captured options object is not
+    // possible; instead simulate success by calling the activated path
+    // after a successful message: stub sendMessage to succeed.
+    const tabs = mock.chromeMock.tabs as { sendMessage: ReturnType<typeof vi.fn> };
+    tabs.sendMessage.mockImplementation(
+      (_tabId: number, _msg: unknown, cb?: () => void) => cb?.()
+    );
+    Object.defineProperty(mock.chromeMock.runtime as object, 'lastError', {
+      get: () => undefined,
+      configurable: true,
+    });
+    routing.requestOverlayToggle({ id: 7, url: 'https://example.com/' } as chrome.tabs.Tab);
+
+    // Unmarked → activation clears the per-tab popup again.
+    mock.actionApi.setPopup.mockClear();
+    mock.activatedListeners[0]({ tabId: 7, windowId: 1 });
+    expect(mock.actionApi.setPopup).toHaveBeenCalledWith({ tabId: 7, popup: '' });
+  });
+
   it('keeps the default popup on a recovered tab across activations until it navigates', () => {
     const { routing, actionApi, activatedListeners, updatedListeners } = stubAndRegister({
       tabs: [{ id: 7, url: 'https://example.com/' }],

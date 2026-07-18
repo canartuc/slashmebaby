@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Popup } from '../../entrypoints/popup/Popup';
+import { mockRawDataMessages, findSentMessage as findCall } from '../helpers/mock-palette-messages';
 
 // The popup renders the same CommandBar palette as the in-page overlay
 // (variant="popup"): raw-data messages, client-side search, jump mode.
@@ -24,78 +25,6 @@ Object.defineProperty(window, 'matchMedia', {
 // Mock window.close
 const mockClose = vi.fn();
 Object.defineProperty(window, 'close', { value: mockClose, writable: true });
-
-function findCall(type: string) {
-  return vi.mocked(chrome.runtime.sendMessage).mock.calls.find(
-    (c) => (c[0] as unknown as { type: string }).type === type
-  );
-}
-
-function mockRawDataMessages(
-  options: { executeActionResponse?: unknown; withPinnedTab?: boolean } = {}
-) {
-  vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
-    msg: unknown,
-    callback?: (response: unknown) => void
-  ) => {
-      const message = msg as { type: string };
-      if (message.type === 'GET_SETTINGS' && callback) {
-        callback({
-          settings: {
-            shortcut: 'Ctrl+Shift+Space',
-            position: 'center',
-            theme: 'dark',
-            maxResultsPerGroup: 5,
-            showFavicons: true,
-            searchSources: { tabs: true, bookmarks: true, history: true },
-          },
-        });
-      } else if (message.type === 'GET_ALL_TABS' && callback) {
-        callback({
-          groups: [
-            {
-              label: 'Window 1',
-              type: 'window',
-              tabs: [
-                ...(options.withPinnedTab
-                  ? [{ id: 9, title: 'Pinned Mail', url: 'https://pinned.example', favIconUrl: '', windowId: 1, pinned: true, audible: false }]
-                  : []),
-                { id: 1, title: 'Gmail', url: 'https://mail.google.com', favIconUrl: '', windowId: 1, pinned: false, audible: false },
-                { id: 2, title: 'GitHub', url: 'https://github.com', favIconUrl: '', windowId: 1, pinned: false, audible: false },
-              ],
-            },
-          ],
-        });
-      } else if (message.type === 'GET_BOOKMARK_TREE' && callback) {
-        callback({
-          tree: [
-            {
-              id: '1',
-              title: 'Bookmarks Bar',
-              children: [
-                { id: '2', title: 'React Docs', url: 'https://react.dev' },
-              ],
-            },
-          ],
-        });
-      } else if (message.type === 'GET_HISTORY_ITEMS' && callback) {
-        callback({ items: [] });
-      } else if (message.type === 'GET_ACTIONS' && callback) {
-        callback({ actions: [{ id: 'action-close-tab', title: 'Close Tab' }] });
-      } else if (message.type === 'EXECUTE_ACTION' && callback) {
-        callback(options.executeActionResponse ?? { success: true });
-      } else if (
-        (message.type === 'SWITCH_TAB' ||
-          message.type === 'NAVIGATE' ||
-          message.type === 'OPEN_NEW_TAB') &&
-        callback
-      ) {
-        callback({ success: true });
-      }
-      return undefined as unknown as Promise<unknown>;
-    }) as unknown as typeof chrome.runtime.sendMessage
-  );
-}
 
 async function renderPopup() {
   render(<Popup />);
