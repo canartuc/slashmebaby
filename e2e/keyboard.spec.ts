@@ -215,15 +215,17 @@ test('Tab jumps between top-level bookmark folders in jump mode', async () => {
   // Tab must skip the expanded children and land on the next TOP-LEVEL
   // folder (ArrowDown would have selected the first child, 'E2E Seeds').
   await page.keyboard.press('Tab');
+  // Chromium title-cases the root on macOS ("Other Bookmarks") but not on
+  // Linux ("Other bookmarks") — match case-insensitively.
   await expect
     .poll(() => getSelectedItemTitle(page), { timeout: 5000 })
-    .toContain('Other Bookmarks');
+    .toMatch(/other bookmarks/i);
 
   await page.keyboard.press('Shift+Tab');
   // Back to the FIRST root — must not still contain 'Other'.
   await expect
     .poll(() => getSelectedItemTitle(page), { timeout: 5000 })
-    .toMatch(/^(?!.*Other).*[Bb]ookmarks/);
+    .toMatch(/^(?!.*other).*bookmarks/i);
 
   await context.close();
 });
