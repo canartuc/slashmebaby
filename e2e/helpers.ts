@@ -294,10 +294,11 @@ export async function seedDiacriticBookmark(context: BrowserContext): Promise<vo
 }
 
 /**
- * Puts titled pages into browser history by really visiting them, then
- * restarts the extension so the history cache (built at worker start,
- * refreshed every 5 min) picks them up. chrome.history.addUrl can't set a
- * title and untitled entries are dropped by the cache.
+ * Puts titled pages into browser history by really visiting them.
+ * chrome.history.addUrl can't set a title and untitled entries are dropped
+ * by the cache; real visits emit onVisited, which the history cache
+ * subscribes to (debounced ~500ms). Only 200 responses count — Chrome
+ * does not record 404 navigations in history at all.
  */
 export async function seedHistory(context: BrowserContext, urls: string[]): Promise<void> {
   for (const url of urls) {
@@ -306,27 +307,8 @@ export async function seedHistory(context: BrowserContext, urls: string[]): Prom
     await page.waitForLoadState('domcontentloaded');
     await page.close();
   }
-  await restartExtension(context);
-}
-
-/** Reloads the extension and waits for the new service worker to respond. */
-export async function restartExtension(context: BrowserContext): Promise<void> {
-  const sw = await getServiceWorker(context);
-  // The worker dies mid-call — the evaluate rejection is expected.
-  await sw.evaluate(() => chrome.runtime.reload()).catch(() => {});
-  await context.waitForEvent('serviceworker', { timeout: 10000 }).catch(() => {});
-  const deadline = Date.now() + 10000;
-  for (;;) {
-    try {
-      const fresh = context.serviceWorkers()[0];
-      if (fresh) {
-        await fresh.evaluate(() => true);
-        return;
-      }
-    } catch { /* worker not ready yet */ }
-    if (Date.now() > deadline) throw new Error('extension did not restart in time');
-    await new Promise(r => setTimeout(r, 250));
-  }
+  // Let the debounced cache refresh run.
+  await new Promise(r => setTimeout(r, 1000));
 }
 
 // ─── Tabs ────────────────────────────────────────────────────────────────────

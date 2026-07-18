@@ -57,8 +57,10 @@ export async function createMessageRouter(): Promise<MessageRouter> {
     // Bookmark cache updated
   });
 
-  // Periodic history refresh (default 5 min)
+  // Periodic history refresh (default 5 min) plus immediate refresh on
+  // actual history changes (onVisited, debounced).
   historyCache.startPeriodicRefresh();
+  historyCache.setupListeners();
 
   // Cached search engine, keyed by the identity of each source's item array.
   // Every cache refresh swaps in a new array, so reference equality detects
