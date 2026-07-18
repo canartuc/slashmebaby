@@ -471,3 +471,76 @@ describe('content script entrypoint', () => {
     expect(host?.shadowRoot?.children.length).toBe(2);
   });
 });
+
+// ─── Activation shortcut presets ─────────────────────────────────────────────
+// Every preset from the onboarding picker plus its Mac (Command) variant
+// must activate the overlay; near-miss modifier combos must not.
+
+describe('activation shortcut presets', () => {
+  beforeEach(() => {
+    clearBody();
+    setLocation('https:');
+    vi.stubGlobal(
+      'defineContentScript',
+      (config: { matches: string[]; main: () => void }) => config
+    );
+  });
+
+  afterEach(() => {
+    clearBody();
+    vi.unstubAllGlobals();
+  });
+
+  const positive: Array<{ shortcut: string; key: string; mods: Partial<{ ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }> }> = [
+    // Uppercase key exercises the toLowerCase normalization (Shift held).
+    { shortcut: 'Ctrl+Shift+L', key: 'L', mods: { ctrlKey: true, shiftKey: true } },
+    { shortcut: 'Ctrl+.', key: '.', mods: { ctrlKey: true } },
+    { shortcut: 'Ctrl+/', key: '/', mods: { ctrlKey: true } },
+    // Space maps to the 'space' token in parseShortcut.
+    { shortcut: 'Command+Shift+Space', key: ' ', mods: { metaKey: true, shiftKey: true } },
+    { shortcut: 'Command+Shift+L', key: 'L', mods: { metaKey: true, shiftKey: true } },
+    { shortcut: 'Command+.', key: '.', mods: { metaKey: true } },
+    { shortcut: 'Command+/', key: '/', mods: { metaKey: true } },
+  ];
+
+  it.each(positive)(
+    'opens the overlay for configured shortcut $shortcut',
+    async ({ shortcut, key, mods }) => {
+      buildChrome({ shortcut });
+      const keys = captureKeydown();
+      const cs = await loadContentMain();
+      cs.main();
+
+      const event = fakeKey({ key, ...mods });
+      keys.handler()(event);
+      expect(event.preventDefault).toHaveBeenCalled();
+      const host = document.getElementById('slashmebaby-root');
+      expect(host?.shadowRoot?.children.length).toBeGreaterThanOrEqual(2);
+    }
+  );
+
+  const negative: Array<{ label: string; shortcut: string; key: string; mods: Partial<{ ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }> }> = [
+    { label: 'bare key without modifiers', shortcut: 'Ctrl+.', key: '.', mods: {} },
+    { label: 'extra Shift modifier', shortcut: 'Ctrl+.', key: '.', mods: { ctrlKey: true, shiftKey: true } },
+    { label: 'Meta instead of Ctrl', shortcut: 'Ctrl+.', key: '.', mods: { metaKey: true } },
+    { label: 'old default after a preset change', shortcut: 'Ctrl+.', key: ' ', mods: { ctrlKey: true, shiftKey: true } },
+    { label: 'Ctrl instead of Command', shortcut: 'Command+Shift+Space', key: ' ', mods: { ctrlKey: true, shiftKey: true } },
+  ];
+
+  it.each(negative)(
+    'does not open for $label',
+    async ({ shortcut, key, mods }) => {
+      buildChrome({ shortcut });
+      const keys = captureKeydown();
+      const cs = await loadContentMain();
+      cs.main();
+
+      const event = fakeKey({ key, ...mods });
+      keys.handler()(event);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      const host = document.getElementById('slashmebaby-root');
+      // Only style + mount point — no rendered overlay.
+      expect(host?.shadowRoot?.children.length).toBe(2);
+    }
+  );
+});
