@@ -599,6 +599,86 @@ describe('createMessageRouter', () => {
     });
   });
 
+  describe('SWITCH_TAB message — hibernated tab wake', () => {
+    function makeSwitchMock(tab: chrome.tabs.Tab, reloadImpl?: () => Promise<void>) {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          update: vi.fn(() => Promise.resolve(makeFakeTab())),
+          get: vi.fn(() => Promise.resolve(tab)),
+          reload: vi.fn(reloadImpl ?? (() => Promise.resolve())),
+        },
+        windows: {
+          ...baseMock.windows,
+          update: vi.fn(() => Promise.resolve()),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+      return chromeMock;
+    }
+
+    it('reloads a discarded tab after activating it', async () => {
+      const chromeMock = makeSwitchMock(makeFakeTab({ discarded: true, windowId: 1 }));
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SWITCH_TAB', payload: { tabId: 7 } }) as { success: boolean };
+
+      expect(response.success).toBe(true);
+      expect(chromeMock.tabs.reload).toHaveBeenCalledWith(7);
+      // Activation and focus complete BEFORE the wake reload.
+      const order = (fn: { mock: { invocationCallOrder: number[] } }) =>
+        fn.mock.invocationCallOrder[0];
+      expect(order(chromeMock.tabs.update)).toBeLessThan(order(chromeMock.tabs.get));
+      expect(order(chromeMock.tabs.get)).toBeLessThan(order(chromeMock.windows.update));
+      expect(order(chromeMock.windows.update)).toBeLessThan(order(chromeMock.tabs.reload));
+    });
+
+    it('reloads a frozen tab after activating it', async () => {
+      const chromeMock = makeSwitchMock(makeFakeTab({ frozen: true, windowId: 1 }));
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SWITCH_TAB', payload: { tabId: 7 } }) as { success: boolean };
+      expect(response.success).toBe(true);
+      expect(chromeMock.tabs.reload).toHaveBeenCalledWith(7);
+    });
+
+    it('does not reload a normal tab', async () => {
+      const chromeMock = makeSwitchMock(makeFakeTab({ windowId: 1 }));
+      const router = await createMessageRouter();
+      await router({ type: 'SWITCH_TAB', payload: { tabId: 7 } });
+      expect(chromeMock.tabs.reload).not.toHaveBeenCalled();
+    });
+
+    it('still returns success when the wake reload fails', async () => {
+      const chromeMock = makeSwitchMock(
+        makeFakeTab({ discarded: true, windowId: 1 }),
+        () => Promise.reject(new Error('reload failed'))
+      );
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SWITCH_TAB', payload: { tabId: 7 } }) as { success: boolean };
+      expect(response.success).toBe(true);
+      expect(chromeMock.tabs.reload).toHaveBeenCalled();
+    });
+
+    it('does not reload when tabs.get itself fails after activation', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          update: vi.fn(() => Promise.resolve(makeFakeTab())),
+          get: vi.fn(() => Promise.reject(new Error('gone'))),
+          reload: vi.fn(() => Promise.resolve()),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SWITCH_TAB', payload: { tabId: 7 } }) as { success: boolean };
+      expect(response.success).toBe(false);
+      expect(chromeMock.tabs.reload).not.toHaveBeenCalled();
+    });
+  });
+
   describe('NAVIGATE message', () => {
     it('updates active tab URL when active tab exists', async () => {
       const baseMock = makeChromeMock();

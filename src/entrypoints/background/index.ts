@@ -248,6 +248,18 @@ export async function createMessageRouter(): Promise<MessageRouter> {
         if (tab.windowId) {
           await chrome.windows.update(tab.windowId, { focused: true });
         }
+        // Wake hibernated tabs: Chrome's auto-reload on activation is not
+        // guaranteed through the API path, so a discarded/frozen tab can
+        // stay blank after the switch. frozen is Chrome-only (undefined on
+        // Firefox MV2 — the === true check is feature-tolerant). Reload
+        // last and best-effort: the switch itself already succeeded.
+        if (tab.discarded === true || tab.frozen === true) {
+          try {
+            await chrome.tabs.reload(tabId);
+          } catch {
+            // Best-effort wake; the activation stands either way.
+          }
+        }
         return { success: true };
       } catch (error) {
         return { success: false, error: String(error) };
