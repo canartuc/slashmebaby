@@ -984,6 +984,49 @@ describe('createMessageRouter', () => {
   }
 
   describe('GET_ALL_TABS message', () => {
+    it('marks discarded tabs with discarded: true', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+            const tabs = [
+              makeFakeTab({ id: 1, title: 'Sleeping', discarded: true }),
+              makeFakeTab({ id: 2, title: 'Awake' }),
+            ];
+            cb?.(tabs);
+            return Promise.resolve(tabs);
+          }),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_ALL_TABS' }) as { groups: Array<{ tabs: Array<{ id: number; discarded?: boolean }> }> };
+      const all = response.groups.flatMap(g => g.tabs);
+      expect(all.find(t => t.id === 1)?.discarded).toBe(true);
+      expect(all.find(t => t.id === 2)?.discarded).toBe(false);
+    });
+
+    it('folds frozen (Chrome-only) into discarded: true', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+            const tabs = [makeFakeTab({ id: 1, frozen: true })];
+            cb?.(tabs);
+            return Promise.resolve(tabs);
+          }),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_ALL_TABS' }) as { groups: Array<{ tabs: Array<{ id: number; discarded?: boolean }> }> };
+      expect(response.groups.flatMap(g => g.tabs)[0]?.discarded).toBe(true);
+    });
+
     it('returns flat "Open Tabs" group for single window, no tab groups', async () => {
       const baseMock = makeChromeMock();
       const tabs = [

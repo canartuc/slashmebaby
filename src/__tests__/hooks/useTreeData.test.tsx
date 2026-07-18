@@ -118,6 +118,25 @@ function setupSendMessage(
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('useTreeData', () => {
+  it('passes discarded through to grid tab items', async () => {
+    setupSendMessage({
+      groups: [
+        {
+          label: 'Window 1',
+          type: 'window',
+          tabs: [
+            { id: 1, title: 'Sleeping', url: 'https://sleep.example', windowId: 1, pinned: false, audible: false, muted: false, discarded: true },
+            { id: 2, title: 'Awake', url: 'https://awake.example', windowId: 1, pinned: false, audible: false, muted: false },
+          ],
+        },
+      ],
+    });
+    const { result } = renderHook(() => useTreeData());
+    await waitFor(() => expect(result.current.allTabs.length).toBe(2));
+    expect(result.current.allTabs.find(t => t.title === 'Sleeping')?.discarded).toBe(true);
+    expect(result.current.allTabs.find(t => t.title === 'Awake')?.discarded).toBeFalsy();
+  });
+
   beforeEach(() => {
     vi.mocked(chrome.runtime.sendMessage).mockReset();
   });

@@ -106,6 +106,9 @@ export interface TabWithGroup {
   audible: boolean;
   muted: boolean;
   lastAccessed?: number;
+  /** true when the tab is discarded or frozen (Chrome) — hibernated; it
+   *  gets a wake reload on switch and a sleep badge in the palette. */
+  discarded?: boolean;
 }
 
 export interface TabGroupInfo {

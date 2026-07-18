@@ -505,6 +505,7 @@ function mapTab(tab: chrome.tabs.Tab): TabWithGroup {
     audible: tab.audible || false,
     muted: tab.mutedInfo?.muted || false,
     lastAccessed: tab.lastAccessed,
+    discarded: tab.discarded === true || tab.frozen === true,
   };
 }
 
