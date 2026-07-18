@@ -23,6 +23,13 @@ export function routePaletteKey(e: KeyboardEvent, ctx: PaletteKeyContext): Palet
   // Shift+Enter, Shift+Tab, and shifted labels are palette gestures.
   if (e.ctrlKey || e.metaKey || e.altKey) return { kind: 'pass' };
 
+  // Bare modifier keydowns are not palette keys either — forwarding the
+  // 'Shift' keydown that precedes a shifted combo character would burn an
+  // armed two-char label prefix.
+  if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') {
+    return { kind: 'pass' };
+  }
+
   if (e.key === 'Escape') return { kind: 'dismiss' };
 
   // Don't intercept typing when a writable input is focused (search mode).

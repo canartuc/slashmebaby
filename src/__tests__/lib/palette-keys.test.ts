@@ -121,6 +121,16 @@ describe('routePaletteKey', () => {
     expect(routePaletteKey(fakeKey({ key: 'Escape', ctrlKey: true }), { activeElement: null })).toEqual({ kind: 'pass' });
   });
 
+  it('passes bare modifier keydowns (they must not disturb an armed label prefix)', () => {
+    // Pressing Shift to type a shifted combo char emits a 'Shift' keydown
+    // first; forwarding it would burn the pending two-char prefix.
+    for (const key of ['Shift', 'Control', 'Alt', 'Meta']) {
+      expect(routePaletteKey(fakeKey({ key, shiftKey: key === 'Shift' }), { activeElement: null })).toEqual({
+        kind: 'pass',
+      });
+    }
+  });
+
   it('treats a non-input active element like jump mode', () => {
     const div = document.createElement('div');
     const decision = routePaletteKey(fakeKey({ key: 'x' }), { activeElement: div });
