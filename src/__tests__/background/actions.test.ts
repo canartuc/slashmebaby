@@ -1,28 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ActionRegistry } from '../../entrypoints/background/actions';
+import { makeFakeTab } from '../helpers/fake-tab';
 
 // ─── Chrome stub helpers ───────────────────────────────────────────────────
 
-function makeFakeTab(overrides: Partial<chrome.tabs.Tab> = {}): chrome.tabs.Tab {
-  return {
-    id: 1,
-    index: 0,
-    pinned: false,
-    highlighted: false,
-    windowId: 1,
-    active: true,
-    incognito: false,
-    selected: false,
-    discarded: false,
-    autoDiscardable: true,
-    frozen: false,
-    groupId: -1,
-    title: 'Test Tab',
-    url: 'https://example.com',
-    mutedInfo: { muted: false },
-    ...overrides,
-  };
-}
 
 function makeChromeMock(overrides: Record<string, unknown> = {}) {
   const tabs = {

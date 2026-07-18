@@ -1,30 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import backgroundEntrypoint, { createMessageRouter, registerBackgroundListeners } from '../../entrypoints/background/index';
 import type { SearchRequest, SmartSuggestionsRequest, ExecuteActionRequest, GetSettingsRequest } from '../../lib/messaging';
+import { makeFakeTab } from '../helpers/fake-tab';
 
 // ─── Chrome stub helpers ───────────────────────────────────────────────────
 
-function makeFakeTab(overrides: Partial<chrome.tabs.Tab> = {}): chrome.tabs.Tab {
-  return {
-    id: 1,
-    index: 0,
-    pinned: false,
-    highlighted: false,
-    windowId: 1,
-    active: true,
-    incognito: false,
-    selected: false,
-    discarded: false,
-    autoDiscardable: true,
-    frozen: false,
-    groupId: -1,
-    title: 'Test Tab',
-    url: 'https://example.com',
-    lastAccessed: Date.now(),
-    mutedInfo: { muted: false },
-    ...overrides,
-  };
-}
 
 function makeChromeMock() {
   return {

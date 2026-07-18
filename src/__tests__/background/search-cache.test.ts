@@ -1,32 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createMessageRouter } from '../../entrypoints/background/index';
 import * as searchLib from '../../lib/search';
+import { makeFakeTab } from '../helpers/fake-tab';
 
 // Spy on createSearchEngine while preserving its real behavior, so we can
 // assert how often the router rebuilds the Fuse index.
 vi.mock('../../lib/search', { spy: true });
 
-function makeFakeTab(overrides: Partial<chrome.tabs.Tab> = {}): chrome.tabs.Tab {
-  return {
-    id: 1,
-    index: 0,
-    pinned: false,
-    highlighted: false,
-    windowId: 1,
-    active: true,
-    incognito: false,
-    selected: false,
-    discarded: false,
-    autoDiscardable: true,
-    frozen: false,
-    groupId: -1,
-    title: 'Test Tab',
-    url: 'https://example.com',
-    lastAccessed: Date.now(),
-    mutedInfo: { muted: false },
-    ...overrides,
-  };
-}
 
 function makeChromeMock() {
   return {
