@@ -1923,3 +1923,65 @@ describe('background entrypoint (default export)', () => {
   });
 });
 
+
+// Appended: MV3 wake-safety for history listeners — they must register in
+// the initial synchronous evaluation, not inside the async router init.
+describe('history visit listeners (MV3 wake safety)', () => {
+  it('registers history.onVisited synchronously in registerBackgroundListeners', () => {
+    const onVisitedAdd = vi.fn();
+    const onVisitRemovedAdd = vi.fn();
+    const chromeMock = {
+      runtime: {
+        id: 'real-ext-id',
+        onMessage: { addListener: vi.fn() },
+        onInstalled: { addListener: vi.fn() },
+        onStartup: { addListener: vi.fn() },
+        getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
+        getManifest: vi.fn(() => ({ action: { default_popup: 'popup.html' } })),
+      },
+      commands: { onCommand: { addListener: vi.fn() } },
+      action: {
+        setPopup: vi.fn((_: object, cb?: () => void) => cb?.()),
+        openPopup: vi.fn(() => Promise.resolve()),
+        onClicked: { addListener: vi.fn() },
+      },
+      extension: {
+        isAllowedFileSchemeAccess: vi.fn((cb: (a: boolean) => void) => cb(false)),
+      },
+      tabs: {
+        query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+          cb?.([]);
+          return Promise.resolve([]);
+        }),
+        onCreated: { addListener: vi.fn() },
+        onRemoved: { addListener: vi.fn() },
+        onUpdated: { addListener: vi.fn() },
+        onActivated: { addListener: vi.fn() },
+      },
+      bookmarks: {
+        getTree: vi.fn((cb: (r: chrome.bookmarks.BookmarkTreeNode[]) => void) => cb([])),
+        onCreated: { addListener: vi.fn() },
+        onRemoved: { addListener: vi.fn() },
+        onChanged: { addListener: vi.fn() },
+      },
+      history: {
+        search: vi.fn((_: object, cb: (r: chrome.history.HistoryItem[]) => void) => cb([])),
+        onVisited: { addListener: onVisitedAdd },
+        onVisitRemoved: { addListener: onVisitRemovedAdd },
+      },
+      storage: {
+        sync: {
+          get: vi.fn((_: string, cb: (r: Record<string, unknown>) => void) => cb({})),
+          set: vi.fn(),
+        },
+      },
+      alarms: { create: vi.fn(), clear: vi.fn(), onAlarm: { addListener: vi.fn() } },
+    };
+    vi.stubGlobal('chrome', chromeMock);
+
+    registerBackgroundListeners();
+    // Synchronous — no awaiting the router warm-up.
+    expect(onVisitedAdd).toHaveBeenCalledTimes(1);
+    expect(onVisitRemovedAdd).toHaveBeenCalledTimes(1);
+  });
+});

@@ -35,10 +35,15 @@ import { validateNavigationUrl, isNavigableUrl } from '../../lib/url-safety';
 
 type MessageRouter = (message: unknown, sender?: chrome.runtime.MessageSender) => Promise<unknown>;
 
+// Module-level so registerBackgroundListeners can attach its
+// history.onVisited listeners in the worker's INITIAL SYNCHRONOUS
+// evaluation (the MV3 wake rule) — the router factory below reuses the
+// same instance and refreshes it during init.
+const historyCache = new HistoryCache();
+
 export async function createMessageRouter(): Promise<MessageRouter> {
   const tabCache = new TabCache();
   const bookmarkCache = new BookmarkCache();
-  const historyCache = new HistoryCache();
   const actionRegistry = new ActionRegistry();
   const faviconCache = new Map<string, string>();
 
@@ -57,10 +62,10 @@ export async function createMessageRouter(): Promise<MessageRouter> {
     // Bookmark cache updated
   });
 
-  // Periodic history refresh (default 5 min) plus immediate refresh on
-  // actual history changes (onVisited, debounced).
+  // Periodic history refresh (default 5 min). The immediate-on-visit
+  // refresh listeners are registered synchronously in
+  // registerBackgroundListeners (MV3 wake rule), not here.
   historyCache.startPeriodicRefresh();
-  historyCache.setupListeners();
 
   // Cached search engine, keyed by the identity of each source's item array.
   // Every cache refresh swaps in a new array, so reference equality detects
@@ -529,6 +534,11 @@ export function registerBackgroundListeners(): void {
   // restricted ones. Registered synchronously for MV3 wake-safety.
   const actionRouting = createActionRouting();
   actionRouting.register();
+
+  // History freshness: refresh the shared cache on real visits. Must be
+  // synchronous here — listeners registered inside the async router init
+  // can never wake a suspended worker.
+  historyCache.setupListeners();
 
   chrome.commands.onCommand.addListener((command, tab) => {
     if (command !== 'toggle-command-bar') return;

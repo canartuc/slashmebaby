@@ -99,6 +99,14 @@ describe('stepSectionBoundary', () => {
     expect(stepSectionBoundary([], 0, -1)).toBeNull();
   });
 
+  it('returns null for a single boundary so callers fall back to item stepping', () => {
+    // One section = nothing to jump between. Snapping to index 0 would yank
+    // the selection away from the user's position (destructive with Enter).
+    expect(stepSectionBoundary([0], 0, 1)).toBeNull();
+    expect(stepSectionBoundary([0], 2, 1)).toBeNull();
+    expect(stepSectionBoundary([0], 2, -1)).toBeNull();
+  });
+
   it('advances to the first boundary after the selection', () => {
     expect(stepSectionBoundary([0, 2, 4, 5], 0, 1)).toBe(2);
     expect(stepSectionBoundary([0, 2, 4, 5], 3, 1)).toBe(4);
@@ -108,19 +116,30 @@ describe('stepSectionBoundary', () => {
     expect(stepSectionBoundary([0, 2, 4, 5], 5, 1)).toBe(0);
   });
 
-  it('steps back to the last boundary before the selection', () => {
-    expect(stepSectionBoundary([0, 2, 4, 5], 3, -1)).toBe(2);
+  it('steps back to the PREVIOUS section start, even from mid-section', () => {
+    // idx 3 sits inside the section starting at 2 — Shift+Tab goes to the
+    // section ABOVE it (0), matching TS-063 and the onboarding copy.
+    expect(stepSectionBoundary([0, 2, 4, 5], 3, -1)).toBe(0);
     expect(stepSectionBoundary([0, 2, 4, 5], 5, -1)).toBe(4);
+    expect(stepSectionBoundary([0, 2, 4, 5], 4, -1)).toBe(2);
   });
 
   it('wraps backward to the last boundary from the top', () => {
     expect(stepSectionBoundary([0, 2, 4, 5], 0, -1)).toBe(5);
   });
 
-  it('matches the recovered useKeyboard contract for boundaries [0,3]', () => {
+  it('forward matches the recovered useKeyboard contract for boundaries [0,3]', () => {
     expect(stepSectionBoundary([0, 3], 0, 1)).toBe(3);
     expect(stepSectionBoundary([0, 3], 4, 1)).toBe(0);
-    expect(stepSectionBoundary([0, 3], 4, -1)).toBe(3);
+  });
+
+  it('backward from mid-section skips to the previous section, wrapping from the first', () => {
+    // Deliberate departure from the deleted useKeyboard hook (which went to
+    // the CURRENT section's start first): docs and onboarding promise the
+    // previous group.
+    expect(stepSectionBoundary([0, 3], 4, -1)).toBe(0);
+    expect(stepSectionBoundary([0, 3], 3, -1)).toBe(0);
+    expect(stepSectionBoundary([0, 3], 1, -1)).toBe(3);
     expect(stepSectionBoundary([0, 3], 0, -1)).toBe(3);
   });
 });

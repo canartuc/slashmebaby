@@ -118,14 +118,18 @@ test("action key 't' in jump mode opens a new tab", async () => {
 
   const tabCountBefore = (await getTabs(context)).length;
 
-  await popup.keyboard.press('/'); // jump mode
-  // The action chips render once GET_ACTIONS resolves — pressing earlier
-  // is a no-op.
-  await popup.waitForFunction(
-    () => document.querySelectorAll('.smb-action-chip').length > 0,
-    undefined,
-    { timeout: 5000 }
-  );
+  // Prove the keyboard pipeline (usePopupKeySource → CommandBar) is live:
+  // the '/' toggle only takes effect once the effect listeners attached,
+  // which is exactly what the following press needs.
+  await expect
+    .poll(async () => {
+      const readOnly = await popup.evaluate(
+        () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? false
+      );
+      if (!readOnly) await popup.keyboard.press('/');
+      return readOnly;
+    }, { timeout: 5000 })
+    .toBe(true);
   await popup.keyboard.press('t'); // New Tab action
 
   await expect

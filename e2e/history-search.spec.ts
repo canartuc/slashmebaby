@@ -18,16 +18,22 @@ test('visited pages appear under History in overlay search', async () => {
   await seedHistory(context, ['https://example.net/']);
   const page = await openPage(context, 'https://example.com');
 
-  await openCommandBar(page);
-  await page.keyboard.press('/');
-  await typeInCommandBar(page, 'example.net');
-
+  // The overlay fetches history once at mount — if the debounced cache
+  // refresh lands after the palette opened, reopen it for a fresh fetch.
   await expect
     .poll(async () => {
+      await openCommandBar(page);
+      await page.keyboard.press('/');
+      await typeInCommandBar(page, 'example.net');
       const sections = await getSectionedResults(page);
       const history = sections.find(s => s.header === 'History');
-      return history?.items.length ?? 0;
-    }, { timeout: 10000 })
+      const count = history?.items.length ?? 0;
+      if (count === 0) {
+        await page.keyboard.press('Escape');
+        await new Promise(r => setTimeout(r, 300));
+      }
+      return count;
+    }, { timeout: 15000, intervals: [500, 1000, 1000, 2000] })
     .toBeGreaterThan(0);
 
   await context.close();
@@ -60,16 +66,21 @@ test('results render Tabs → Bookmarks → History with per-group caps', async 
   await openPage(context, 'https://example.com/x');
   const page = await openPage(context, 'https://example.com');
 
-  await openCommandBar(page);
-  await page.keyboard.press('/');
-  // Not domain-like ('example' has no dot) → no Navigate row.
-  await typeInCommandBar(page, 'example');
-
+  // Reopen-on-miss for the same one-shot-history-fetch reason as above.
   await expect
     .poll(async () => {
+      await openCommandBar(page);
+      await page.keyboard.press('/');
+      // Not domain-like ('example' has no dot) → no Navigate row.
+      await typeInCommandBar(page, 'example');
       const sections = (await getSectionedResults(page)).filter(s => s.items.length > 0);
-      return sections.map(s => `${s.header}:${s.items.length}`);
-    }, { timeout: 10000 })
+      const shape = sections.map(s => `${s.header}:${s.items.length}`);
+      if (shape.join(',') !== 'Open Tabs:2,Bookmarks:2,History:2') {
+        await page.keyboard.press('Escape');
+        await new Promise(r => setTimeout(r, 300));
+      }
+      return shape;
+    }, { timeout: 15000, intervals: [500, 1000, 1000, 2000] })
     .toEqual(['Open Tabs:2', 'Bookmarks:2', 'History:2']);
 
   await context.close();

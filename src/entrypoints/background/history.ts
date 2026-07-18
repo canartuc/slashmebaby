@@ -59,13 +59,23 @@ export class HistoryCache {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
+    // Also cancel a pending debounced visit refresh — an orphaned timer
+    // would call chrome.history.search after the caller has quiesced the
+    // cache (or, in tests, after the chrome stub was torn down).
+    if (this.visitDebounceId !== null) {
+      clearTimeout(this.visitDebounceId);
+      this.visitDebounceId = null;
+    }
   }
 
   /**
    * Refreshes the cache when browsing history actually changes, debounced —
    * a page load can emit several onVisited events in quick succession.
    * Keeps new visits searchable immediately instead of waiting for the
-   * 5-minute tick or the next worker start.
+   * 5-minute tick or the next worker start. MV3 wake rule: this MUST run
+   * in the worker's initial synchronous evaluation (see
+   * registerBackgroundListeners) or the events can't wake a suspended
+   * worker.
    */
   setupListeners(): void {
     const debouncedRefresh = () => {
@@ -75,7 +85,7 @@ export class HistoryCache {
         this.refresh();
       }, VISIT_DEBOUNCE_MS);
     };
-    chrome.history.onVisited?.addListener(debouncedRefresh);
-    chrome.history.onVisitRemoved?.addListener(debouncedRefresh);
+    chrome.history?.onVisited?.addListener(debouncedRefresh);
+    chrome.history?.onVisitRemoved?.addListener(debouncedRefresh);
   }
 }

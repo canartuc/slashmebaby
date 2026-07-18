@@ -1,6 +1,7 @@
 import { chromium, type BrowserContext, type Page } from '@playwright/test';
 import path from 'path';
 import { isInjectableUrl } from '../src/lib/url-safety';
+import { DEFAULT_SETTINGS } from '../src/lib/messaging';
 
 const EXTENSION_PATH = path.resolve('.output/chrome-mv3');
 
@@ -157,20 +158,9 @@ export async function getInputValue(page: Page): Promise<string> {
 }
 
 export async function getExtensionId(context: BrowserContext): Promise<string> {
-  const bgPages = context.serviceWorkers();
-  if (bgPages.length > 0) {
-    const url = bgPages[0].url();
-    const match = url.match(/chrome-extension:\/\/([^/]+)/);
-    if (match) return match[1];
-  }
-  // Fallback: wait for service worker
-  await new Promise(r => setTimeout(r, 2000));
-  const workers = context.serviceWorkers();
-  for (const w of workers) {
-    const match = w.url().match(/chrome-extension:\/\/([^/]+)/);
-    if (match) return match[1];
-  }
-  return '';
+  const sw = await getServiceWorker(context).catch(() => null);
+  const match = sw?.url().match(/chrome-extension:\/\/([^/]+)/);
+  return match?.[1] ?? '';
 }
 
 /**
@@ -179,13 +169,8 @@ export async function getExtensionId(context: BrowserContext): Promise<string> {
  * and launchPersistentContext('') starts from an empty profile.
  */
 export async function seedBookmarks(context: BrowserContext): Promise<void> {
-  // Wait for at least one service worker to be registered.
-  const deadline = Date.now() + 5000;
-  let sw = context.serviceWorkers()[0];
-  while (!sw && Date.now() < deadline) {
-    await new Promise(r => setTimeout(r, 200));
-    sw = context.serviceWorkers()[0];
-  }
+  // Historic silent-return semantics: seeding is best-effort.
+  const sw = await getServiceWorker(context).catch(() => null);
   if (!sw) return;
 
   await sw.evaluate(async () => {
@@ -226,27 +211,29 @@ export async function setSetting(
   partial: Record<string, unknown>
 ): Promise<void> {
   const sw = await getServiceWorker(context);
-  await sw.evaluate(async (p: Record<string, unknown>) => {
-    const current = await new Promise<Record<string, unknown>>((resolve) =>
-      chrome.storage.sync.get('settings', (r) => resolve((r.settings as Record<string, unknown>) ?? {}))
-    );
-    const next: Record<string, unknown> = { ...current, ...p };
-    if (current.searchSources || p.searchSources) {
-      // Anchor on the full default shape: on a fresh profile the stored
-      // settings object is empty, and a partial searchSources write would
-      // otherwise drop the missing sources entirely.
-      next.searchSources = {
-        tabs: true,
-        bookmarks: true,
-        history: true,
-        ...(current.searchSources as Record<string, unknown>),
-        ...(p.searchSources as Record<string, unknown>),
-      };
-    }
-    await new Promise<void>((resolve) =>
-      chrome.storage.sync.set({ settings: next }, () => resolve())
-    );
-  }, partial);
+  await sw.evaluate(
+    async (args: { p: Record<string, unknown>; defaultSources: Record<string, unknown> }) => {
+      const { p, defaultSources } = args;
+      const current = await new Promise<Record<string, unknown>>((resolve) =>
+        chrome.storage.sync.get('settings', (r) => resolve((r.settings as Record<string, unknown>) ?? {}))
+      );
+      const next: Record<string, unknown> = { ...current, ...p };
+      if (current.searchSources || p.searchSources) {
+        // Anchor on the production default shape: on a fresh profile the
+        // stored settings object is empty, and a partial searchSources
+        // write would otherwise drop the missing sources entirely.
+        next.searchSources = {
+          ...defaultSources,
+          ...(current.searchSources as Record<string, unknown>),
+          ...(p.searchSources as Record<string, unknown>),
+        };
+      }
+      await new Promise<void>((resolve) =>
+        chrome.storage.sync.set({ settings: next }, () => resolve())
+      );
+    },
+    { p: partial, defaultSources: { ...DEFAULT_SETTINGS.searchSources } }
+  );
 }
 
 // ─── Seeding ─────────────────────────────────────────────────────────────────

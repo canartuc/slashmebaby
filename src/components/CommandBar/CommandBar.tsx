@@ -384,13 +384,15 @@ export const CommandBar: React.FC<CommandBarProps> = ({
       case 'Tab':
         // Section jump, not item step: first item of the next/previous
         // section (top-level folders in the jump-mode tree), wrapping.
+        // Lists with fewer than two sections fall back to item stepping so
+        // Tab always moves the selection.
         setSelectedIndex(prev => {
           const target = stepSectionBoundary(
             computeSectionBoundaries(items),
             prev,
             shiftKey ? -1 : 1
           );
-          return target ?? prev;
+          return target ?? nextIndex(prev, items.length, shiftKey ? -1 : 1);
         });
         return;
       case 'ArrowDown':

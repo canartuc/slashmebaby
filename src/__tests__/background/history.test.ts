@@ -318,4 +318,23 @@ describe('HistoryCache — visit listeners', () => {
     const cache = new HistoryCache();
     expect(() => cache.setupListeners()).not.toThrow();
   });
+
+  it('setupListeners is a no-op when chrome.history is missing entirely', () => {
+    vi.stubGlobal('chrome', {});
+    const cache = new HistoryCache();
+    expect(() => cache.setupListeners()).not.toThrow();
+  });
+
+  it('stopPeriodicRefresh cancels a pending debounced visit refresh', async () => {
+    const { api, visitedListeners } = makeHistoryApiWithEvents([makeFakeHistoryItem()]);
+    vi.stubGlobal('chrome', { history: api });
+    const cache = new HistoryCache();
+    cache.setupListeners();
+
+    visitedListeners[0]();
+    cache.stopPeriodicRefresh();
+    await vi.advanceTimersByTimeAsync(2000);
+    // The orphaned timer must NOT fire refresh against a torn-down chrome.
+    expect(api.search).not.toHaveBeenCalled();
+  });
 });

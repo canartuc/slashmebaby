@@ -84,18 +84,25 @@ test('shortcut change applies live without a reload', async () => {
   expect(await isOpen()).toBe(false);
 
   await setSetting(context, { shortcut: 'Ctrl+.' });
-  await new Promise(r => setTimeout(r, 300));
 
-  // The old default is dead now…
+  // Positively confirm propagation FIRST: poll until the new combo opens
+  // (retrying the press), so the negative assertion below can't race the
+  // storage.onChanged delivery.
+  await expect
+    .poll(async () => {
+      if (!(await isOpen())) await page.keyboard.press('Control+Period');
+      return isOpen();
+    }, { timeout: 5000 })
+    .toBe(true);
+  await page.keyboard.press('Escape');
+  await expect.poll(isOpen, { timeout: 5000 }).toBe(false);
+
+  // Propagation proven — the old default must now be dead.
   await page.keyboard.press(
     process.platform === 'darwin' ? 'Meta+Shift+Space' : 'Control+Shift+Space'
   );
   await new Promise(r => setTimeout(r, 300));
   expect(await isOpen()).toBe(false);
-
-  // …and the new combo opens the palette.
-  await page.keyboard.press('Control+Period');
-  await expect.poll(isOpen, { timeout: 5000 }).toBe(true);
 
   await context.close();
 });

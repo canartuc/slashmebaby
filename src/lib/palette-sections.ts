@@ -51,21 +51,29 @@ export function computeSectionBoundaries(items: SectionableItem[]): number[] {
 
 /**
  * The next Tab stop from selectedIndex, or null when there is nothing to
- * jump to. Forward: first boundary after the selection, wrapping to the
- * first. Backward: last boundary before the selection (the start of the
- * PREVIOUS group, so Shift+Tab from inside a group skips to the one
- * above), wrapping to the last.
+ * jump between — fewer than two sections. Callers fall back to item
+ * stepping then, so Tab keeps moving the selection in single-section lists
+ * ('>' action mode) instead of no-oping or yanking it back to the top.
+ *
+ * Forward: first boundary after the selection, wrapping to the first.
+ * Backward: the PREVIOUS section's start, even from mid-section (matching
+ * TS-063 and the onboarding "Jump to previous group" copy), wrapping to
+ * the last section from the first.
  */
 export function stepSectionBoundary(
   boundaries: number[],
   selectedIndex: number,
   dir: 1 | -1
 ): number | null {
-  if (boundaries.length === 0) return null;
+  if (boundaries.length < 2) return null;
   if (dir === 1) {
     const next = boundaries.find((b) => b > selectedIndex);
     return next ?? boundaries[0];
   }
-  const prev = [...boundaries].reverse().find((b) => b < selectedIndex);
+  // Start of the section the selection is currently in (or the first
+  // boundary when the selection sits above every boundary).
+  const currentStart =
+    [...boundaries].reverse().find((b) => b <= selectedIndex) ?? boundaries[0];
+  const prev = [...boundaries].reverse().find((b) => b < currentStart);
   return prev ?? boundaries[boundaries.length - 1];
 }

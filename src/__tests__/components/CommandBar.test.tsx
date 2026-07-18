@@ -1696,16 +1696,18 @@ describe('CommandBar — Tab section jumping (jump mode)', () => {
     await waitFor(() => expect(selectedTitle(container)).toContain('Bookmarks Bar'));
   });
 
-  it("Shift+Tab from a folder's child selects that folder, then wraps", async () => {
+  it("Shift+Tab from a folder's child jumps to the PREVIOUS group (wrapping)", async () => {
     const container = await renderTree();
     fireSmbKey('ArrowRight'); // expand Bookmarks Bar
     await waitFor(() => expect(screen.getByText('React Docs')).toBeTruthy());
-    fireSmbKey('ArrowDown'); // React Docs (index 1)
+    fireSmbKey('ArrowDown'); // React Docs (index 1, inside the FIRST group)
     await waitFor(() => expect(selectedTitle(container)).toContain('React Docs'));
-    fireSmbKey('Tab', true);
-    await waitFor(() => expect(selectedTitle(container)).toContain('Bookmarks Bar'));
+    // Previous group from inside the first one wraps to the last group —
+    // never the current group's own start.
     fireSmbKey('Tab', true);
     await waitFor(() => expect(selectedTitle(container)).toContain('Work Stuff'));
+    fireSmbKey('Tab', true);
+    await waitFor(() => expect(selectedTitle(container)).toContain('Bookmarks Bar'));
   });
 });
 
@@ -1758,8 +1760,14 @@ describe('CommandBar — Tab section jumping (search mode)', () => {
 
   it('Tab from mid-section jumps to the next section start, not the next item', async () => {
     const container = await searchAlpha();
+    const initial = selectedTitle(container);
     fireSmbKey('ArrowDown'); // second tab (index 1)
-    await waitFor(() => expect(selectedTitle(container)).toMatch(/Alpha (Docs|Blog)/));
+    // Premise check: the selection really moved off the first tab.
+    await waitFor(() => {
+      const title = selectedTitle(container);
+      expect(title).toMatch(/Alpha (Docs|Blog)/);
+      expect(title).not.toBe(initial);
+    });
     fireSmbKey('Tab');
     await waitFor(() => expect(selectedTitle(container)).toContain('Alpha Reference'));
   });
@@ -1792,7 +1800,7 @@ describe('CommandBar — Tab section jumping (search mode)', () => {
     });
   });
 
-  it('action mode: Tab snaps selection back to the first action', async () => {
+  it('action mode: Tab falls back to item stepping in a single-section list', async () => {
     const view = render(<CommandBar onDismiss={() => {}} />);
     await waitFor(() => expect(screen.getByText(/Alpha Docs/)).toBeTruthy());
     fireSmbKey('/');
@@ -1801,11 +1809,14 @@ describe('CommandBar — Tab section jumping (search mode)', () => {
     )) as HTMLInputElement;
     fireEvent.input(input, { target: { value: '>' } });
     await waitFor(() => expect(screen.getByText('Close Tab')).toBeTruthy());
-    fireSmbKey('ArrowDown');
-    fireSmbKey('ArrowDown'); // third action
+    // One section, nothing to jump between — Tab must still MOVE, never
+    // no-op or snap back to the top (Enter would then hit the wrong action).
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(view.container)).toContain('Pin Tab'));
+    fireSmbKey('Tab');
     await waitFor(() => expect(selectedTitle(view.container)).toContain('New Tab'));
-    fireSmbKey('Tab'); // single boundary [0] → wrap to first action
-    await waitFor(() => expect(selectedTitle(view.container)).toContain('Close Tab'));
+    fireSmbKey('Tab', true);
+    await waitFor(() => expect(selectedTitle(view.container)).toContain('Pin Tab'));
   });
 
   it('Tab on an empty result list is a no-op', async () => {
