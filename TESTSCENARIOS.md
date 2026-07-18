@@ -358,3 +358,20 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 | TS-186 | P0 | Discarded tabs show the ⏾ sleep badge identically on both surfaces |
 | TS-187 | P1 | A frozen tab (Chrome-only) is woken on activation like a discarded one |
 | TS-188 | P2 | Manual: incognito tabs are invisible to the palette (no `incognito` manifest key) unless the user enables "Allow in Incognito" |
+
+## Design Baselines (pixel)
+
+Checked-in darwin screenshots (`e2e/__screenshots__/darwin/`) compared with `maxDiffPixelRatio: 0.001`; regeneration and review policy in CONTRIBUTING.md. Theme scope: dark everywhere plus one light shot per token-bearing stylesheet (overlay, popup, settings); onboarding-light is a conscious exclusion (shares the settings token approach).
+
+| ID | Priority | Scenario |
+|----|----------|----------|
+| TS-189 | P1 | Overlay jump view (dark, center, with pinned grid) matches its pixel baseline |
+| TS-190 | P1 | Overlay top and bottom position variants match their pixel baselines |
+| TS-191 | P1 | Overlay search results (Tabs/Bookmarks/History) match the pixel baseline |
+| TS-192 | P1 | Overlay `>` action mode matches the pixel baseline |
+| TS-193 | P1 | Overlay jump view (light) matches the pixel baseline |
+| TS-194 | P1 | Popup jump view (dark and light) matches its pixel baselines |
+| TS-195 | P1 | Popup search and action modes match their pixel baselines |
+| TS-196 | P1 | Settings page (dark and light) matches its pixel baselines |
+| TS-197 | P1 | Onboarding steps 1–5 (dark) match their pixel baselines (async pin badge masked) |
+| TS-198 | P1 | The visible error strip matches its pixel baseline |

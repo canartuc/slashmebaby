@@ -82,6 +82,27 @@ src/__tests__/                unit tests (Vitest)
 e2e/                          end-to-end tests (Playwright)
 ```
 
+## Visual design baselines
+
+`e2e/design-baselines.spec.ts` compares every designed surface against
+checked-in screenshots under `e2e/__screenshots__/darwin/`. Baselines are
+OS/font-renderer specific — they are generated and enforced on macOS
+(darwin); the suite auto-skips elsewhere (CI's design enforcement is the
+cross-surface pixel diff in `surface-parity.spec.ts`'s visual sibling).
+
+- **Regenerate** after an intentional design change:
+  `npm run build && npx playwright test e2e/design-baselines.spec.ts --update-snapshots`
+  Then EYEBALL every changed PNG before committing, and confirm two
+  consecutive plain runs pass without retries.
+- **Review rule:** a PR with an intentional design change must include the
+  regenerated PNGs, and the reviewer must inspect before/after images in
+  the Playwright HTML report. NEVER raise `maxDiffPixelRatio` to make a
+  red baseline pass; a per-shot bump to 0.002 is allowed only for proven
+  headed anti-aliasing jitter, with a comment.
+- A baseline test that needs retries to pass is investigated, not shipped.
+- Adding a scenario row to TESTSCENARIOS.md obligates a matching update to
+  the automation coverage map (`docs/test-coverage.md`).
+
 ## Related documents
 
 - [AI_CONTRIBUTIONS.md](AI_CONTRIBUTIONS.md), the policy on AI-assisted contributions
