@@ -1,6 +1,8 @@
 # TESTSCENARIOS.md: SlashMeBaby QA Test Scenarios
 
-Last updated: 2026-07-07
+Last updated: 2026-07-18
+
+Automation coverage map: [docs/test-coverage.md](docs/test-coverage.md)
 
 Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line description of what is verified.
 
@@ -93,7 +95,7 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 | TS-043 | P0 | Each group shows at most the configured Results Per Group value (3/5/8, default 5) |
 | TS-044 | P0 | Total visible results never exceed the per-group cap multiplied by the number of result groups (there is no separate global cap) |
 | TS-045 | P0 | Each result row shows the item's title |
-| TS-046 | P0 | Each result row shows the item's URL (where applicable) |
+| TS-046 | P1 | Result rows show the item title (single line); the URL is exposed via tooltip/aria rather than a visible second line (current tree-view design) |
 | TS-047 | P1 | Each result row shows the item's favicon (when Show Favicons setting is On) |
 | TS-048 | P1 | A globe fallback icon is shown for items with a missing or broken favicon |
 
@@ -329,7 +331,7 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 | TS-167 | P0 | Tabs with no favicon show the globe fallback icon without breaking the layout |
 | TS-168 | P0 | Rapidly opening and closing the command bar in quick succession does not leave stale overlays or errors |
 | TS-169 | P0 | Typing very fast (burst of keystrokes) returns correct results for the final query state |
-| TS-170 | P0 | Searching with a query that matches nothing shows an appropriate empty results message |
+| TS-170 | P2 | A query with no matches renders an empty result list with no selection (no placeholder message by design; Enter is a no-op) |
 | TS-171 | P0 | Tab titles containing special HTML characters (e.g., `<`, `>`, `&`) are rendered safely (no XSS) |
 | TS-172 | P1 | Command bar opens correctly on a page that aggressively captures keyboard events |
 | TS-173 | P1 | Switching to a tab in a different window via the command bar focuses that window |
