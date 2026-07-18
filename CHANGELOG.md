@@ -57,4 +57,5 @@ Initial public release.
 - Background favicon proxy: fetches site favicons image-only with credentials omitted, converts them to `data:` URLs, and caches them in memory, with a globe-glyph fallback.
 - Cross-browser builds via WXT: Chrome MV3 (primary) and Firefox MV2.
 
+[1.1.0]: https://github.com/canartuc/slashmebaby/releases/tag/v1.1.0
 [1.0.0]: https://github.com/canartuc/slashmebaby/releases/tag/v1.0.0
