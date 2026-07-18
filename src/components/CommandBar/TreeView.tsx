@@ -2,6 +2,7 @@ import React from 'react';
 import type { TreeItem as TreeItemData } from '../../hooks/useTreeData';
 import { TreeItem } from './TreeItem';
 import { Favicon } from './Favicon';
+import { sectionOf } from '../../lib/palette-sections';
 
 // ─── Action definitions ─────────────────────────────────────────────────────
 
@@ -51,26 +52,6 @@ export interface TreeViewProps {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/** Maps an item type to the section header it renders under. */
-function sectionOf(item: TreeItemData): string | null {
-  switch (item.type) {
-    case 'tab':
-    case 'group':
-      return 'Open Tabs';
-    case 'bookmark':
-    case 'folder':
-      return 'Bookmarks';
-    case 'history':
-      return 'History';
-    case 'action':
-      return 'Actions';
-    case 'goto':
-      return 'Navigate';
-    default:
-      return null;
-  }
-}
 
 /**
  * Determines whether a section header should be shown before this item.
