@@ -999,6 +999,10 @@ describe('createMessageRouter', () => {
             return Promise.resolve(tabs);
           }),
         },
+        windows: {
+          ...baseMock.windows,
+          getAll: vi.fn(() => Promise.resolve([{ id: 1 } as chrome.windows.Window])),
+        },
       };
       vi.stubGlobal('chrome', chromeMock);
       const router = await createMessageRouter();
@@ -1019,6 +1023,10 @@ describe('createMessageRouter', () => {
             cb?.(tabs);
             return Promise.resolve(tabs);
           }),
+        },
+        windows: {
+          ...baseMock.windows,
+          getAll: vi.fn(() => Promise.resolve([{ id: 1 } as chrome.windows.Window])),
         },
       };
       vi.stubGlobal('chrome', chromeMock);
