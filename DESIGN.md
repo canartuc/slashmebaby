@@ -366,7 +366,7 @@ All features must be fully operable without a mouse:
 - Open: keyboard shortcut (configured by user)
 - Navigate: Arrow keys + Tab
 - Execute: Enter
-- Close: Escape (the toolbar popup also closes on Backspace with an empty query; the on-page overlay does not)
+- Close: Escape on both surfaces (the toolbar popup additionally closes when it loses focus — a browser behavior of action popups)
 - No feature requires hover, drag, or click to operate
 
 ### Color Independence

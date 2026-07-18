@@ -39,7 +39,7 @@ After completing onboarding, you can start using SlashMeBaby on any web page.
 
 Type any part of a tab's title or URL to find it instantly. Results show the tab title, hostname, and favicon. Press Enter to switch to the selected tab.
 
-The overlay ranks results by fuzzy match quality. In the toolbar popup, tabs are scored by a combination of fuzzy match quality and recency, so tabs you accessed recently appear higher in its results.
+Results are ranked by fuzzy match quality — identically in the on-page command bar and the toolbar popup.
 
 ### Bookmark Search
 
@@ -47,7 +47,7 @@ Search across your entire bookmark collection. Results show the bookmark title a
 
 ### History Search
 
-Search the last 1,000 items from your browsing history. Results show the page title and URL. In the toolbar popup, history results are also ranked by recency (recently visited pages score higher).
+Search the last 1,000 items from your browsing history. Results show the page title and URL, identically on both surfaces. New visits become searchable within about a second.
 
 ### Browser Actions
 
@@ -95,7 +95,7 @@ You can change the activation shortcut in Settings or via `chrome://extensions/s
 | Enter | Execute the selected result |
 | Escape | Close the command bar |
 
-Backspace edits the query as normal text editing; the on-page command bar never closes on Backspace. In the toolbar-icon popup only, pressing Backspace with an empty input also closes the popup.
+Backspace edits the query as normal text editing; neither the on-page command bar nor the toolbar popup ever closes on Backspace.
 
 ## Settings
 
@@ -122,7 +122,7 @@ The command bar overlay cannot appear on browser-internal pages such as:
 - `about:` pages
 - The Chrome Web Store
 
-On these pages, click the SlashMeBaby icon in the toolbar to open a popup fallback with the same search functionality.
+On these pages, click the SlashMeBaby icon in the toolbar to open a popup running the identical palette — jump labels, keyboard shortcuts, and search all work exactly as in the on-page command bar.
 
 ### How do I change the keyboard shortcut?
 

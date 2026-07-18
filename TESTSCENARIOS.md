@@ -63,7 +63,7 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 
 | ID | Priority | Description |
 |----|----------|-------------|
-| TS-026 | P0 | Opening the popup with no query shows smart suggestions immediately (the overlay's empty state shows the pinned-tab grid and tree view instead) |
+| TS-026 | P0 | Opening either surface with no query shows the jump view: pinned-tab grid, open-tab grid, bookmark tree, and action chips |
 | TS-027 | P0 | Smart suggestions include the 3 most recently accessed open tabs |
 | TS-028 | P0 | Smart suggestions include the 2 most recently added bookmarks |
 | TS-029 | P0 | Smart suggestions include contextual action "Mute Tab" only when the current tab is audible |
@@ -77,17 +77,17 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 | TS-032 | P0 | Typing a query returns fuzzy-matched results from open tabs |
 | TS-033 | P0 | Typing a query returns fuzzy-matched results from bookmarks |
 | TS-034 | P0 | Typing a query returns fuzzy-matched results from browsing history |
-| TS-035 | P0 | Typing a query in the popup returns fuzzy-matched actions by name (in the overlay, actions are matched via the `>` prefix) |
+| TS-035 | P0 | Actions are matched via the `>` prefix in search mode, identically on both surfaces |
 | TS-036 | P0 | Partial query matches (e.g. "gmil" matches "Gmail") |
 | TS-037 | P0 | Case-insensitive matching works (e.g. "GMAIL" matches "Gmail") |
 | TS-038 | P0 | URL fields are searched in addition to titles |
-| TS-039 | P0 | Clearing the query returns to the empty state (smart suggestions in the popup, tree view in the overlay) |
+| TS-039 | P0 | Clearing the query returns to the jump-view empty state on both surfaces |
 
 ### 3.3 Grouped Results
 
 | ID | Priority | Description |
 |----|----------|-------------|
-| TS-040 | P0 | Popup results are grouped in order: Tabs, Bookmarks, History, Actions; overlay results in order: Open Tabs, Bookmarks, History, then a Navigate row when the query looks like a URL |
+| TS-040 | P0 | Results on both surfaces are grouped in order: Open Tabs, Bookmarks, History, then a Navigate row when the query looks like a URL |
 | TS-041 | P0 | Each group shows a visible group header label |
 | TS-042 | P0 | A group section is not shown at all when it has no matching results |
 | TS-043 | P0 | Each group shows at most the configured Results Per Group value (3/5/8, default 5) |
@@ -263,7 +263,7 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 | TS-129 | P0 | Clicking the extension icon on a chrome:// page opens the popup fallback |
 | TS-130 | P0 | Clicking the extension icon on an about: page opens the popup fallback |
 | TS-131 | P0 | The popup fallback contains the search input field |
-| TS-132 | P0 | Typing in the popup search input returns search results |
+| TS-132 | P0 | Pressing `/` in the popup and typing returns search results, exactly as in the overlay |
 | TS-133 | P0 | Selecting a result in the popup executes the action (e.g., switches to the selected tab) |
 | TS-134 | P0 | The popup fallback does NOT show a backdrop element |
 | TS-135 | P1 | The popup fallback applies the same theme (light/dark) as the main overlay |
@@ -336,3 +336,15 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 | TS-174 | P1 | "Close All Duplicates" when there are no duplicates completes without error |
 | TS-175 | P1 | "Sort Tabs by Domain" when there is only one tab completes without error |
 | TS-176 | P0 | "Recently Closed" completes without error when no tabs have been closed this session (nothing to restore) |
+
+## Surface Parity (popup ≡ overlay)
+
+| ID | Priority | Scenario |
+|----|----------|----------|
+| TS-177 | P0 | The popup opens in jump mode identical to the overlay: read-only input, labels visible on tabs, bookmarks, and folders |
+| TS-178 | P0 | A digit key switches to the corresponding pinned tab from the popup, exactly as in the overlay |
+| TS-179 | P0 | `/` toggles between jump and typed search in the popup, exactly as in the overlay |
+| TS-180 | P0 | Backspace never closes either surface; Escape closes the popup (and dismisses the overlay) |
+| TS-181 | P0 | For identical data, both surfaces render identical section headers, tab-grid labels, and tree-row badges |
+| TS-182 | P1 | The results region renders pixel-identical (within tolerance) on both surfaces at equalized width |
+| TS-183 | P0 | Two-character label combos activate the same target from either surface |

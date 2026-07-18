@@ -17,11 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keyboard shortcut now works on the new tab page and other restricted pages (`chrome://`, Chrome Web Store): the browser-level command opens the palette popup there via `chrome.action.openPopup()`.
 - Onboarding gains a "Pin it to your toolbar" step with browser-specific instructions (Chrome / Firefox) and a live "Pinned" confirmation where the browser supports it.
 
+### Removed
+
+- The popup-only "Backspace closes the window" behavior (strict overlay parity — Escape or clicking away still closes it).
+
 ### Changed
 
 - Automated coverage expanded substantially: every activation-shortcut preset (including Command variants), settings applied live to the open overlay, theme/position placement, jump labels (including two-character combos), pinned-tab number shortcuts, tree arrow navigation, go-to-URL, `>` action mode, diacritics folding, history section rendering, popup keyboard flows, and real tab-group/multi-window round-trips.
 - Clicking the toolbar icon on normal pages now opens the in-page overlay palette (same as the shortcut); the popup remains the surface on restricted pages.
-- The popup is visually and behaviorally unified with the overlay palette: same CommandBar (tab grid, bookmark tree, jump/search modes, action chips) in a larger 720×540 window, with client-side fuzzy search replacing the old background-search mini list.
+- The popup is visually and behaviorally unified with the overlay palette: same CommandBar (tab grid, bookmark tree, jump/search modes, action chips) in a larger 720×540 window, opening in jump mode identical to the overlay (labels pressable on entry, `/` for typed search), with client-side fuzzy search replacing the old background-search mini list. Surface parity is enforced by dedicated unit, e2e, and pixel-diff suites.
 - Minimum browser versions raised: Chrome 127 (for `action.openPopup`) and Firefox 126 (for the `commands.onCommand` tab argument).
 
 ## [1.0.0] - 2026-07-07
