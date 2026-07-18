@@ -148,8 +148,9 @@ export async function getGroupHeaders(page: Page): Promise<string[]> {
 
 export async function typeInCommandBar(page: Page, text: string): Promise<void> {
   await page.evaluate((t) => {
-    const host = document.getElementById('slashmebaby-root');
-    const input = host?.shadowRoot?.querySelector('.smb-input') as HTMLInputElement;
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const input = root.querySelector('.smb-input') as HTMLInputElement;
     if (input) {
       input.value = t;
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -170,8 +171,9 @@ export async function typeInCommandBar(page: Page, text: string): Promise<void> 
 
 export async function getInputValue(page: Page): Promise<string> {
   return page.evaluate(() => {
-    const host = document.getElementById('slashmebaby-root');
-    const input = host?.shadowRoot?.querySelector('.smb-input') as HTMLInputElement;
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const input = root.querySelector('.smb-input') as HTMLInputElement;
     return input?.value || '';
   });
 }
