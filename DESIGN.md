@@ -395,3 +395,7 @@ State is never communicated by color alone. The selected item uses both a backgr
 ### No External Icon Libraries
 
 All icons are inline SVG strings embedded in the component source. This avoids extra network requests and icon library version drift, and the icons stay available even on pages with restrictive Content Security Policies.
+
+### Sleep badge
+
+`.smb-sleep-badge` — U+23FE on hibernated tab rows (grid and search results): `--color-text-muted`, 12px, line-height 1, no background. Identical on both surfaces via `palette-core.css`.

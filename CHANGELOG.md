@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Activating a hibernated (discarded/Memory-Saver) tab from the palette now wakes it with an explicit reload — previously the switch could land on a blank page.
 - Tab and Shift+Tab now jump to the first item of the next/previous result section (top-level folders in the tree view) instead of duplicating ArrowDown/ArrowUp, in both search and jump modes; single-section lists (such as `>` action mode) fall back to one-item steps so Tab always moves the selection. The onboarding guide gained a matching Shift+Tab row.
 - History results now refresh immediately after a page visit (debounced `history.onVisited` listener) instead of waiting up to five minutes for the next periodic refresh.
 
 ### Added
 
+- A ⏾ sleep badge marks hibernated tabs in the palette on both surfaces.
 - Keyboard shortcut now works on the new tab page and other restricted pages (`chrome://`, Chrome Web Store): the browser-level command opens the palette popup there via `chrome.action.openPopup()`.
 - Onboarding gains a "Pin it to your toolbar" step with browser-specific instructions (Chrome / Firefox) and a live "Pinned" confirmation where the browser supports it.
 

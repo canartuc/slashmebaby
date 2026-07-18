@@ -142,3 +142,7 @@ Yes. SlashMeBaby supports Firefox via the Firefox Add-ons store. The extension u
 ### Why does the command bar look different from the host page?
 
 SlashMeBaby renders inside a Shadow DOM, which isolates its styles from the host page. The command bar keeps the same look regardless of the website's CSS.
+
+## Sleeping tabs
+
+Tabs hibernated by the browser (Memory Saver) stay searchable and show a ⏾ badge in the palette. Switching to one wakes it automatically — the page reloads without a manual refresh.

@@ -10,7 +10,7 @@ Works in Chrome (Manifest V3) and Firefox (Manifest V2).
 
 ## Features
 
-- **Tab switching.** Fuzzy-search every open tab in every window and jump to it with Enter.
+- **Tab switching.** Fuzzy-search every open tab in every window and jump to it with Enter. Sleeping (Memory-Saver) tabs show a ⏾ badge and wake automatically when you switch to them.
 - **Bookmark search.** Search your full bookmark tree, including nested folders.
 - **History search.** Search your recent browsing history.
 - **Tab actions.** Close tab, close other tabs, pin/unpin, mute/unmute, duplicate, move to a new window, reload, new tab, go to URL, restore recently closed tabs, close duplicate tabs, and sort tabs by domain.
