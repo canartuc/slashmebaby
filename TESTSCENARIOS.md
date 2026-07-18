@@ -126,8 +126,8 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 | TS-059 | P0 | Arrow Up moves selection to the previous result item |
 | TS-060 | P0 | Arrow Down from the last item in one group moves to the first item in the next group |
 | TS-061 | P0 | Arrow Up from the first item in one group moves to the last item in the previous group |
-| TS-062 | P0 | Tab key moves selection to the next result item, wrapping at the end of the list |
-| TS-063 | P0 | Shift+Tab moves selection to the previous result item, wrapping at the top of the list |
+| TS-062 | P0 | Tab moves selection to the first item of the next section, wrapping to the first section after the last |
+| TS-063 | P0 | Shift+Tab moves selection to the start of the previous section, wrapping to the last section from the top |
 | TS-064 | P0 | Pressing Enter executes the currently selected item |
 | TS-065 | P0 | Pressing Escape dismisses the overlay |
 | TS-066 | P0 | Pressing Backspace on an empty query does NOT dismiss the overlay |

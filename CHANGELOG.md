@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.0] - 2026-07-18
 
+### Fixed
+
+- Tab and Shift+Tab now jump to the first item of the next/previous result section (top-level folders in the tree view) instead of duplicating ArrowDown/ArrowUp, in both search and jump modes. The onboarding guide gained a matching Shift+Tab row.
+
 ### Added
 
 - Keyboard shortcut now works on the new tab page and other restricted pages (`chrome://`, Chrome Web Store): the browser-level command opens the palette popup there via `chrome.action.openPopup()`.
