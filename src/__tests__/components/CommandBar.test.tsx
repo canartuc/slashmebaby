@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { CommandBar } from '../../components/CommandBar/CommandBar';
 
 Object.defineProperty(window, 'matchMedia', {
@@ -237,7 +237,8 @@ describe('CommandBar', () => {
     expect(screen.getByRole('listbox')).toBeTruthy();
   });
 
-  it('Tab cycles forward and Shift+Tab cycles backward', async () => {
+  it('Tab and Shift+Tab do not throw on the default surface', async () => {
+    // Section-jump semantics are pinned in the dedicated Tab describes below.
     render(<CommandBar onDismiss={() => {}} />);
     await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
     fireSmbKey('Tab');
@@ -267,7 +268,7 @@ describe('CommandBar', () => {
     expect(screen.getByRole('listbox')).toBeTruthy();
   });
 
-  it('search-mode Tab/ArrowDown still cycle the selection', async () => {
+  it('search-mode ArrowDown/ArrowUp still cycle the selection one item at a time', async () => {
     render(<CommandBar onDismiss={() => {}} />);
     await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
 
@@ -275,7 +276,6 @@ describe('CommandBar', () => {
     await waitFor(() =>
       expect(screen.getByPlaceholderText('Search tabs, bookmarks, actions...')).toBeTruthy()
     );
-    fireSmbKey('Tab');
     fireSmbKey('ArrowDown');
     fireSmbKey('ArrowUp');
     expect(screen.getByRole('listbox')).toBeTruthy();
@@ -444,7 +444,7 @@ describe('CommandBar', () => {
     expect(onDismiss).toHaveBeenCalled();
   });
 
-  it('Tab moves selection forward without invoking activation', async () => {
+  it('Tab never invokes activation or dismissal', async () => {
     const onDismiss = vi.fn();
     render(<CommandBar onDismiss={onDismiss} />);
     await waitFor(() => expect(screen.getByText('Bookmarks Bar')).toBeTruthy());
@@ -1558,5 +1558,269 @@ describe('CommandBar — popup variant', () => {
       expect(onDismiss).toHaveBeenCalled();
     });
     expect(writeText).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Tab section jumping ────────────────────────────────────────────────────
+// Tab/Shift+Tab jump to the first item of the next/previous SECTION
+// (top-level folders in the jump-mode tree), never one item at a time.
+
+function makeTabJumpMock(options: {
+  tabs: Array<{ id: number; title: string }>;
+  tree: Array<{ id: string; title: string; children: Array<{ id: string; title: string; url?: string; children?: Array<{ id: string; title: string; url: string }> }> }>;
+  history?: Array<{ id: string; title: string; url: string }>;
+  actions?: Array<{ id: string; title: string }>;
+}) {
+  vi.mocked(chrome.runtime.sendMessage).mockReset();
+  vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+    msg: unknown,
+    callback?: (response: unknown) => void
+  ) => {
+      const message = msg as { type: string };
+      if (message.type === 'GET_SETTINGS' && callback) {
+        callback({
+          settings: {
+            shortcut: 'Ctrl+Shift+Space',
+            position: 'center',
+            theme: 'dark',
+            maxResultsPerGroup: 5,
+            showFavicons: true,
+            searchSources: { tabs: true, bookmarks: true, history: true },
+          },
+        });
+      } else if (message.type === 'GET_ALL_TABS' && callback) {
+        callback({
+          groups: [
+            {
+              label: 'Window 1',
+              type: 'window',
+              tabs: options.tabs.map((t) => ({
+                id: t.id,
+                title: t.title,
+                url: `https://tab-${t.id}.example/`,
+                favIconUrl: '',
+                windowId: 1,
+                pinned: false,
+                audible: false,
+              })),
+            },
+          ],
+        });
+      } else if (message.type === 'GET_BOOKMARK_TREE' && callback) {
+        callback({ tree: options.tree });
+      } else if (message.type === 'GET_HISTORY_ITEMS' && callback) {
+        callback({
+          items: (options.history ?? []).map((h) => ({ ...h, lastVisitTime: 1 })),
+        });
+      } else if (message.type === 'GET_ACTIONS' && callback) {
+        callback({ actions: options.actions ?? [] });
+      } else if (callback) {
+        callback({ success: true });
+      }
+      return undefined as unknown as Promise<unknown>;
+    }) as unknown as typeof chrome.runtime.sendMessage
+  );
+}
+
+function selectedTitle(container: HTMLElement): string {
+  return container.querySelector('.smb-tree-item--selected')?.textContent ?? '';
+}
+
+describe('CommandBar — Tab section jumping (jump mode)', () => {
+  function fireSmbKey(key: string, shiftKey = false) {
+    document.dispatchEvent(new CustomEvent('smb-keydown', { detail: { key, shiftKey } }));
+  }
+
+  beforeEach(() => {
+    makeTabJumpMock({
+      tabs: [
+        { id: 1, title: 'Gmail' },
+        { id: 2, title: 'GitHub' },
+      ],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [
+            { id: '2', title: 'React Docs', url: 'https://react.dev' },
+            { id: '3', title: 'Vue Docs', url: 'https://vuejs.org' },
+          ],
+        },
+        {
+          id: '4',
+          title: 'Work Stuff',
+          children: [{ id: '5', title: 'Jira', url: 'https://jira.example' }],
+        },
+      ],
+    });
+  });
+
+  async function renderTree() {
+    const view = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Work Stuff')).toBeTruthy());
+    return view.container;
+  }
+
+  it('Tab moves selection to the next top-level folder', async () => {
+    const container = await renderTree();
+    expect(selectedTitle(container)).toContain('Bookmarks Bar');
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(container)).toContain('Work Stuff'));
+  });
+
+  it('Shift+Tab moves selection back to the previous top-level folder', async () => {
+    const container = await renderTree();
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(container)).toContain('Work Stuff'));
+    fireSmbKey('Tab', true);
+    await waitFor(() => expect(selectedTitle(container)).toContain('Bookmarks Bar'));
+  });
+
+  it("Tab skips an expanded folder's children and lands on the next top-level folder", async () => {
+    const container = await renderTree();
+    fireSmbKey('ArrowRight'); // expand Bookmarks Bar
+    await waitFor(() => expect(screen.getByText('React Docs')).toBeTruthy());
+    fireSmbKey('Tab');
+    await waitFor(() => {
+      const title = selectedTitle(container);
+      expect(title).toContain('Work Stuff');
+      expect(title).not.toContain('React Docs');
+    });
+  });
+
+  it('Tab wraps from the last top-level folder to the first', async () => {
+    const container = await renderTree();
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(container)).toContain('Work Stuff'));
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(container)).toContain('Bookmarks Bar'));
+  });
+
+  it("Shift+Tab from a folder's child selects that folder, then wraps", async () => {
+    const container = await renderTree();
+    fireSmbKey('ArrowRight'); // expand Bookmarks Bar
+    await waitFor(() => expect(screen.getByText('React Docs')).toBeTruthy());
+    fireSmbKey('ArrowDown'); // React Docs (index 1)
+    await waitFor(() => expect(selectedTitle(container)).toContain('React Docs'));
+    fireSmbKey('Tab', true);
+    await waitFor(() => expect(selectedTitle(container)).toContain('Bookmarks Bar'));
+    fireSmbKey('Tab', true);
+    await waitFor(() => expect(selectedTitle(container)).toContain('Work Stuff'));
+  });
+});
+
+describe('CommandBar — Tab section jumping (search mode)', () => {
+  function fireSmbKey(key: string, shiftKey = false) {
+    document.dispatchEvent(new CustomEvent('smb-keydown', { detail: { key, shiftKey } }));
+  }
+
+  beforeEach(() => {
+    makeTabJumpMock({
+      tabs: [
+        { id: 1, title: 'Alpha Docs' },
+        { id: 2, title: 'Alpha Blog' },
+      ],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'Alpha Reference', url: 'https://alpha.ref/' }],
+        },
+      ],
+      history: [{ id: 'h1', title: 'Alpha History', url: 'https://alpha.hist/' }],
+      actions: [
+        { id: 'action-close-tab', title: 'Close Tab' },
+        { id: 'action-pin-tab', title: 'Pin Tab' },
+        { id: 'action-new-tab', title: 'New Tab' },
+      ],
+    });
+  });
+
+  async function searchAlpha() {
+    const view = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText(/Alpha Docs/)).toBeTruthy());
+    fireSmbKey('/');
+    const input = (await waitFor(() =>
+      screen.getByPlaceholderText('Search tabs, bookmarks, actions...')
+    )) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'alpha' } });
+    // Results: [tab, tab, bookmark, history] → boundaries [0, 2, 3]
+    await waitFor(() => expect(screen.getByText(/Alpha History/)).toBeTruthy());
+    return view.container;
+  }
+
+  it('Tab jumps from the tabs section to the first bookmark result', async () => {
+    const container = await searchAlpha();
+    expect(selectedTitle(container)).toMatch(/Alpha (Docs|Blog)/);
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(container)).toContain('Alpha Reference'));
+  });
+
+  it('Tab from mid-section jumps to the next section start, not the next item', async () => {
+    const container = await searchAlpha();
+    fireSmbKey('ArrowDown'); // second tab (index 1)
+    await waitFor(() => expect(selectedTitle(container)).toMatch(/Alpha (Docs|Blog)/));
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(container)).toContain('Alpha Reference'));
+  });
+
+  it('Tab walks section starts and wraps to the top', async () => {
+    const container = await searchAlpha();
+    const initial = selectedTitle(container);
+    fireSmbKey('Tab'); // bookmarks
+    await waitFor(() => expect(selectedTitle(container)).toContain('Alpha Reference'));
+    fireSmbKey('Tab'); // history
+    await waitFor(() => expect(selectedTitle(container)).toContain('Alpha History'));
+    fireSmbKey('Tab'); // wrap to first tab
+    await waitFor(() => expect(selectedTitle(container)).toBe(initial));
+  });
+
+  it('Shift+Tab from the first result wraps to the last section start', async () => {
+    const container = await searchAlpha();
+    fireSmbKey('Tab', true);
+    await waitFor(() => expect(selectedTitle(container)).toContain('Alpha History'));
+  });
+
+  it('ArrowDown still moves one item at a time in search mode', async () => {
+    const container = await searchAlpha();
+    const initial = selectedTitle(container);
+    fireSmbKey('ArrowDown');
+    await waitFor(() => {
+      const title = selectedTitle(container);
+      expect(title).toMatch(/Alpha (Docs|Blog)/);
+      expect(title).not.toBe(initial);
+    });
+  });
+
+  it('action mode: Tab snaps selection back to the first action', async () => {
+    const view = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText(/Alpha Docs/)).toBeTruthy());
+    fireSmbKey('/');
+    const input = (await waitFor(() =>
+      screen.getByPlaceholderText('Search tabs, bookmarks, actions...')
+    )) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: '>' } });
+    await waitFor(() => expect(screen.getByText('Close Tab')).toBeTruthy());
+    fireSmbKey('ArrowDown');
+    fireSmbKey('ArrowDown'); // third action
+    await waitFor(() => expect(selectedTitle(view.container)).toContain('New Tab'));
+    fireSmbKey('Tab'); // single boundary [0] → wrap to first action
+    await waitFor(() => expect(selectedTitle(view.container)).toContain('Close Tab'));
+  });
+
+  it('Tab on an empty result list is a no-op', async () => {
+    const view = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText(/Alpha Docs/)).toBeTruthy());
+    fireSmbKey('/');
+    const input = (await waitFor(() =>
+      screen.getByPlaceholderText('Search tabs, bookmarks, actions...')
+    )) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'zzzz' } });
+    await waitFor(() =>
+      expect(view.container.querySelector('.smb-tree-item--selected')).toBeNull()
+    );
+    fireSmbKey('Tab');
+    expect(screen.getByRole('listbox')).toBeTruthy();
+    expect(view.container.querySelector('.smb-tree-item--selected')).toBeNull();
   });
 });

@@ -10,6 +10,7 @@ import type { TreeItem } from '../../hooks/useTreeData';
 import { useLabelAssignment } from '../../hooks/useLabelAssignment';
 import { useTheme } from '../../hooks/useTheme';
 import { isActionKey, getActionForKey } from '../../lib/labels';
+import { computeSectionBoundaries, stepSectionBoundary } from '../../lib/palette-sections';
 import { cleanUrl } from '../../lib/url-clean';
 import { foldDiacritics } from '../../lib/diacritics';
 import { guessNavigableUrl } from '../../lib/url-guess';
@@ -381,7 +382,16 @@ export const CommandBar: React.FC<CommandBarProps> = ({
     // Navigation + activation — identical in jump and search modes
     switch (key) {
       case 'Tab':
-        setSelectedIndex(prev => nextIndex(prev, items.length, shiftKey ? -1 : 1));
+        // Section jump, not item step: first item of the next/previous
+        // section (top-level folders in the jump-mode tree), wrapping.
+        setSelectedIndex(prev => {
+          const target = stepSectionBoundary(
+            computeSectionBoundaries(items),
+            prev,
+            shiftKey ? -1 : 1
+          );
+          return target ?? prev;
+        });
         return;
       case 'ArrowDown':
         setSelectedIndex(prev => nextIndex(prev, items.length, 1));
