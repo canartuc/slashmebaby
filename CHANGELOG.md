@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Tab and Shift+Tab now jump to the first item of the next/previous result section (top-level folders in the tree view) instead of duplicating ArrowDown/ArrowUp, in both search and jump modes. The onboarding guide gained a matching Shift+Tab row.
+- History results now refresh immediately after a page visit (debounced `history.onVisited` listener) instead of waiting up to five minutes for the next periodic refresh.
 
 ### Added
 
@@ -18,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Automated coverage expanded substantially: every activation-shortcut preset (including Command variants), settings applied live to the open overlay, theme/position placement, jump labels (including two-character combos), pinned-tab number shortcuts, tree arrow navigation, go-to-URL, `>` action mode, diacritics folding, history section rendering, popup keyboard flows, and real tab-group/multi-window round-trips.
 - Clicking the toolbar icon on normal pages now opens the in-page overlay palette (same as the shortcut); the popup remains the surface on restricted pages.
 - The popup is visually and behaviorally unified with the overlay palette: same CommandBar (tab grid, bookmark tree, jump/search modes, action chips) in a larger 720×540 window, with client-side fuzzy search replacing the old background-search mini list.
 - Minimum browser versions raised: Chrome 127 (for `action.openPopup`) and Firefox 126 (for the `commands.onCommand` tab argument).
