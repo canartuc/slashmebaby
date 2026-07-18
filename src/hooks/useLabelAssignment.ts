@@ -1,14 +1,18 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useRef } from 'react';
 import { assignLabels } from '../lib/labels';
 
 export function useLabelAssignment(visibleItemCount: number): {
   labels: Map<number, string>;
   labelToIndex: Map<string, number>;
   handleKeyPress: (key: string) => { targetIndex: number | null; consumed: boolean };
-  pendingPrefix: string | null;
   clearPending: () => void;
 } {
-  const [pendingPrefix, setPendingPrefix] = useState<string | null>(null);
+  // A ref, deliberately NOT state: the pending prefix must be visible to
+  // the very next keypress even when both keys land in the same frame —
+  // state would race the effect that re-attaches the key listener, and a
+  // rapid two-char combo (fast typing, key autorepeat) would be dropped or
+  // misrouted by the stale closure. Nothing renders from it.
+  const pendingPrefixRef = useRef<string | null>(null);
 
   // Build the two lookup maps whenever the count changes
   const { labels, labelToIndex } = useMemo(() => {
@@ -34,15 +38,15 @@ export function useLabelAssignment(visibleItemCount: number): {
   }, [labelToIndex]);
 
   const clearPending = useCallback(() => {
-    setPendingPrefix(null);
+    pendingPrefixRef.current = null;
   }, []);
 
   const handleKeyPress = useCallback(
     (key: string): { targetIndex: number | null; consumed: boolean } => {
-      if (pendingPrefix !== null) {
+      if (pendingPrefixRef.current !== null) {
         // We have a pending prefix; try to complete a two-char label
-        const combo = pendingPrefix + key;
-        setPendingPrefix(null);
+        const combo = pendingPrefixRef.current + key;
+        pendingPrefixRef.current = null;
         const idx = labelToIndex.get(combo);
         if (idx !== undefined) {
           return { targetIndex: idx, consumed: true };
@@ -59,7 +63,7 @@ export function useLabelAssignment(visibleItemCount: number): {
           // But only if this key can't also be a two-char prefix
           // If it IS a two-char prefix, we need to wait for the second char
           if (twoCharPrefixes.has(key)) {
-            setPendingPrefix(key);
+            pendingPrefixRef.current = key;
             return { targetIndex: null, consumed: true };
           }
           return { targetIndex: idx, consumed: true };
@@ -68,15 +72,15 @@ export function useLabelAssignment(visibleItemCount: number): {
 
       // Check if this key could start a two-char label
       if (twoCharPrefixes.has(key)) {
-        setPendingPrefix(key);
+        pendingPrefixRef.current = key;
         return { targetIndex: null, consumed: true };
       }
 
       // Not a label key at all
       return { targetIndex: null, consumed: false };
     },
-    [pendingPrefix, labelToIndex, twoCharPrefixes]
+    [labelToIndex, twoCharPrefixes]
   );
 
-  return { labels, labelToIndex, handleKeyPress, pendingPrefix, clearPending };
+  return { labels, labelToIndex, handleKeyPress, clearPending };
 }

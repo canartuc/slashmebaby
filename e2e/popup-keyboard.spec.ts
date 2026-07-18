@@ -45,6 +45,13 @@ test("opens in jump mode; '/' enters typed search which filters immediately", as
       return ro;
     }, { timeout: 5000 })
     .toBe(false);
+  // And wait for the focus effect: characters typed before the input owns
+  // focus are routed as palette keys (action letters could fire).
+  await popup.waitForFunction(
+    () => document.activeElement?.classList?.contains('smb-input') ?? false,
+    undefined,
+    { timeout: 5000 }
+  );
   await popup.keyboard.type('mozilla');
   await expect
     .poll(async () =>
@@ -186,6 +193,14 @@ test('Backspace never closes the popup; Escape does', async () => {
   await popup.keyboard.press('/');
   await expect.poll(readOnly, { timeout: 5000 }).toBe(false);
   expect(popup.isClosed()).toBe(false);
+
+  // Wait for the focus effect before typing — pre-focus characters are
+  // routed as palette keys ('x' is the close-others action).
+  await popup.waitForFunction(
+    () => document.activeElement?.classList?.contains('smb-input') ?? false,
+    undefined,
+    { timeout: 5000 }
+  );
 
   // Mid-query editing preserved.
   await popup.keyboard.type('exa');

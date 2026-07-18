@@ -118,12 +118,14 @@ test('a two-char label combo activates from the popup', async () => {
 
   const popup = await openPopupPage(context);
   // Expand the selected bookmarks root so labeled leaves are visible.
+  // Retried press: the first ArrowRight can race listener attachment or
+  // the bookmark data still being in flight.
   await expect
-    .poll(() => getPaletteInputState(popup).then((s) => s.readOnly), { timeout: 5000 })
-    .toBe(true);
-  await popup.keyboard.press('ArrowRight');
-  await expect
-    .poll(() => getFirstTwoCharTreeLabel(popup), { timeout: 5000 })
+    .poll(async () => {
+      const combo = await getFirstTwoCharTreeLabel(popup);
+      if (!combo) await popup.keyboard.press('ArrowRight');
+      return combo;
+    }, { timeout: 10000 })
     .not.toBeNull();
 
   const combo = (await getFirstTwoCharTreeLabel(popup))!;
@@ -135,9 +137,6 @@ test('a two-char label combo activates from the popup', async () => {
   // (the popup page is a tab here) and race its window.close() — in a real
   // popup window there is no sender tab and the page behind navigates.
   await popup.keyboard.press(combo.label[0]);
-  // The pending prefix is React state; a same-frame second press can beat
-  // its commit (and the re-attached listener). Human typing cadence.
-  await new Promise(r => setTimeout(r, 150));
   await popup.keyboard.press(`Shift+${combo.label[1].toUpperCase()}`).catch(() => {});
 
   await expect

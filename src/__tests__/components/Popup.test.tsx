@@ -158,10 +158,10 @@ describe('Popup', () => {
     expect(screen.getByText('Gmail')).toBeTruthy();
   });
 
-  it('Backspace with a typed query and stray focus neither closes nor refocuses', async () => {
-    // The old popup refocused the input here; strict parity drops the whole
-    // popup-only Backspace branch — the key is forwarded and ignored, same
-    // as the overlay.
+  it('Backspace with a typed query and stray focus refocuses the input without closing (shared recovery)', async () => {
+    // Keyboard recovery lives in CommandBar now, so BOTH surfaces refocus
+    // the query on a forwarded search-mode Backspace — parity preserved
+    // (the overlay half is pinned in CommandBar.test.tsx).
     await renderPopup();
     fireEvent.keyDown(document, { key: '/' });
     const input = (await screen.findByPlaceholderText(
@@ -171,7 +171,7 @@ describe('Popup', () => {
     (document.activeElement as HTMLElement | null)?.blur();
     fireEvent.keyDown(document, { key: 'Backspace' });
     expect(mockClose).not.toHaveBeenCalled();
-    expect(document.activeElement).not.toBe(input);
+    await waitFor(() => expect(document.activeElement).toBe(input));
   });
 
   it('Backspace while typing in the search input does not close', async () => {

@@ -5,6 +5,7 @@ import { CommandBar } from '../../components/CommandBar/CommandBar';
 import { Popup } from '../../entrypoints/popup/Popup';
 import { mockRawDataMessages, findSentMessage } from '../helpers/mock-palette-messages';
 import type { MockPaletteOptions } from '../helpers/mock-palette-messages';
+import { routePaletteKey } from '../../lib/palette-keys';
 
 // ─── Surface parity suite ───────────────────────────────────────────────────
 // The popup and the in-page overlay are ONE palette in two window frames.
@@ -66,11 +67,29 @@ function sendKey(surface: Surface, key: string, shiftKey = false) {
     if (surface === 'popup') {
       fireEvent.keyDown(document, { key, shiftKey });
     } else {
-      document.dispatchEvent(
-        new CustomEvent('smb-keydown', { detail: { key, shiftKey } })
+      // Mirror the content-script forwarder faithfully: run the SHARED
+      // routing layer first (so overlay-leg parity exercises
+      // routePaletteKey's pass/forward/normalization decisions too), then
+      // dispatch the normalized CustomEvent the overlay consumes.
+      const decision = routePaletteKey(
+        { key, shiftKey, ctrlKey: false, metaKey: false, altKey: false } as KeyboardEvent,
+        { activeElement: document.activeElement }
       );
+      if (decision.kind === 'forward') {
+        document.dispatchEvent(
+          new CustomEvent('smb-keydown', {
+            detail: { key: decision.key, shiftKey: decision.shiftKey },
+          })
+        );
+      }
     }
   });
+}
+
+function countSentMessages(type: string): number {
+  return vi
+    .mocked(chrome.runtime.sendMessage)
+    .mock.calls.filter((c) => (c[0] as unknown as { type: string }).type === type).length;
 }
 
 async function renderSurface(surface: Surface) {
@@ -156,10 +175,13 @@ describe('surface parity — popup is the overlay in a different frame', () => {
     expect(overlay).toContain('Open Tabs');
   });
 
-  it('a digit key sends the same SWITCH_TAB pinned-tab message from both surfaces', async () => {
+  it('a digit key sends the same SWITCH_TAB pinned-tab message from both surfaces, exactly once', async () => {
     const [overlay, popup] = await runOnBoth(PINNED_FIXTURE, async ({ key }) => {
       key('1');
       await waitFor(() => expect(findSentMessage('SWITCH_TAB')).toBeTruthy());
+      // Exactly one — a leaked duplicate listener would double-fire and
+      // still satisfy a first-match assertion.
+      expect(countSentMessages('SWITCH_TAB')).toBe(1);
       return (findSentMessage('SWITCH_TAB')?.[0] as unknown as { payload: unknown }).payload;
     });
     expect(popup).toEqual(overlay);
@@ -226,14 +248,32 @@ describe('surface parity — popup is the overlay in a different frame', () => {
     expect(popup).toEqual(overlay);
   });
 
-  it('an action key dispatches an identical EXECUTE_ACTION message from both surfaces', async () => {
+  it('an action key dispatches an identical EXECUTE_ACTION message from both surfaces, exactly once', async () => {
     const [overlay, popup] = await runOnBoth(PINNED_FIXTURE, async ({ key }) => {
       key('c');
       await waitFor(() => expect(findSentMessage('EXECUTE_ACTION')).toBeTruthy());
+      expect(countSentMessages('EXECUTE_ACTION')).toBe(1);
       return (findSentMessage('EXECUTE_ACTION')?.[0] as unknown as { payload: unknown }).payload;
     });
     expect(popup).toEqual(overlay);
     expect(overlay).toEqual({ actionId: 'action-close-tab' });
+  });
+
+  it('modifier chords never trigger palette actions on either surface', async () => {
+    const [overlay, popup] = await runOnBoth(PINNED_FIXTURE, async ({ container }) => {
+      // Ctrl+C / Cmd+C must be inert (browser copy chords, not palette keys).
+      act(() => {
+        fireEvent.keyDown(document, { key: 'c', ctrlKey: true });
+        fireEvent.keyDown(document, { key: 'c', metaKey: true });
+      });
+      await new Promise((r) => setTimeout(r, 50));
+      return {
+        executed: countSentMessages('EXECUTE_ACTION'),
+        rendered: !!container.querySelector('.smb-container'),
+      };
+    });
+    expect(popup).toEqual(overlay);
+    expect(overlay).toEqual({ executed: 0, rendered: true });
   });
 
   it('two-char labels appear and activate the same target on both surfaces', async () => {

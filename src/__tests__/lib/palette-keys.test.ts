@@ -2,10 +2,19 @@
 import { describe, it, expect } from 'vitest';
 import { routePaletteKey } from '../../lib/palette-keys';
 
-function fakeKey(opts: { key: string; shiftKey?: boolean }): KeyboardEvent {
+function fakeKey(opts: {
+  key: string;
+  shiftKey?: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  altKey?: boolean;
+}): KeyboardEvent {
   return {
     key: opts.key,
     shiftKey: !!opts.shiftKey,
+    ctrlKey: !!opts.ctrlKey,
+    metaKey: !!opts.metaKey,
+    altKey: !!opts.altKey,
   } as unknown as KeyboardEvent;
 }
 
@@ -98,6 +107,18 @@ describe('routePaletteKey', () => {
       key: 'Backspace',
       shiftKey: false,
     });
+  });
+
+  it('passes any key when Ctrl, Meta, or Alt is held (browser chords are never palette keys)', () => {
+    // Ctrl/Cmd+C must never fire the close-tab action; Shift stays allowed
+    // (Shift+Enter, Shift+Tab, shift-labels).
+    expect(routePaletteKey(fakeKey({ key: 'c', ctrlKey: true }), { activeElement: null })).toEqual({ kind: 'pass' });
+    expect(routePaletteKey(fakeKey({ key: 'c', metaKey: true }), { activeElement: null })).toEqual({ kind: 'pass' });
+    expect(routePaletteKey(fakeKey({ key: 'r', metaKey: true }), { activeElement: null })).toEqual({ kind: 'pass' });
+    expect(routePaletteKey(fakeKey({ key: 'a', altKey: true }), { activeElement: null })).toEqual({ kind: 'pass' });
+    expect(routePaletteKey(fakeKey({ key: 'Enter', ctrlKey: true }), { activeElement: null })).toEqual({ kind: 'pass' });
+    // Escape stays dismiss even with a modifier? No — chords pass entirely.
+    expect(routePaletteKey(fakeKey({ key: 'Escape', ctrlKey: true }), { activeElement: null })).toEqual({ kind: 'pass' });
   });
 
   it('treats a non-input active element like jump mode', () => {

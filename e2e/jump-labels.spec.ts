@@ -82,10 +82,8 @@ test('two-char labels appear beyond the label pool and jump correctly', async ()
   expect(match).not.toBeNull();
 
   // Two-char jump: first char arms the prefix, second activates. The
-  // prefix is React state — give it a frame to commit before the second
-  // press (human typing cadence).
+  // prefix is a ref (same-frame safe) — back-to-back presses must work.
   await page.keyboard.press(combo.label[0]);
-  await new Promise(r => setTimeout(r, 150));
   await page.keyboard.press(combo.label[1]);
 
   await expect

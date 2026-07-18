@@ -64,11 +64,11 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 | ID | Priority | Description |
 |----|----------|-------------|
 | TS-026 | P0 | Opening either surface with no query shows the jump view: pinned-tab grid, open-tab grid, bookmark tree, and action chips |
-| TS-027 | P0 | Smart suggestions include the 3 most recently accessed open tabs |
-| TS-028 | P0 | Smart suggestions include the 2 most recently added bookmarks |
-| TS-029 | P0 | Smart suggestions include contextual action "Mute Tab" only when the current tab is audible |
-| TS-030 | P0 | Smart suggestions include contextual action "Unmute Tab" when the current tab is muted |
-| TS-031 | P0 | Smart suggestions show no more than 2 contextual actions |
+| TS-027 | — | Superseded by the unified jump-first empty state (see TS-026): the popup no longer shows a smart-suggestions list |
+| TS-028 | — | Superseded (see TS-026) |
+| TS-029 | P0 | The "Mute Tab" action chip label flips to "Unmute Tab" when the current tab is muted (both surfaces) |
+| TS-030 | — | Merged into TS-029 |
+| TS-031 | — | Superseded: contextual-action prioritization retired with the smart-suggestions list |
 
 ### 3.2 Fuzzy Search
 

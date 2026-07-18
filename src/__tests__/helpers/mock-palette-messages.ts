@@ -1,4 +1,11 @@
 import { vi } from 'vitest';
+import type {
+  GetSettingsResponse,
+  GetAllTabsResponse,
+  GetBookmarkTreeResponse,
+  GetHistoryItemsResponse,
+  GetActionsResponse,
+} from '../../lib/messaging';
 
 // Shared raw-data message mock for palette surfaces (overlay CommandBar and
 // popup). Mirrors the background router's GET_* responses so both surfaces
@@ -31,17 +38,21 @@ export function mockRawDataMessages(options: MockPaletteOptions = {}) {
             showFavicons: true,
             searchSources: { tabs: true, bookmarks: true, history: true },
           },
-        });
+        } satisfies GetSettingsResponse);
       } else if (message.type === 'GET_ALL_TABS' && callback) {
-        const extra = Array.from({ length: options.extraTabs ?? 0 }, (_, i) => ({
-          id: 101 + i,
-          title: `Tab ${String(i + 1).padStart(2, '0')}`,
-          url: `https://tab-${101 + i}.example/`,
+        const makeTab = (id: number, title: string, url: string, pinned = false) => ({
+          id,
+          title,
+          url,
           favIconUrl: '',
           windowId: 1,
-          pinned: false,
+          pinned,
           audible: false,
-        }));
+          muted: false,
+        });
+        const extra = Array.from({ length: options.extraTabs ?? 0 }, (_, i) =>
+          makeTab(101 + i, `Tab ${String(i + 1).padStart(2, '0')}`, `https://tab-${101 + i}.example/`)
+        );
         callback({
           groups: [
             {
@@ -49,15 +60,15 @@ export function mockRawDataMessages(options: MockPaletteOptions = {}) {
               type: 'window',
               tabs: [
                 ...(options.withPinnedTab
-                  ? [{ id: 9, title: 'Pinned Mail', url: 'https://pinned.example', favIconUrl: '', windowId: 1, pinned: true, audible: false }]
+                  ? [makeTab(9, 'Pinned Mail', 'https://pinned.example', true)]
                   : []),
-                { id: 1, title: 'Gmail', url: 'https://mail.google.com', favIconUrl: '', windowId: 1, pinned: false, audible: false },
-                { id: 2, title: 'GitHub', url: 'https://github.com', favIconUrl: '', windowId: 1, pinned: false, audible: false },
+                makeTab(1, 'Gmail', 'https://mail.google.com'),
+                makeTab(2, 'GitHub', 'https://github.com'),
                 ...extra,
               ],
             },
           ],
-        });
+        } satisfies GetAllTabsResponse);
       } else if (message.type === 'GET_BOOKMARK_TREE' && callback) {
         callback({
           tree: [
@@ -74,9 +85,9 @@ export function mockRawDataMessages(options: MockPaletteOptions = {}) {
               children: [{ id: '5', title: 'Jira', url: 'https://jira.example' }],
             },
           ],
-        });
+        } satisfies GetBookmarkTreeResponse);
       } else if (message.type === 'GET_HISTORY_ITEMS' && callback) {
-        callback({ items: [] });
+        callback({ items: [] } satisfies GetHistoryItemsResponse);
       } else if (message.type === 'GET_ACTIONS' && callback) {
         callback({
           actions: options.actions ?? [
@@ -84,7 +95,7 @@ export function mockRawDataMessages(options: MockPaletteOptions = {}) {
             { id: 'action-pin-tab', title: 'Pin Tab' },
             { id: 'action-new-tab', title: 'New Tab' },
           ],
-        });
+        } satisfies GetActionsResponse);
       } else if (message.type === 'EXECUTE_ACTION' && callback) {
         callback(options.executeActionResponse ?? { success: true });
       } else if (

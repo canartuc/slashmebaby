@@ -18,6 +18,11 @@ export type PaletteKeyDecision =
 const NAVIGATION_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Tab'];
 
 export function routePaletteKey(e: KeyboardEvent, ctx: PaletteKeyContext): PaletteKeyDecision {
+  // Browser chords (Ctrl/Cmd/Alt + key) are never palette keys — routing
+  // them would turn Ctrl+C into the close-tab action. Shift stays allowed:
+  // Shift+Enter, Shift+Tab, and shifted labels are palette gestures.
+  if (e.ctrlKey || e.metaKey || e.altKey) return { kind: 'pass' };
+
   if (e.key === 'Escape') return { kind: 'dismiss' };
 
   // Don't intercept typing when a writable input is focused (search mode).

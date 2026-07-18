@@ -58,25 +58,40 @@ test('the results region renders pixel-identical (within tolerance) in popup and
   const popup = await openPopupPage(context);
   await popup.setViewportSize({ width: 1200, height: 800 });
 
-  // DOM-parity gate before any pixels: same headers on both surfaces.
-  await expect
-    .poll(() => getGroupHeaders(popup), { timeout: 5000 })
-    .toContain('Open Tabs');
-  await injectNormalization(popup);
-  const popupShot = await popup.locator('.smb-results').screenshot();
-
+  // Open BOTH surfaces first, then gate on fully settled, EQUAL state
+  // (headers match and the forced dark theme landed on each) before any
+  // pixel is captured — capturing earlier could freeze a pre-settlement
+  // frame that the later equality check no longer sees.
   await page.bringToFront();
   await openCommandBar(page);
+
+  const themeOf = (p: import('@playwright/test').Page) =>
+    p.evaluate(() => {
+      const root: ParentNode =
+        document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+      return root.querySelector('.smb-container')?.getAttribute('data-theme') ?? '';
+    });
+
   await expect
     .poll(async () => {
-      const [popupHeaders, overlayHeaders] = [
+      const [popupHeaders, overlayHeaders, popupTheme, overlayTheme] = [
         await getGroupHeaders(popup),
         await getGroupHeaders(page),
+        await themeOf(popup),
+        await themeOf(page),
       ];
-      return JSON.stringify(overlayHeaders) === JSON.stringify(popupHeaders);
-    }, { timeout: 5000 })
+      return (
+        popupHeaders.includes('Open Tabs') &&
+        JSON.stringify(overlayHeaders) === JSON.stringify(popupHeaders) &&
+        popupTheme === 'dark' &&
+        overlayTheme === 'dark'
+      );
+    }, { timeout: 10000 })
     .toBe(true);
+
+  await injectNormalization(popup);
   await injectNormalization(page);
+  const popupShot = await popup.locator('.smb-results').screenshot();
   const overlayShot = await page.locator('.smb-results').screenshot();
 
   const popupPng = PNG.sync.read(popupShot);

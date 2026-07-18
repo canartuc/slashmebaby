@@ -1849,3 +1849,96 @@ describe('CommandBar — Tab section jumping (search mode)', () => {
     expect(view.container.querySelector('.smb-tree-item--selected')).toBeNull();
   });
 });
+
+// ─── Review-fix pins: same-frame combos and search-mode Backspace recovery ──
+
+describe('CommandBar — rapid input robustness', () => {
+  function fireSmbKey(key: string, shiftKey = false) {
+    document.dispatchEvent(new CustomEvent('smb-keydown', { detail: { key, shiftKey } }));
+  }
+
+  it('a two-char label pressed within one frame activates the combo target', async () => {
+    // 16 extra tabs push labels into two-char territory. Both presses land
+    // in the SAME task — a stale-closure prefix would drop or misroute the
+    // combo (rapid typists, key autorepeat).
+    makeTabJumpMock({
+      tabs: Array.from({ length: 16 }, (_, i) => ({ id: 100 + i, title: `Bulk ${i}` })),
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'Deep Target', url: 'https://deep.example' }],
+        },
+        {
+          id: '4',
+          title: 'Work Stuff',
+          children: [{ id: '5', title: 'Jira', url: 'https://jira.example' }],
+        },
+      ],
+    });
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Work Stuff')).toBeTruthy());
+
+    // Expand the first folder so a LEAF row (deterministic NAVIGATE target)
+    // carries a two-char badge.
+    fireSmbKey('ArrowRight');
+    await waitFor(() => expect(screen.getByText('Deep Target')).toBeTruthy());
+
+    let combo = '';
+    await waitFor(() => {
+      const rows = container.querySelectorAll('.smb-tree-item');
+      for (const row of Array.from(rows)) {
+        if ((row.querySelector('.smb-title')?.textContent ?? '') === 'Deep Target') {
+          combo = row.querySelector('.smb-label-badge')?.textContent ?? '';
+        }
+      }
+      expect(combo).toHaveLength(2);
+    });
+
+    // Same-frame double press — a stale-closure prefix would drop this.
+    fireSmbKey(combo[0]);
+    fireSmbKey(combo[1]);
+
+    await waitFor(() => {
+      const call = vi.mocked(chrome.runtime.sendMessage).mock.calls.find(
+        (c) => (c[0] as unknown as { type: string }).type === 'NAVIGATE'
+      );
+      expect(call).toBeTruthy();
+      expect((call?.[0] as unknown as { payload: { url: string } }).payload.url).toBe(
+        'https://deep.example'
+      );
+    });
+  });
+
+  it('forwarded Backspace in search mode refocuses the query input (keyboard recovery)', async () => {
+    makeTabJumpMock({
+      tabs: [{ id: 1, title: 'Gmail' }],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'React Docs', url: 'https://react.dev' }],
+        },
+      ],
+    });
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('/');
+    const input = (await waitFor(() => {
+      const el = container.querySelector('.smb-input') as HTMLInputElement;
+      expect(el.readOnly).toBe(false);
+      return el;
+    })) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'react' } });
+
+    // Focus wanders (e.g. clicking a result row).
+    input.blur();
+    expect(document.activeElement).not.toBe(input);
+
+    // Backspace is the recovery path back into query editing on BOTH
+    // surfaces: it must refocus the input instead of dying.
+    fireSmbKey('Backspace');
+    await waitFor(() => expect(document.activeElement).toBe(input));
+  });
+});

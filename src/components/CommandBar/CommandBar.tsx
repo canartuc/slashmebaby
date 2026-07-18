@@ -352,6 +352,18 @@ export const CommandBar: React.FC<CommandBarProps> = ({
       return;
     }
 
+    // Keyboard recovery: a forwarded Backspace only reaches here when no
+    // writable input has focus (the forwarder passes it to the input
+    // otherwise). In search mode that means focus wandered off the query —
+    // pull it back so editing keeps working on both surfaces. In jump mode
+    // it falls through to the label handling below (clears a pending
+    // two-char prefix).
+    if (key === 'Backspace' && currentMode === 'search') {
+      const input = containerRef.current?.querySelector<HTMLInputElement>('.smb-input');
+      input?.focus();
+      return;
+    }
+
     // Action keys work in BOTH modes
     if (isActionKey(key)) {
       const actionId = getActionForKey(key);
