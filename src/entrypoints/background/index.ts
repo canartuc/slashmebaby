@@ -2,6 +2,7 @@ import { TabCache } from './tabs';
 import { BookmarkCache } from './bookmarks';
 import { HistoryCache } from './history';
 import { ActionRegistry } from './actions';
+import { createActionRouting } from './action-routing';
 import { createSearchEngine } from '../../lib/search';
 import { getSettings } from '../../lib/storage';
 import { getFaviconDataUrl } from './favicon';
@@ -34,10 +35,15 @@ import { validateNavigationUrl, isNavigableUrl } from '../../lib/url-safety';
 
 type MessageRouter = (message: unknown, sender?: chrome.runtime.MessageSender) => Promise<unknown>;
 
+// Module-level so registerBackgroundListeners can attach its
+// history.onVisited listeners in the worker's INITIAL SYNCHRONOUS
+// evaluation (the MV3 wake rule) — the router factory below reuses the
+// same instance and refreshes it during init.
+const historyCache = new HistoryCache();
+
 export async function createMessageRouter(): Promise<MessageRouter> {
   const tabCache = new TabCache();
   const bookmarkCache = new BookmarkCache();
-  const historyCache = new HistoryCache();
   const actionRegistry = new ActionRegistry();
   const faviconCache = new Map<string, string>();
 
@@ -56,7 +62,9 @@ export async function createMessageRouter(): Promise<MessageRouter> {
     // Bookmark cache updated
   });
 
-  // Periodic history refresh (default 5 min)
+  // Periodic history refresh (default 5 min). The immediate-on-visit
+  // refresh listeners are registered synchronously in
+  // registerBackgroundListeners (MV3 wake rule), not here.
   historyCache.startPeriodicRefresh();
 
   // Cached search engine, keyed by the identity of each source's item array.
@@ -107,6 +115,9 @@ export async function createMessageRouter(): Promise<MessageRouter> {
   // ─── Message Handler ────────────────────────────────────────────────────
 
   return async function router(message: unknown, sender?: chrome.runtime.MessageSender): Promise<unknown> {
+    // SEARCH and SMART_SUGGESTIONS are kept as a stable message API even
+    // though no shipped surface calls them anymore (the popup moved to the
+    // overlay's raw-data pipeline in the 2026-07 unification).
     if (isSearchRequest(message)) {
       const { query, sources } = message.payload;
 
@@ -236,6 +247,20 @@ export async function createMessageRouter(): Promise<MessageRouter> {
         const tab = await chrome.tabs.get(tabId);
         if (tab.windowId) {
           await chrome.windows.update(tab.windowId, { focused: true });
+        }
+        // Wake hibernated tabs: Chrome does not auto-reload a discarded tab
+        // on programmatic activation, so it stays blank after the switch.
+        // Only discarded tabs on Chrome need this — frozen tabs keep their
+        // content in memory and unfreeze on activation (a reload would wipe
+        // live form/SPA state), and Firefox restores discarded tabs natively
+        // on activation (a reload would replace session restore with a cold
+        // network load). chrome.action is absent on the Firefox MV2 build.
+        if (tab.discarded === true && chrome.action !== undefined) {
+          try {
+            await chrome.tabs.reload(tabId);
+          } catch {
+            // Best-effort wake; the activation stands either way.
+          }
         }
         return { success: true };
       } catch (error) {
@@ -482,6 +507,7 @@ function mapTab(tab: chrome.tabs.Tab): TabWithGroup {
     audible: tab.audible || false,
     muted: tab.mutedInfo?.muted || false,
     lastAccessed: tab.lastAccessed,
+    discarded: tab.discarded === true || tab.frozen === true,
   };
 }
 
@@ -519,27 +545,47 @@ export function registerBackgroundListeners(): void {
     return true;
   });
 
-  chrome.commands.onCommand.addListener((command) => {
-    if (command === 'toggle-command-bar') {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const tabId = tabs[0]?.id;
-        if (typeof tabId === 'number') {
-          chrome.tabs.sendMessage(tabId, { type: 'TOGGLE_OVERLAY' }, () => {
-            // Swallow lastError — expected on chrome:// pages where the
-            // content script cannot run. The popup is the fallback there.
-            void chrome.runtime.lastError;
-          });
-        }
-      });
+  // Per-tab action-popup routing: overlay on normal pages, popup on
+  // restricted ones. Registered synchronously for MV3 wake-safety.
+  const actionRouting = createActionRouting();
+  actionRouting.register();
+
+  // History freshness: refresh the shared cache on real visits. Must be
+  // synchronous here — listeners registered inside the async router init
+  // can never wake a suspended worker.
+  historyCache.setupListeners();
+
+  chrome.commands.onCommand.addListener((command, tab) => {
+    if (command !== 'toggle-command-bar') return;
+    if (tab) {
+      // The tab argument (Chrome, Firefox 126+) lets the restricted-page
+      // branch call action.openPopup() synchronously inside this handler,
+      // which Firefox pre-149 requires for the user-input context.
+      actionRouting.requestOverlayToggle(tab);
+      return;
     }
+    // Legacy path without a tab argument — Chrome only, where openPopup
+    // needs no user gesture, so the async query is fine.
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      actionRouting.requestOverlayToggle(tabs[0]);
+    });
   });
 
   chrome.runtime.onInstalled.addListener((details) => {
+    // Per-tab popup state can be stale after an install or update — apply
+    // routing to every open tab. Not done on plain worker wakes: the
+    // browser keeps per-tab popup state across suspensions and the
+    // tab-event listeners keep it current.
+    actionRouting.sweep();
     if (details.reason === 'install') {
       // WXT emits the onboarding entrypoint at the bundle root as
       // "onboarding.html" (see .output/*/onboarding.html).
       chrome.tabs.create({ url: chrome.runtime.getURL('/onboarding.html') });
     }
+  });
+
+  chrome.runtime.onStartup.addListener(() => {
+    actionRouting.sweep();
   });
 
   // Warm the router on startup so the first user interaction isn't delayed.

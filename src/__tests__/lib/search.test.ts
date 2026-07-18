@@ -354,3 +354,21 @@ describe('createSearchEngine', () => {
     });
   });
 });
+
+
+describe('search engine at scale (TS-162)', () => {
+  it('returns correct grouped results over a 120-tab corpus', () => {
+    const items: SearchableItem[] = Array.from({ length: 120 }, (_, i) => ({
+      id: `tab-${i}`,
+      title: i === 57 ? 'Needle In Haystack' : `Filler Tab ${i}`,
+      url: `https://site-${i}.example/`,
+      category: 'tabs' as const,
+      timestamp: 1700000000000 + i,
+    }));
+    const engine = createSearchEngine(items, { maxResultsPerGroup: 5 });
+    const groups = engine.search('needle haystack');
+    const tabGroup = groups.find((g) => g.category === 'tabs');
+    expect(tabGroup?.items[0]?.title).toBe('Needle In Haystack');
+    expect(tabGroup?.items.length).toBeLessThanOrEqual(5);
+  });
+});

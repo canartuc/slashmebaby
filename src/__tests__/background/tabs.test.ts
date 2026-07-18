@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TabCache } from '../../entrypoints/background/tabs';
+import { makeFakeTab } from '../helpers/fake-tab';
 
 // ─── Chrome stub helpers ───────────────────────────────────────────────────
 
@@ -15,26 +16,6 @@ function makeTabsApi(tabs: chrome.tabs.Tab[] = []) {
   };
 }
 
-function makeFakeTab(overrides: Partial<chrome.tabs.Tab> = {}): chrome.tabs.Tab {
-  return {
-    id: 1,
-    index: 0,
-    pinned: false,
-    highlighted: false,
-    windowId: 1,
-    active: true,
-    incognito: false,
-    selected: false,
-    discarded: false,
-    autoDiscardable: true,
-    frozen: false,
-    groupId: -1,
-    title: 'Test Tab',
-    url: 'https://example.com',
-    lastAccessed: 1700000000000,
-    ...overrides,
-  };
-}
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
 

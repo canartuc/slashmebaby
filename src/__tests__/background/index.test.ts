@@ -1,30 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import backgroundEntrypoint, { createMessageRouter, registerBackgroundListeners } from '../../entrypoints/background/index';
 import type { SearchRequest, SmartSuggestionsRequest, ExecuteActionRequest, GetSettingsRequest } from '../../lib/messaging';
+import { makeFakeTab } from '../helpers/fake-tab';
 
 // ─── Chrome stub helpers ───────────────────────────────────────────────────
 
-function makeFakeTab(overrides: Partial<chrome.tabs.Tab> = {}): chrome.tabs.Tab {
-  return {
-    id: 1,
-    index: 0,
-    pinned: false,
-    highlighted: false,
-    windowId: 1,
-    active: true,
-    incognito: false,
-    selected: false,
-    discarded: false,
-    autoDiscardable: true,
-    frozen: false,
-    groupId: -1,
-    title: 'Test Tab',
-    url: 'https://example.com',
-    lastAccessed: Date.now(),
-    mutedInfo: { muted: false },
-    ...overrides,
-  };
-}
 
 function makeChromeMock() {
   return {
@@ -90,7 +70,18 @@ function makeChromeMock() {
     runtime: {
       openOptionsPage: vi.fn((cb?: () => void) => cb?.()),
       getURL: vi.fn((path: string) => `chrome-extension://fake/${path}`),
+      getManifest: vi.fn(() => ({ action: { default_popup: 'popup.html' } })),
       onMessage: { addListener: vi.fn() },
+      onInstalled: { addListener: vi.fn() },
+      onStartup: { addListener: vi.fn() },
+    },
+    action: {
+      setPopup: vi.fn((_: object, cb?: () => void) => cb?.()),
+      openPopup: vi.fn(() => Promise.resolve()),
+      onClicked: { addListener: vi.fn() },
+    },
+    extension: {
+      isAllowedFileSchemeAccess: vi.fn((cb: (allowed: boolean) => void) => cb(false)),
     },
     storage: {
       sync: {
@@ -608,6 +599,97 @@ describe('createMessageRouter', () => {
     });
   });
 
+  describe('SWITCH_TAB message — hibernated tab wake', () => {
+    function makeSwitchMock(tab: chrome.tabs.Tab, reloadImpl?: () => Promise<void>) {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          update: vi.fn(() => Promise.resolve(makeFakeTab())),
+          get: vi.fn(() => Promise.resolve(tab)),
+          reload: vi.fn(reloadImpl ?? (() => Promise.resolve())),
+        },
+        windows: {
+          ...baseMock.windows,
+          update: vi.fn(() => Promise.resolve()),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+      return chromeMock;
+    }
+
+    it('reloads a discarded tab after activating it', async () => {
+      const chromeMock = makeSwitchMock(makeFakeTab({ discarded: true, windowId: 1 }));
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SWITCH_TAB', payload: { tabId: 7 } }) as { success: boolean };
+
+      expect(response.success).toBe(true);
+      expect(chromeMock.tabs.reload).toHaveBeenCalledWith(7);
+      // Activation and focus complete BEFORE the wake reload.
+      const order = (fn: { mock: { invocationCallOrder: number[] } }) =>
+        fn.mock.invocationCallOrder[0];
+      expect(order(chromeMock.tabs.update)).toBeLessThan(order(chromeMock.tabs.get));
+      expect(order(chromeMock.tabs.get)).toBeLessThan(order(chromeMock.windows.update));
+      expect(order(chromeMock.windows.update)).toBeLessThan(order(chromeMock.tabs.reload));
+    });
+
+    it('does not reload a frozen tab — its content is memory-resident and unfreezes on activation', async () => {
+      const chromeMock = makeSwitchMock(makeFakeTab({ frozen: true, windowId: 1 }));
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SWITCH_TAB', payload: { tabId: 7 } }) as { success: boolean };
+      expect(response.success).toBe(true);
+      expect(chromeMock.tabs.reload).not.toHaveBeenCalled();
+    });
+
+    it('does not reload a discarded tab on Firefox — activation triggers native session restore', async () => {
+      const chromeMock = makeSwitchMock(makeFakeTab({ discarded: true, windowId: 1 }));
+      // Firefox MV2: no chrome.action namespace (browserAction instead).
+      delete (chromeMock as { action?: unknown }).action;
+      vi.stubGlobal('chrome', chromeMock);
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SWITCH_TAB', payload: { tabId: 7 } }) as { success: boolean };
+      expect(response.success).toBe(true);
+      expect(chromeMock.tabs.reload).not.toHaveBeenCalled();
+    });
+
+    it('does not reload a normal tab', async () => {
+      const chromeMock = makeSwitchMock(makeFakeTab({ windowId: 1 }));
+      const router = await createMessageRouter();
+      await router({ type: 'SWITCH_TAB', payload: { tabId: 7 } });
+      expect(chromeMock.tabs.reload).not.toHaveBeenCalled();
+    });
+
+    it('still returns success when the wake reload fails', async () => {
+      const chromeMock = makeSwitchMock(
+        makeFakeTab({ discarded: true, windowId: 1 }),
+        () => Promise.reject(new Error('reload failed'))
+      );
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SWITCH_TAB', payload: { tabId: 7 } }) as { success: boolean };
+      expect(response.success).toBe(true);
+      expect(chromeMock.tabs.reload).toHaveBeenCalled();
+    });
+
+    it('does not reload when tabs.get itself fails after activation', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          update: vi.fn(() => Promise.resolve(makeFakeTab())),
+          get: vi.fn(() => Promise.reject(new Error('gone'))),
+          reload: vi.fn(() => Promise.resolve()),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SWITCH_TAB', payload: { tabId: 7 } }) as { success: boolean };
+      expect(response.success).toBe(false);
+      expect(chromeMock.tabs.reload).not.toHaveBeenCalled();
+    });
+  });
+
   describe('NAVIGATE message', () => {
     it('updates active tab URL when active tab exists', async () => {
       const baseMock = makeChromeMock();
@@ -913,6 +995,57 @@ describe('createMessageRouter', () => {
   }
 
   describe('GET_ALL_TABS message', () => {
+    it('marks discarded tabs with discarded: true', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+            const tabs = [
+              makeFakeTab({ id: 1, title: 'Sleeping', discarded: true }),
+              makeFakeTab({ id: 2, title: 'Awake' }),
+            ];
+            cb?.(tabs);
+            return Promise.resolve(tabs);
+          }),
+        },
+        windows: {
+          ...baseMock.windows,
+          getAll: vi.fn(() => Promise.resolve([{ id: 1 } as chrome.windows.Window])),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_ALL_TABS' }) as { groups: Array<{ tabs: Array<{ id: number; discarded?: boolean }> }> };
+      const all = response.groups.flatMap(g => g.tabs);
+      expect(all.find(t => t.id === 1)?.discarded).toBe(true);
+      expect(all.find(t => t.id === 2)?.discarded).toBe(false);
+    });
+
+    it('folds frozen (Chrome-only) into discarded: true', async () => {
+      const baseMock = makeChromeMock();
+      const chromeMock = {
+        ...baseMock,
+        tabs: {
+          ...baseMock.tabs,
+          query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+            const tabs = [makeFakeTab({ id: 1, frozen: true })];
+            cb?.(tabs);
+            return Promise.resolve(tabs);
+          }),
+        },
+        windows: {
+          ...baseMock.windows,
+          getAll: vi.fn(() => Promise.resolve([{ id: 1 } as chrome.windows.Window])),
+        },
+      };
+      vi.stubGlobal('chrome', chromeMock);
+      const router = await createMessageRouter();
+      const response = await router({ type: 'GET_ALL_TABS' }) as { groups: Array<{ tabs: Array<{ id: number; discarded?: boolean }> }> };
+      expect(response.groups.flatMap(g => g.tabs)[0]?.discarded).toBe(true);
+    });
+
     it('returns flat "Open Tabs" group for single window, no tab groups', async () => {
       const baseMock = makeChromeMock();
       const tabs = [
@@ -1486,6 +1619,7 @@ describe('registerBackgroundListeners', () => {
         id: 'real-ext-id',
         onMessage: { addListener: vi.fn((fn) => onMessageListeners.push(fn)) },
         onInstalled: { addListener: vi.fn() },
+        onStartup: { addListener: vi.fn() },
         getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
       },
       commands: { onCommand: { addListener: vi.fn() } },
@@ -1537,34 +1671,51 @@ describe('registerBackgroundListeners', () => {
     expect(responses[0]).toEqual({ error: 'forbidden sender' });
   });
 
-  it('toggle-command-bar command sends TOGGLE_OVERLAY to the active tab', async () => {
-    const commandListeners: Array<(cmd: string) => void> = [];
-    // Simulate a page without a content script (e.g. chrome://): the message
-    // callback fires with chrome.runtime.lastError set. Count reads so we can
-    // assert the callback checks it (otherwise Chrome logs
-    // "Unchecked runtime.lastError").
+  // Harness for the command/action-routing wiring tests: captures the
+  // onCommand listener and provides the action + extension APIs the routing
+  // module needs. `lastError` controls whether callbacks see a runtime error.
+  function makeCommandHarness(opts: { lastError?: boolean } = {}) {
+    const commandListeners: Array<(cmd: string, tab?: chrome.tabs.Tab) => void> = [];
     let lastErrorReads = 0;
-    const tabsSendMessage = vi.fn((_tabId: number, _msg: unknown, cb?: () => void) => cb?.());
+    const actionApi = {
+      setPopup: vi.fn((_: object, cb?: () => void) => cb?.()),
+      openPopup: vi.fn(() => Promise.resolve()),
+      onClicked: { addListener: vi.fn() },
+    };
+    const activeTab = makeFakeTab({ id: 7, url: 'https://one.com' });
     const chromeMock = {
       runtime: {
         id: 'real-ext-id',
         onMessage: { addListener: vi.fn() },
         onInstalled: { addListener: vi.fn() },
+        onStartup: { addListener: vi.fn() },
         getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
+        getManifest: vi.fn(() => ({ action: { default_popup: 'popup.html' } })),
         get lastError() {
           lastErrorReads += 1;
-          return { message: 'Could not establish connection.' };
+          return opts.lastError
+            ? { message: 'Could not establish connection. Receiving end does not exist.' }
+            : undefined;
         },
       },
       commands: {
-        onCommand: { addListener: vi.fn((cb: (cmd: string) => void) => commandListeners.push(cb)) },
+        onCommand: {
+          addListener: vi.fn((cb: (cmd: string, tab?: chrome.tabs.Tab) => void) =>
+            commandListeners.push(cb)
+          ),
+        },
+      },
+      action: actionApi,
+      extension: {
+        isAllowedFileSchemeAccess: vi.fn((cb: (allowed: boolean) => void) => cb(false)),
       },
       tabs: {
         query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
-          cb?.([{ id: 7 } as chrome.tabs.Tab]);
-          return Promise.resolve([{ id: 7 } as chrome.tabs.Tab]);
+          cb?.([activeTab]);
+          return Promise.resolve([activeTab]);
         }),
-        sendMessage: tabsSendMessage,
+        get: vi.fn((_: number, cb?: (tab?: chrome.tabs.Tab) => void) => cb?.(activeTab)),
+        sendMessage: vi.fn((_tabId: number, _msg: unknown, cb?: () => void) => cb?.()),
         onCreated: { addListener: vi.fn() },
         onRemoved: { addListener: vi.fn() },
         onUpdated: { addListener: vi.fn() },
@@ -1586,23 +1737,106 @@ describe('registerBackgroundListeners', () => {
       alarms: { create: vi.fn(), clear: vi.fn(), onAlarm: { addListener: vi.fn() } },
     };
     vi.stubGlobal('chrome', chromeMock);
-
     registerBackgroundListeners();
+    // The register() sweep touches setPopup/query; clear so tests assert
+    // only what the command handler itself does.
+    actionApi.setPopup.mockClear();
+    chromeMock.tabs.query.mockClear();
+    return {
+      chromeMock,
+      actionApi,
+      commandListeners,
+      readLastErrorCount: () => lastErrorReads,
+    };
+  }
+
+  it('registers action click routing synchronously', () => {
+    const { actionApi, chromeMock } = makeCommandHarness();
+    expect(actionApi.onClicked.addListener).toHaveBeenCalledTimes(1);
+    expect(chromeMock.tabs.onUpdated.addListener).toHaveBeenCalled();
+    expect(chromeMock.tabs.onActivated.addListener).toHaveBeenCalled();
+  });
+
+  it('sweeps popup routing from onInstalled and onStartup, not from plain registration', () => {
+    const { chromeMock } = makeCommandHarness();
+    // Registration alone must not rewrite per-tab popup state (mockClear in
+    // the harness ran after registerBackgroundListeners — query only fires
+    // for warm-up caches, and setPopup was untouched by then; assert the
+    // wired triggers instead).
+    const installedListener = (
+      chromeMock.runtime.onInstalled.addListener as ReturnType<typeof vi.fn>
+    ).mock.calls[0][0] as (d: chrome.runtime.InstalledDetails) => void;
+    installedListener({ reason: 'update' } as chrome.runtime.InstalledDetails);
+    expect(chromeMock.tabs.query).toHaveBeenCalledWith({}, expect.any(Function));
+
+    chromeMock.tabs.query.mockClear();
+    const startupListener = (
+      chromeMock.runtime.onStartup.addListener as ReturnType<typeof vi.fn>
+    ).mock.calls[0][0] as () => void;
+    startupListener();
+    expect(chromeMock.tabs.query).toHaveBeenCalledWith({}, expect.any(Function));
+  });
+
+  it('toggle-command-bar with a scriptable tab arg sends typed TOGGLE_OVERLAY without tabs.query', () => {
+    const { chromeMock, commandListeners } = makeCommandHarness();
     expect(commandListeners).toHaveLength(1);
 
-    commandListeners[0]('toggle-command-bar');
-    expect(tabsSendMessage).toHaveBeenCalledWith(
+    commandListeners[0]('toggle-command-bar', makeFakeTab({ id: 7, url: 'https://one.com' }));
+    expect(chromeMock.tabs.sendMessage).toHaveBeenCalledWith(
       7,
       { type: 'TOGGLE_OVERLAY' },
       expect.any(Function)
     );
-    // The sendMessage callback swallowed the "no receiver" error by reading
-    // chrome.runtime.lastError.
-    expect(lastErrorReads).toBeGreaterThan(0);
+    expect(chromeMock.tabs.query).not.toHaveBeenCalled();
+  });
 
-    // Unknown command — should be a no-op.
-    commandListeners[0]('something-else');
-    expect(tabsSendMessage).toHaveBeenCalledTimes(1);
+  it('toggle-command-bar with a restricted tab arg calls action.openPopup synchronously', () => {
+    const { chromeMock, actionApi, commandListeners } = makeCommandHarness();
+
+    commandListeners[0]('toggle-command-bar', makeFakeTab({ id: 8, url: 'chrome://newtab/' }));
+    expect(actionApi.openPopup).toHaveBeenCalledTimes(1);
+    expect(chromeMock.tabs.sendMessage).not.toHaveBeenCalled();
+    expect(chromeMock.tabs.query).not.toHaveBeenCalled();
+  });
+
+  it('toggle-command-bar without a tab arg falls back to tabs.query (legacy Chrome)', () => {
+    const { chromeMock, commandListeners } = makeCommandHarness();
+
+    commandListeners[0]('toggle-command-bar');
+    expect(chromeMock.tabs.query).toHaveBeenCalledWith(
+      { active: true, currentWindow: true },
+      expect.any(Function)
+    );
+    expect(chromeMock.tabs.sendMessage).toHaveBeenCalledWith(
+      7,
+      { type: 'TOGGLE_OVERLAY' },
+      expect.any(Function)
+    );
+  });
+
+  it('toggle-command-bar recovers through the default popup when the content script is unreachable', () => {
+    const { chromeMock, actionApi, commandListeners, readLastErrorCount } = makeCommandHarness({
+      lastError: true,
+    });
+
+    commandListeners[0]('toggle-command-bar', makeFakeTab({ id: 7, url: 'https://one.com' }));
+    expect(chromeMock.tabs.sendMessage).toHaveBeenCalledTimes(1);
+    // The sendMessage callback must read chrome.runtime.lastError (otherwise
+    // Chrome logs "Unchecked runtime.lastError").
+    expect(readLastErrorCount()).toBeGreaterThan(0);
+    expect(actionApi.setPopup).toHaveBeenCalledWith(
+      { tabId: 7, popup: 'popup.html' },
+      expect.any(Function)
+    );
+    expect(actionApi.openPopup).toHaveBeenCalledTimes(1);
+  });
+
+  it('unknown command is a no-op', () => {
+    const { chromeMock, actionApi, commandListeners } = makeCommandHarness();
+
+    commandListeners[0]('something-else', makeFakeTab({ id: 7, url: 'https://one.com' }));
+    expect(chromeMock.tabs.sendMessage).not.toHaveBeenCalled();
+    expect(actionApi.openPopup).not.toHaveBeenCalled();
   });
 
   it('onInstalled with reason "install" opens the onboarding tab', async () => {
@@ -1615,6 +1849,7 @@ describe('registerBackgroundListeners', () => {
         onInstalled: {
           addListener: vi.fn((cb: (d: chrome.runtime.InstalledDetails) => void) => installListeners.push(cb)),
         },
+        onStartup: { addListener: vi.fn() },
         getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
       },
       commands: { onCommand: { addListener: vi.fn() } },
@@ -1670,6 +1905,7 @@ describe('registerBackgroundListeners', () => {
         id: 'real-ext-id',
         onMessage: { addListener: vi.fn((fn) => onMessageListeners.push(fn)) },
         onInstalled: { addListener: vi.fn() },
+        onStartup: { addListener: vi.fn() },
         getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
       },
       commands: { onCommand: { addListener: vi.fn() } },
@@ -1768,6 +2004,7 @@ describe('background entrypoint (default export)', () => {
         id: 'real-ext-id',
         onMessage: { addListener: onMessageAddListener },
         onInstalled: { addListener: onInstalledAddListener },
+        onStartup: { addListener: vi.fn() },
         getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
       },
       commands: { onCommand: { addListener: onCommandAddListener } },
@@ -1808,3 +2045,65 @@ describe('background entrypoint (default export)', () => {
   });
 });
 
+
+// Appended: MV3 wake-safety for history listeners — they must register in
+// the initial synchronous evaluation, not inside the async router init.
+describe('history visit listeners (MV3 wake safety)', () => {
+  it('registers history.onVisited synchronously in registerBackgroundListeners', () => {
+    const onVisitedAdd = vi.fn();
+    const onVisitRemovedAdd = vi.fn();
+    const chromeMock = {
+      runtime: {
+        id: 'real-ext-id',
+        onMessage: { addListener: vi.fn() },
+        onInstalled: { addListener: vi.fn() },
+        onStartup: { addListener: vi.fn() },
+        getURL: vi.fn((p: string) => `chrome-extension://fake/${p}`),
+        getManifest: vi.fn(() => ({ action: { default_popup: 'popup.html' } })),
+      },
+      commands: { onCommand: { addListener: vi.fn() } },
+      action: {
+        setPopup: vi.fn((_: object, cb?: () => void) => cb?.()),
+        openPopup: vi.fn(() => Promise.resolve()),
+        onClicked: { addListener: vi.fn() },
+      },
+      extension: {
+        isAllowedFileSchemeAccess: vi.fn((cb: (a: boolean) => void) => cb(false)),
+      },
+      tabs: {
+        query: vi.fn((_: object, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+          cb?.([]);
+          return Promise.resolve([]);
+        }),
+        onCreated: { addListener: vi.fn() },
+        onRemoved: { addListener: vi.fn() },
+        onUpdated: { addListener: vi.fn() },
+        onActivated: { addListener: vi.fn() },
+      },
+      bookmarks: {
+        getTree: vi.fn((cb: (r: chrome.bookmarks.BookmarkTreeNode[]) => void) => cb([])),
+        onCreated: { addListener: vi.fn() },
+        onRemoved: { addListener: vi.fn() },
+        onChanged: { addListener: vi.fn() },
+      },
+      history: {
+        search: vi.fn((_: object, cb: (r: chrome.history.HistoryItem[]) => void) => cb([])),
+        onVisited: { addListener: onVisitedAdd },
+        onVisitRemoved: { addListener: onVisitRemovedAdd },
+      },
+      storage: {
+        sync: {
+          get: vi.fn((_: string, cb: (r: Record<string, unknown>) => void) => cb({})),
+          set: vi.fn(),
+        },
+      },
+      alarms: { create: vi.fn(), clear: vi.fn(), onAlarm: { addListener: vi.fn() } },
+    };
+    vi.stubGlobal('chrome', chromeMock);
+
+    registerBackgroundListeners();
+    // Synchronous — no awaiting the router warm-up.
+    expect(onVisitedAdd).toHaveBeenCalledTimes(1);
+    expect(onVisitRemovedAdd).toHaveBeenCalledTimes(1);
+  });
+});

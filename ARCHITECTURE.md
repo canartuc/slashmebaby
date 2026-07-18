@@ -1,6 +1,6 @@
 # ARCHITECTURE.md: SlashMeBaby Technical Architecture
 
-Last updated: 2026-03-14
+Last updated: 2026-07-18
 
 ---
 
@@ -472,10 +472,11 @@ The performance cost of re-creating the React tree is negligible (under 5ms) com
 
 ### Restricted Pages
 
-Content scripts cannot inject into `chrome://`, `chrome-extension://`, `about:`, or browser-internal pages. On these pages:
-- The keyboard shortcut has no effect (browser blocks it)
-- The extension icon opens a popup (`src/entrypoints/popup/`) with equivalent search functionality
-- The popup communicates with the background service worker using the same messaging protocol
+Content scripts cannot inject into `chrome://`, `chrome-extension://`, `about:`, or browser-internal pages (plus policy-blocked https hosts like the Chrome Web Store). The shared predicate for "can the overlay exist here" is `isInjectableUrl`/`isContentScriptBlockedUrl` in `src/lib/url-safety.ts`, used by the content script, the background routing, and the e2e helpers. On restricted pages:
+- The keyboard shortcut still reaches the background (`commands.onCommand`), which falls back to `chrome.action.openPopup()` — the reason for `minimum_chrome_version: 127` and gecko `strict_min_version: 126.0` (the `tab` argument on `onCommand` lets the handler call `openPopup` synchronously, required by Firefox's pre-149 user-input rule)
+- The extension icon opens the popup (`src/entrypoints/popup/`), which renders the same CommandBar palette as the overlay
+- On normal pages the background clears the per-tab popup (`src/entrypoints/background/action-routing.ts`) so icon clicks fire `action.onClicked` and toggle the in-page overlay instead; per-tab popup state is re-applied on `tabs.onUpdated`/`onActivated`
+- The popup communicates with the background service worker using the same messaging protocol as the overlay (raw-data messages + client-side Fuse search)
 
 ---
 
@@ -600,6 +601,8 @@ No host permissions are requested beyond the content script match pattern (`<all
 |---------|--------|--------|
 | `npm run build` | `.output/chrome-mv3/` | Chrome, Edge, Brave (MV3) |
 | `npm run build:firefox` | `.output/firefox-mv2/` | Firefox (MV2) |
+| `npm run pack` | `.output/slashmebaby-<version>-chrome.zip` | Chrome store / manual install zip |
+| `npm run pack:firefox` | `.output/slashmebaby-<version>-firefox.zip` (+ `-sources.zip`) | AMO zip |
 | `npm run dev` | Hot-reload dev server | Chrome (default) |
 | `npm run dev:firefox` | Hot-reload dev server | Firefox |
 | `npx vitest run` | Unit test results | All |

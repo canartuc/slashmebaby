@@ -40,6 +40,19 @@ const tab2: TreeItemData = {
   tabId: 102,
 };
 
+const discardedTab: TreeItemData = {
+  id: 'tab-103',
+  title: 'Sleeping Docs',
+  url: 'https://sleep.example',
+  type: 'tab',
+  depth: 1,
+  isExpanded: false,
+  childCount: 0,
+  parentId: 'group-Window 1',
+  tabId: 103,
+  discarded: true,
+};
+
 const folderItem: TreeItemData = {
   id: 'folder-1',
   title: 'Bookmarks Bar',
@@ -477,5 +490,80 @@ describe('TreeView', () => {
       />
     );
     expect(container.querySelectorAll('.smb-tab-col-item')).toHaveLength(0);
+  });
+});
+
+
+describe('TreeView — sleep badge', () => {
+  it('shows a sleep badge on discarded tabs in the tab grid', () => {
+    const { container } = render(
+      <TreeView
+        {...defaultProps}
+        allTabs={[tab1, discardedTab]}
+        visibleItems={[]}
+        labels={makeLabels(2)}
+      />
+    );
+    const badges = container.querySelectorAll('.smb-sleep-badge');
+    expect(badges).toHaveLength(1);
+    const badgedRow = badges[0].closest('.smb-tab-col-item');
+    expect(badgedRow?.textContent).toContain('Sleeping Docs');
+  });
+
+  it('does not show a sleep badge on normal tabs', () => {
+    const { container } = render(
+      <TreeView
+        {...defaultProps}
+        allTabs={[tab1, tab2]}
+        visibleItems={[]}
+        labels={makeLabels(2)}
+      />
+    );
+    expect(container.querySelectorAll('.smb-sleep-badge')).toHaveLength(0);
+  });
+
+  it('renders the badge as "zzz" text (cross-platform glyph safety)', () => {
+    const { container } = render(
+      <TreeView
+        {...defaultProps}
+        allTabs={[tab1, discardedTab]}
+        visibleItems={[]}
+        labels={makeLabels(2)}
+      />
+    );
+    expect(container.querySelector('.smb-sleep-badge')?.textContent).toBe('zzz');
+  });
+
+  it('shows a sleep badge on a discarded pinned tab tile', () => {
+    const { container } = render(
+      <TreeView
+        {...defaultProps}
+        pinnedTabs={[{ ...discardedTab, id: 'pinned-9', tabId: 9 }]}
+        allTabs={[]}
+        visibleItems={[]}
+        labels={makeLabels(0)}
+      />
+    );
+    const badge = container.querySelector('.smb-pinned-tab .smb-sleep-badge');
+    expect(badge).toBeTruthy();
+  });
+
+  it('announces sleeping state in the row aria-label on both grids', () => {
+    const { container } = render(
+      <TreeView
+        {...defaultProps}
+        pinnedTabs={[{ ...discardedTab, id: 'pinned-9', tabId: 9 }]}
+        allTabs={[tab1, discardedTab]}
+        visibleItems={[]}
+        labels={makeLabels(2)}
+      />
+    );
+    const labels = Array.from(container.querySelectorAll('[role="option"]')).map(el =>
+      el.getAttribute('aria-label')
+    );
+    expect(labels).toContain('Sleeping Docs (sleeping)');
+    expect(labels).toContain('Gmail');
+    // Every discarded row announces it; no normal row does.
+    expect(labels.filter(l => l?.endsWith('(sleeping)'))).toHaveLength(2);
   });
 });

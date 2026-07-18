@@ -65,13 +65,22 @@ check "Manifest has background script" $?
 node -e "const m=JSON.parse(require('fs').readFileSync('$FIREFOX_BUILD/manifest.json','utf8')); if(!m.content_scripts) process.exit(1)" 2>/dev/null
 check "Manifest has content scripts" $?
 
+# activeTab is intentionally absent — wxt.config.ts documents it as unused
+# (no executeScript/captureVisibleTab/insertCSS anywhere).
 node -e "
 const m=JSON.parse(require('fs').readFileSync('$FIREFOX_BUILD/manifest.json','utf8'));
-const required=['tabs','bookmarks','history','storage','activeTab'];
+const required=['tabs','bookmarks','history','storage'];
 const missing=required.filter(p=>!m.permissions.includes(p));
 if(missing.length>0){console.error('Missing:',missing);process.exit(1)}
 " 2>/dev/null
-check "All required permissions present (tabs, bookmarks, history, storage, activeTab)" $?
+check "All required permissions present (tabs, bookmarks, history, storage)" $?
+
+node -e "
+const m=JSON.parse(require('fs').readFileSync('$FIREFOX_BUILD/manifest.json','utf8'));
+const v=m.browser_specific_settings?.gecko?.strict_min_version;
+if(v!=='126.0'){console.error('strict_min_version:',v);process.exit(1)}
+" 2>/dev/null
+check "gecko strict_min_version pinned to 126.0" $?
 
 # 4. web-ext lint
 echo ""

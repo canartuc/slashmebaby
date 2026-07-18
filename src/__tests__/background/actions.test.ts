@@ -1,28 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ActionRegistry } from '../../entrypoints/background/actions';
+import { makeFakeTab } from '../helpers/fake-tab';
 
 // ─── Chrome stub helpers ───────────────────────────────────────────────────
 
-function makeFakeTab(overrides: Partial<chrome.tabs.Tab> = {}): chrome.tabs.Tab {
-  return {
-    id: 1,
-    index: 0,
-    pinned: false,
-    highlighted: false,
-    windowId: 1,
-    active: true,
-    incognito: false,
-    selected: false,
-    discarded: false,
-    autoDiscardable: true,
-    frozen: false,
-    groupId: -1,
-    title: 'Test Tab',
-    url: 'https://example.com',
-    mutedInfo: { muted: false },
-    ...overrides,
-  };
-}
 
 function makeChromeMock(overrides: Record<string, unknown> = {}) {
   const tabs = {
@@ -393,8 +374,32 @@ describe('ActionRegistry', () => {
       const result = await registry.execute('sort-by-domain');
 
       expect(result.success).toBe(true);
-      // tabs.move should have been called to reorder tabs
-      expect(chromeMock.tabs.move).toHaveBeenCalled();
+      // TS-086: the moves must place tabs in ALPHABETICAL domain order —
+      // alpha.com (id 2) → index 0, middle.com (id 3) → 1, zebra.com (id 1) → 2.
+      const moves = (chromeMock.tabs.move as ReturnType<typeof vi.fn>).mock.calls.map(
+        (c) => [c[0], (c[1] as { index: number }).index]
+      );
+      expect(moves).toEqual([
+        [2, 0],
+        [3, 1],
+        [1, 2],
+      ]);
+    });
+
+    it('sort-by-domain succeeds with a single-tab corpus (TS-175)', async () => {
+      const tabs = [makeFakeTab({ id: 1, url: 'https://solo.com/page', index: 0 })];
+      const chromeMock = makeChromeMock();
+      chromeMock.tabs.query = vi.fn(
+        (_queryInfo: object, cb?: (tabs: chrome.tabs.Tab[]) => void): Promise<chrome.tabs.Tab[]> => {
+          cb?.(tabs);
+          return Promise.resolve(tabs);
+        }
+      );
+      vi.stubGlobal('chrome', chromeMock);
+
+      const registry = new ActionRegistry();
+      const result = await registry.execute('sort-by-domain');
+      expect(result.success).toBe(true);
     });
 
     it('executes pin-tab action — already pinned tab gets unpinned', async () => {

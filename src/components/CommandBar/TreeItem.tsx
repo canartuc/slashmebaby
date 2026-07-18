@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import type { TreeItem as TreeItemData } from '../../hooks/useTreeData';
 import { LabelBadge } from './LabelBadge';
 import { Favicon } from './Favicon';
+import { SleepBadge, sleepAriaLabel } from './SleepBadge';
 
 export interface TreeItemProps {
   item: TreeItemData;
@@ -60,7 +61,7 @@ export const TreeItem: React.FC<TreeItemProps> = React.memo(({
       className={className}
       role="option"
       aria-selected={isSelected}
-      aria-label={item.title}
+      aria-label={sleepAriaLabel(item.title, item.type === 'tab' && item.discarded)}
       style={{ paddingLeft: 16 + item.depth * 16 }}
     >
       {!searchMode && <LabelBadge label={label} />}
@@ -74,6 +75,8 @@ export const TreeItem: React.FC<TreeItemProps> = React.memo(({
       {showFavicons && <Favicon src={item.icon} size={16} />}
 
       <span className="smb-title">{item.title}</span>
+
+      {item.type === 'tab' && item.discarded && <SleepBadge />}
 
       {isFolder && (
         <span className="smb-child-count">({item.childCount})</span>

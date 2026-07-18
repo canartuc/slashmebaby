@@ -1,6 +1,6 @@
 # PLAN.md: SlashMeBaby Sprint Plan
 
-Last updated: 2026-03-14
+Last updated: 2026-07-18
 
 ---
 
@@ -138,7 +138,7 @@ Last updated: 2026-03-14
 | 4.5 | Smart suggestions accuracy | Engineer | Empty state returns 3 most recently accessed tabs + 2 most recently added bookmarks + contextual actions based on active tab state |
 | 4.6 | Keyboard shortcut | Engineer | Alt+Space registered via chrome.commands; settings page shortcut selector updates command registration; shortcut change takes effect immediately |
 | 4.7 | Firefox E2E | QA | Full user flow (open → search → tab switch) verified on Firefox build; no API errors in browser console |
-| 4.8 | Restricted page popup | Engineer | Extension icon click on chrome:// pages opens popup; popup uses same CommandBar component; communicates with same background |
+| 4.8 | Restricted page popup | Engineer | Extension icon click on chrome:// pages opens popup; popup originally shipped as a separate minimal UI and shares the overlay's CommandBar component since the 2026-07 popup unification (see F20); communicates with same background |
 | 4.9 | Performance validation | Engineer + QA | E2E test measures overlay open time < 50ms; search response time < 16ms; profiled with Chrome DevTools Performance panel |
 | 4.10 | Error handling | Engineer | EXECUTE_ACTION returns `{ success: false, error: string }` on failure; content script shows brief error toast; no uncaught exceptions in console |
 
@@ -196,7 +196,7 @@ Last updated: 2026-03-14
 | 6.1 | Full E2E regression suite | QA | All P0 + P1 user flows covered by Playwright tests; suite runs in under 3 minutes |
 | 6.2 | Accessibility audit | Designer + QA | axe-playwright reports zero critical or serious violations; keyboard-only tester completes all P0 flows |
 | 6.3 | Performance profiling | Engineer | Chrome DevTools Performance trace shows overlay open < 50ms (P95); search rendering < 16ms (P95) |
-| 6.4 | Cross-browser final test | QA | Full manual test matrix on Chrome 123+, Firefox 120+, Edge 123+, Brave latest |
+| 6.4 | Cross-browser final test | QA | Full manual test matrix on Chrome 127+ (floor raised for `action.openPopup`), Firefox 126+ (floor raised for the `onCommand` tab argument), Edge 127+, Brave latest |
 | 6.5 | Bundle size check | Engineer | Chrome build < 500KB unzipped; Firefox build < 500KB unzipped; no unused dependencies included |
 | 6.6 | Favicons fallback | Engineer | All result items show correct favicons; broken favicon URLs show globe fallback icon |
 | 6.7 | Reduced motion | Engineer + QA | `prefers-reduced-motion: reduce` disables all animations; all features still functional |

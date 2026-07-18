@@ -1,0 +1,119 @@
+import { test, expect } from '@playwright/test';
+import { launchBrowserWithExtension as launchWithExtension, openPage } from './helpers';
+
+// Playwright cannot click the real toolbar icon or fire registered command
+// shortcuts, so these tests assert the observable contract of the per-tab
+// popup routing instead: the popup string the background maintains for each
+// tab, read through the service worker.
+//
+// Recovery-path e2e (unreachableTabs marking → default-popup restore →
+// clear on navigation/successful message) is INFEASIBLE here:
+// requestOverlayToggle is reachable only from action.onClicked (not
+// clickable by automation) and commands.onCommand (CDP keys never fire
+// registered extension commands), and the function is closed over inside
+// createActionRouting — unreachable from sw.evaluate. No production test
+// hooks are added for this; the full recovery contract is pinned by unit
+// tests in src/__tests__/background/action-routing.test.ts.
+
+async function getPopupForUrl(
+  context: Awaited<ReturnType<typeof launchWithExtension>>,
+  urlPattern: string
+): Promise<string | null> {
+  const sw = context.serviceWorkers()[0];
+  return sw.evaluate(async (pattern: string) => {
+    const [tab] = await chrome.tabs.query({ url: pattern });
+    if (tab?.id === undefined) return null;
+    return await chrome.action.getPopup({ tabId: tab.id });
+  }, urlPattern);
+}
+
+// ─── Test 1: injectable pages get a cleared per-tab popup ────────────────────
+
+test('clears the per-tab popup on injectable pages', async () => {
+  const context = await launchWithExtension();
+
+  await openPage(context, 'https://example.com');
+
+  // '' means icon clicks fire action.onClicked → in-page overlay.
+  await expect
+    .poll(() => getPopupForUrl(context, 'https://example.com/*'), { timeout: 10000 })
+    .toBe('');
+
+  await context.close();
+});
+
+// ─── Test 2: chrome:// pages keep the default popup ──────────────────────────
+
+test('keeps the default popup on chrome:// pages', async () => {
+  const context = await launchWithExtension();
+
+  const page = await context.newPage();
+  await page.goto('chrome://version/');
+  await page.waitForLoadState('domcontentloaded');
+
+  await expect
+    .poll(() => getPopupForUrl(context, 'chrome://version/*'), { timeout: 10000 })
+    .toContain('popup.html');
+
+  await context.close();
+});
+
+// ─── Test 3: overlay toggle round-trip acks without a phantom error ──────────
+// Regression net for the double-open bug: without the content script's
+// sendResponse ack, Chrome set "The message port closed…" lastError on every
+// successful toggle and the background stacked the popup on the overlay.
+
+test('TOGGLE_OVERLAY round-trip acks and leaves the per-tab popup cleared', async () => {
+  const context = await launchWithExtension();
+
+  const page = await openPage(context, 'https://example.com');
+  await expect
+    .poll(() => getPopupForUrl(context, 'https://example.com/*'), { timeout: 10000 })
+    .toBe('');
+
+  const sw = context.serviceWorkers()[0];
+  const roundTrip = await sw.evaluate(async () => {
+    const [tab] = await chrome.tabs.query({ url: 'https://example.com/*' });
+    return new Promise<{ response: unknown; error?: string }>((resolve) => {
+      chrome.tabs.sendMessage(tab.id!, { type: 'TOGGLE_OVERLAY' }, (response) => {
+        resolve({ response, error: chrome.runtime.lastError?.message });
+      });
+    });
+  });
+  expect(roundTrip.error).toBeUndefined();
+  expect(roundTrip.response).toEqual({ ok: true });
+
+  // The overlay actually opened…
+  const overlayOpen = await page.evaluate(() => {
+    const host = document.getElementById('slashmebaby-root');
+    return !!host?.shadowRoot?.querySelector('.smb-backdrop');
+  });
+  expect(overlayOpen).toBe(true);
+
+  // …and the per-tab popup stayed cleared (no phantom recovery).
+  await expect
+    .poll(() => getPopupForUrl(context, 'https://example.com/*'), { timeout: 5000 })
+    .toBe('');
+
+  await context.close();
+});
+
+// ─── Test 4: navigating injectable → restricted restores the default ─────────
+
+test('restores the default popup after navigating from https to chrome://', async () => {
+  const context = await launchWithExtension();
+
+  const page = await openPage(context, 'https://example.com');
+  await expect
+    .poll(() => getPopupForUrl(context, 'https://example.com/*'), { timeout: 10000 })
+    .toBe('');
+
+  await page.goto('chrome://version/');
+  await page.waitForLoadState('domcontentloaded');
+
+  await expect
+    .poll(() => getPopupForUrl(context, 'chrome://version/*'), { timeout: 10000 })
+    .toContain('popup.html');
+
+  await context.close();
+});

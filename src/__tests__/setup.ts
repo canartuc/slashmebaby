@@ -58,5 +58,14 @@ if (typeof globalThis.chrome === 'undefined') {
     commands: {
       onCommand: noopListener,
     },
+    action: {
+      setPopup: vi.fn((_details: unknown, cb?: () => void) => cb?.()),
+      openPopup: vi.fn(() => Promise.resolve()),
+      getUserSettings: vi.fn(() => Promise.resolve({ isOnToolbar: false })),
+      onClicked: noopListener,
+    },
+    extension: {
+      isAllowedFileSchemeAccess: vi.fn((cb: (allowed: boolean) => void) => cb(false)),
+    },
   });
 }

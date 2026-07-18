@@ -366,7 +366,7 @@ All features must be fully operable without a mouse:
 - Open: keyboard shortcut (configured by user)
 - Navigate: Arrow keys + Tab
 - Execute: Enter
-- Close: Escape (the toolbar popup also closes on Backspace with an empty query; the on-page overlay does not)
+- Close: Escape on both surfaces (the toolbar popup additionally closes when it loses focus — a browser behavior of action popups)
 - No feature requires hover, drag, or click to operate
 
 ### Color Independence
@@ -395,3 +395,7 @@ State is never communicated by color alone. The selected item uses both a backgr
 ### No External Icon Libraries
 
 All icons are inline SVG strings embedded in the component source. This avoids extra network requests and icon library version drift, and the icons stay available even on pages with restrictive Content Security Policies.
+
+### Sleep badge
+
+`.smb-sleep-badge` — the text "zzz" on hibernated tab rows (tab grid, search results, and pinned tiles): `--color-text-muted`, 9px, weight 600, 0.5px letter-spacing, line-height 1. Plain text instead of U+23FE, which lacks glyph coverage in common Windows/Linux fonts. Inside the 44px pinned tile it overlays the bottom-right corner on a `--color-bg-secondary` chip. The badge is `aria-hidden`; the row's `aria-label` appends " (sleeping)" so the state is announced. Rendered by the shared `SleepBadge` component; identical on both surfaces via `palette-core.css`.

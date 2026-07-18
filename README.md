@@ -10,15 +10,15 @@ Works in Chrome (Manifest V3) and Firefox (Manifest V2).
 
 ## Features
 
-- **Tab switching.** Fuzzy-search every open tab in every window and jump to it with Enter. (In the toolbar popup, results are also ranked by recency.)
+- **Tab switching.** Fuzzy-search every open tab in every window and jump to it with Enter. Sleeping (Memory-Saver) tabs show a "zzz" badge and wake automatically when you switch to them.
 - **Bookmark search.** Search your full bookmark tree, including nested folders.
-- **History search.** Search your recent browsing history. (In the toolbar popup, results are also ranked by how recently you visited each page.)
+- **History search.** Search your recent browsing history.
 - **Tab actions.** Close tab, close other tabs, pin/unpin, mute/unmute, duplicate, move to a new window, reload, new tab, go to URL, restore recently closed tabs, close duplicate tabs, and sort tabs by domain.
 - **Action-only mode.** Type `>` as the first character to filter the palette to actions only (for example `>close`).
-- **Smart suggestions.** With an empty query, the toolbar popup shows your most recent tabs, newest bookmarks, and contextual actions. (The overlay's empty state shows a navigable tree of all tabs and bookmarks instead.)
+- **Jump-first empty state.** Open either surface with no query and you get the full jump view — pinned tabs, the open-tab grid, your bookmark tree, and action chips, all with instant keyboard labels.
 - **Onboarding.** A short interactive tutorial opens on first install to help you pick a shortcut and learn the keyboard navigation.
 - **Settings.** Configure the activation shortcut, palette position (center / top / bottom), theme (system / light / dark), maximum results per group, favicon display, and which search sources are enabled. Settings sync via your browser account.
-- **Popup fallback.** On pages where content scripts cannot run (`chrome://`, `about:`, the Chrome Web Store), the toolbar icon opens a popup with the same search.
+- **Popup fallback.** On pages where content scripts cannot run (`chrome://`, `about:`, the Chrome Web Store), the toolbar icon opens a popup running the identical palette — same jump labels, keys, and search.
 
 ## Keyboard shortcut
 

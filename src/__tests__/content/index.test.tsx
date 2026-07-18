@@ -14,7 +14,11 @@ type ChangeListener = (
   changes: Record<string, chrome.storage.StorageChange>,
   area: string
 ) => void;
-type RuntimeListener = (message: unknown, sender: chrome.runtime.MessageSender) => void;
+type RuntimeListener = (
+  message: unknown,
+  sender: chrome.runtime.MessageSender,
+  sendResponse?: (response: unknown) => void
+) => void;
 type StorageGetCb = (result: Record<string, unknown>) => void;
 
 interface CapturedChrome {
@@ -62,10 +66,19 @@ async function loadContentMain(): Promise<ContentMain> {
   return mod.default;
 }
 
-function setLocation(protocol: 'http:' | 'https:' | 'chrome:' | 'about:') {
+function setLocation(protocol: 'http:' | 'https:' | 'chrome:' | 'about:' | 'file:') {
+  // The injectability guard parses the full URL, so href must agree with
+  // the faked protocol (jsdom's own href is always http://localhost/).
+  const hrefByProtocol: Record<string, string> = {
+    'http:': 'http://test.example/',
+    'https:': 'https://test.example/',
+    'chrome:': 'chrome://newtab/',
+    'about:': 'about:blank',
+    'file:': 'file:///Users/test/doc.html',
+  };
   Object.defineProperty(window, 'location', {
     configurable: true,
-    value: { ...window.location, protocol },
+    value: { ...window.location, protocol, href: hrefByProtocol[protocol] },
   });
 }
 
@@ -138,6 +151,14 @@ describe('content script entrypoint', () => {
     const cs = await loadContentMain();
     cs.main();
     expect(document.getElementById('slashmebaby-root')).toBeNull();
+  });
+
+  it('injects on file: pages', async () => {
+    setLocation('file:');
+    buildChrome();
+    const cs = await loadContentMain();
+    cs.main();
+    expect(document.getElementById('slashmebaby-root')).not.toBeNull();
   });
 
   it('injects host element with shadow root on https pages', async () => {
@@ -420,4 +441,106 @@ describe('content script entrypoint', () => {
     const host = document.getElementById('slashmebaby-root');
     expect(host?.shadowRoot?.children.length).toBe(2);
   });
+
+  it('acks TOGGLE_OVERLAY with sendResponse so the background sees no lastError', async () => {
+    // Without the ack, Chrome sets "The message port closed before a
+    // response was received." in the background's sendMessage callback on
+    // EVERY successful toggle — indistinguishable from a missing content
+    // script without message filtering, and the reason the routing must see
+    // a response here.
+    const captured = buildChrome();
+    const cs = await loadContentMain();
+    cs.main();
+
+    const sender = { id: 'test-extension' } as chrome.runtime.MessageSender;
+    const sendResponse = vi.fn();
+    captured.runtimeListeners[0]({ type: 'TOGGLE_OVERLAY' }, sender, sendResponse);
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true });
+  });
+
+  it('ignores malformed TOGGLE_OVERLAY-ish messages via the shared type guard', async () => {
+    const captured = buildChrome();
+    const cs = await loadContentMain();
+    cs.main();
+
+    const sender = { id: 'test-extension' } as chrome.runtime.MessageSender;
+    captured.runtimeListeners[0]('TOGGLE_OVERLAY', sender); // bare string
+    captured.runtimeListeners[0]({ type: 'toggle_overlay' }, sender); // wrong case
+    captured.runtimeListeners[0](null, sender);
+    const host = document.getElementById('slashmebaby-root');
+    expect(host?.shadowRoot?.children.length).toBe(2);
+  });
+});
+
+// ─── Activation shortcut presets ─────────────────────────────────────────────
+// Every preset from the onboarding picker plus its Mac (Command) variant
+// must activate the overlay; near-miss modifier combos must not.
+
+describe('activation shortcut presets', () => {
+  beforeEach(() => {
+    clearBody();
+    setLocation('https:');
+    vi.stubGlobal(
+      'defineContentScript',
+      (config: { matches: string[]; main: () => void }) => config
+    );
+  });
+
+  afterEach(() => {
+    clearBody();
+    vi.unstubAllGlobals();
+  });
+
+  const positive: Array<{ shortcut: string; key: string; mods: Partial<{ ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }> }> = [
+    // Uppercase key exercises the toLowerCase normalization (Shift held).
+    { shortcut: 'Ctrl+Shift+L', key: 'L', mods: { ctrlKey: true, shiftKey: true } },
+    { shortcut: 'Ctrl+.', key: '.', mods: { ctrlKey: true } },
+    { shortcut: 'Ctrl+/', key: '/', mods: { ctrlKey: true } },
+    // Space maps to the 'space' token in parseShortcut.
+    { shortcut: 'Command+Shift+Space', key: ' ', mods: { metaKey: true, shiftKey: true } },
+    { shortcut: 'Command+Shift+L', key: 'L', mods: { metaKey: true, shiftKey: true } },
+    { shortcut: 'Command+.', key: '.', mods: { metaKey: true } },
+    { shortcut: 'Command+/', key: '/', mods: { metaKey: true } },
+  ];
+
+  it.each(positive)(
+    'opens the overlay for configured shortcut $shortcut',
+    async ({ shortcut, key, mods }) => {
+      buildChrome({ shortcut });
+      const keys = captureKeydown();
+      const cs = await loadContentMain();
+      cs.main();
+
+      const event = fakeKey({ key, ...mods });
+      keys.handler()(event);
+      expect(event.preventDefault).toHaveBeenCalled();
+      const host = document.getElementById('slashmebaby-root');
+      expect(host?.shadowRoot?.children.length).toBeGreaterThanOrEqual(2);
+    }
+  );
+
+  const negative: Array<{ label: string; shortcut: string; key: string; mods: Partial<{ ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }> }> = [
+    { label: 'bare key without modifiers', shortcut: 'Ctrl+.', key: '.', mods: {} },
+    { label: 'extra Shift modifier', shortcut: 'Ctrl+.', key: '.', mods: { ctrlKey: true, shiftKey: true } },
+    { label: 'Meta instead of Ctrl', shortcut: 'Ctrl+.', key: '.', mods: { metaKey: true } },
+    { label: 'old default after a preset change', shortcut: 'Ctrl+.', key: ' ', mods: { ctrlKey: true, shiftKey: true } },
+    { label: 'Ctrl instead of Command', shortcut: 'Command+Shift+Space', key: ' ', mods: { ctrlKey: true, shiftKey: true } },
+  ];
+
+  it.each(negative)(
+    'does not open for $label',
+    async ({ shortcut, key, mods }) => {
+      buildChrome({ shortcut });
+      const keys = captureKeydown();
+      const cs = await loadContentMain();
+      cs.main();
+
+      const event = fakeKey({ key, ...mods });
+      keys.handler()(event);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      const host = document.getElementById('slashmebaby-root');
+      // Only style + mount point — no rendered overlay.
+      expect(host?.shadowRoot?.children.length).toBe(2);
+    }
+  );
 });

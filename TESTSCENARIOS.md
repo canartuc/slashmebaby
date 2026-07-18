@@ -1,6 +1,8 @@
 # TESTSCENARIOS.md: SlashMeBaby QA Test Scenarios
 
-Last updated: 2026-07-07
+Last updated: 2026-07-18
+
+Automation coverage map: [docs/test-coverage.md](docs/test-coverage.md)
 
 Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line description of what is verified.
 
@@ -63,12 +65,12 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 
 | ID | Priority | Description |
 |----|----------|-------------|
-| TS-026 | P0 | Opening the popup with no query shows smart suggestions immediately (the overlay's empty state shows the pinned-tab grid and tree view instead) |
-| TS-027 | P0 | Smart suggestions include the 3 most recently accessed open tabs |
-| TS-028 | P0 | Smart suggestions include the 2 most recently added bookmarks |
-| TS-029 | P0 | Smart suggestions include contextual action "Mute Tab" only when the current tab is audible |
-| TS-030 | P0 | Smart suggestions include contextual action "Unmute Tab" when the current tab is muted |
-| TS-031 | P0 | Smart suggestions show no more than 2 contextual actions |
+| TS-026 | P0 | Opening either surface with no query shows the jump view: pinned-tab grid, open-tab grid, bookmark tree, and action chips |
+| TS-027 | — | Superseded by the unified jump-first empty state (see TS-026): the popup no longer shows a smart-suggestions list |
+| TS-028 | — | Superseded (see TS-026) |
+| TS-029 | P0 | The "Mute Tab" action chip label flips to "Unmute Tab" when the current tab is muted (both surfaces) |
+| TS-030 | — | Merged into TS-029 |
+| TS-031 | — | Superseded: contextual-action prioritization retired with the smart-suggestions list |
 
 ### 3.2 Fuzzy Search
 
@@ -77,23 +79,23 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 | TS-032 | P0 | Typing a query returns fuzzy-matched results from open tabs |
 | TS-033 | P0 | Typing a query returns fuzzy-matched results from bookmarks |
 | TS-034 | P0 | Typing a query returns fuzzy-matched results from browsing history |
-| TS-035 | P0 | Typing a query in the popup returns fuzzy-matched actions by name (in the overlay, actions are matched via the `>` prefix) |
+| TS-035 | P0 | Actions are matched via the `>` prefix in search mode, identically on both surfaces |
 | TS-036 | P0 | Partial query matches (e.g. "gmil" matches "Gmail") |
 | TS-037 | P0 | Case-insensitive matching works (e.g. "GMAIL" matches "Gmail") |
 | TS-038 | P0 | URL fields are searched in addition to titles |
-| TS-039 | P0 | Clearing the query returns to the empty state (smart suggestions in the popup, tree view in the overlay) |
+| TS-039 | P0 | Clearing the query returns to the jump-view empty state on both surfaces |
 
 ### 3.3 Grouped Results
 
 | ID | Priority | Description |
 |----|----------|-------------|
-| TS-040 | P0 | Popup results are grouped in order: Tabs, Bookmarks, History, Actions; overlay results in order: Open Tabs, Bookmarks, History, then a Navigate row when the query looks like a URL |
+| TS-040 | P0 | Results on both surfaces are grouped in order: Open Tabs, Bookmarks, History, then a Navigate row when the query looks like a URL |
 | TS-041 | P0 | Each group shows a visible group header label |
 | TS-042 | P0 | A group section is not shown at all when it has no matching results |
 | TS-043 | P0 | Each group shows at most the configured Results Per Group value (3/5/8, default 5) |
 | TS-044 | P0 | Total visible results never exceed the per-group cap multiplied by the number of result groups (there is no separate global cap) |
 | TS-045 | P0 | Each result row shows the item's title |
-| TS-046 | P0 | Each result row shows the item's URL (where applicable) |
+| TS-046 | P1 | Result rows show the item title (single line); the URL is exposed via tooltip/aria rather than a visible second line (current tree-view design) |
 | TS-047 | P1 | Each result row shows the item's favicon (when Show Favicons setting is On) |
 | TS-048 | P1 | A globe fallback icon is shown for items with a missing or broken favicon |
 
@@ -126,8 +128,8 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 | TS-059 | P0 | Arrow Up moves selection to the previous result item |
 | TS-060 | P0 | Arrow Down from the last item in one group moves to the first item in the next group |
 | TS-061 | P0 | Arrow Up from the first item in one group moves to the last item in the previous group |
-| TS-062 | P0 | Tab key moves selection to the next result item, wrapping at the end of the list |
-| TS-063 | P0 | Shift+Tab moves selection to the previous result item, wrapping at the top of the list |
+| TS-062 | P0 | Tab moves selection to the first item of the next section, wrapping to the first section after the last |
+| TS-063 | P0 | Shift+Tab moves selection to the start of the previous section, wrapping to the last section from the top |
 | TS-064 | P0 | Pressing Enter executes the currently selected item |
 | TS-065 | P0 | Pressing Escape dismisses the overlay |
 | TS-066 | P0 | Pressing Backspace on an empty query does NOT dismiss the overlay |
@@ -263,7 +265,7 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 | TS-129 | P0 | Clicking the extension icon on a chrome:// page opens the popup fallback |
 | TS-130 | P0 | Clicking the extension icon on an about: page opens the popup fallback |
 | TS-131 | P0 | The popup fallback contains the search input field |
-| TS-132 | P0 | Typing in the popup search input returns search results |
+| TS-132 | P0 | Pressing `/` in the popup and typing returns search results, exactly as in the overlay |
 | TS-133 | P0 | Selecting a result in the popup executes the action (e.g., switches to the selected tab) |
 | TS-134 | P0 | The popup fallback does NOT show a backdrop element |
 | TS-135 | P1 | The popup fallback applies the same theme (light/dark) as the main overlay |
@@ -325,14 +327,53 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 | TS-163 | P0 | Command bar opens and shows results gracefully when there are no bookmarks |
 | TS-164 | P0 | Command bar opens and shows results gracefully when there is no browsing history |
 | TS-165 | P0 | Tab titles longer than the result row width are truncated with ellipsis (no wrapping) |
-| TS-166 | P0 | URLs longer than the result row width are truncated with ellipsis (no wrapping) |
+| TS-166 | P0 | ~~URLs longer than the result row width are truncated with ellipsis~~ Superseded: the jump-first design shows no URL text in rows (see TS-046); title truncation is covered by TS-165 |
 | TS-167 | P0 | Tabs with no favicon show the globe fallback icon without breaking the layout |
 | TS-168 | P0 | Rapidly opening and closing the command bar in quick succession does not leave stale overlays or errors |
 | TS-169 | P0 | Typing very fast (burst of keystrokes) returns correct results for the final query state |
-| TS-170 | P0 | Searching with a query that matches nothing shows an appropriate empty results message |
+| TS-170 | P2 | A query with no matches renders an empty result list with no selection (no placeholder message by design; Enter is a no-op) |
 | TS-171 | P0 | Tab titles containing special HTML characters (e.g., `<`, `>`, `&`) are rendered safely (no XSS) |
 | TS-172 | P1 | Command bar opens correctly on a page that aggressively captures keyboard events |
 | TS-173 | P1 | Switching to a tab in a different window via the command bar focuses that window |
 | TS-174 | P1 | "Close All Duplicates" when there are no duplicates completes without error |
 | TS-175 | P1 | "Sort Tabs by Domain" when there is only one tab completes without error |
 | TS-176 | P0 | "Recently Closed" completes without error when no tabs have been closed this session (nothing to restore) |
+
+## Surface Parity (popup ≡ overlay)
+
+| ID | Priority | Scenario |
+|----|----------|----------|
+| TS-177 | P0 | The popup opens in jump mode identical to the overlay: read-only input, labels visible on tabs, bookmarks, and folders |
+| TS-178 | P0 | A digit key switches to the corresponding pinned tab from the popup, exactly as in the overlay |
+| TS-179 | P0 | `/` toggles between jump and typed search in the popup, exactly as in the overlay |
+| TS-180 | P0 | Backspace never closes either surface; Escape closes the popup (and dismisses the overlay) |
+| TS-181 | P0 | For identical data, both surfaces render identical section headers, tab-grid labels, and tree-row badges |
+| TS-182 | P1 | The results region renders pixel-identical (within tolerance) on both surfaces at equalized width |
+| TS-183 | P0 | Two-character label combos activate the same target from either surface |
+
+## Tab States (hibernation)
+
+| ID | Priority | Scenario |
+|----|----------|----------|
+| TS-184 | P0 | Activating a discarded (sleeping) tab from the overlay reloads it and shows the page (unit-pinned; e2e fixme-gated — chrome.tabs.discard crashes the current Chromium-for-Testing build; verify manually via Memory Saver) |
+| TS-185 | P0 | Activating a discarded tab from the popup reloads it and shows the page (same gating as TS-184) |
+| TS-186 | P0 | Discarded tabs show the "zzz" sleep badge identically on both surfaces (grid, search rows, and pinned tiles), with "(sleeping)" announced in the row aria-label |
+| TS-187 | P1 | A frozen tab (Chrome-only) is NOT force-reloaded on activation — its content is memory-resident and unfreezes natively; it still shows the sleep badge |
+| TS-188 | P2 | Manual: incognito tabs are invisible to the palette (no `incognito` manifest key) unless the user enables "Allow in Incognito" |
+
+## Design Baselines (pixel)
+
+Checked-in darwin screenshots (`e2e/__screenshots__/darwin/`) compared with `maxDiffPixelRatio: 0.001`; regeneration and review policy in CONTRIBUTING.md. Theme scope: dark everywhere plus one light shot per token-bearing stylesheet (overlay, popup, settings); onboarding-light is a conscious exclusion (shares the settings token approach).
+
+| ID | Priority | Scenario |
+|----|----------|----------|
+| TS-189 | P1 | Overlay jump view (dark, center, with pinned grid) matches its pixel baseline |
+| TS-190 | P1 | Overlay top and bottom position variants match their pixel baselines |
+| TS-191 | P1 | Overlay search results (Tabs/Bookmarks/History) match the pixel baseline |
+| TS-192 | P1 | Overlay `>` action mode matches the pixel baseline |
+| TS-193 | P1 | Overlay jump view (light) matches the pixel baseline |
+| TS-194 | P1 | Popup jump view (dark and light) matches its pixel baselines |
+| TS-195 | P1 | Popup search and action modes match their pixel baselines |
+| TS-196 | P1 | Settings page (dark and light) matches its pixel baselines |
+| TS-197 | P1 | Onboarding steps 1–5 (dark) match their pixel baselines (async pin badge masked) |
+| TS-198 | P1 | The visible error strip matches its pixel baseline |

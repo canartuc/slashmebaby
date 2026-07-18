@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { CommandBar } from '../../components/CommandBar/CommandBar';
+import { mockRawDataMessages } from '../helpers/mock-palette-messages';
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -237,7 +238,8 @@ describe('CommandBar', () => {
     expect(screen.getByRole('listbox')).toBeTruthy();
   });
 
-  it('Tab cycles forward and Shift+Tab cycles backward', async () => {
+  it('Tab and Shift+Tab do not throw on the default surface', async () => {
+    // Section-jump semantics are pinned in the dedicated Tab describes below.
     render(<CommandBar onDismiss={() => {}} />);
     await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
     fireSmbKey('Tab');
@@ -267,7 +269,7 @@ describe('CommandBar', () => {
     expect(screen.getByRole('listbox')).toBeTruthy();
   });
 
-  it('search-mode Tab/ArrowDown still cycle the selection', async () => {
+  it('search-mode ArrowDown/ArrowUp still cycle the selection one item at a time', async () => {
     render(<CommandBar onDismiss={() => {}} />);
     await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
 
@@ -275,7 +277,6 @@ describe('CommandBar', () => {
     await waitFor(() =>
       expect(screen.getByPlaceholderText('Search tabs, bookmarks, actions...')).toBeTruthy()
     );
-    fireSmbKey('Tab');
     fireSmbKey('ArrowDown');
     fireSmbKey('ArrowUp');
     expect(screen.getByRole('listbox')).toBeTruthy();
@@ -444,7 +445,7 @@ describe('CommandBar', () => {
     expect(onDismiss).toHaveBeenCalled();
   });
 
-  it('Tab moves selection forward without invoking activation', async () => {
+  it('Tab never invokes activation or dismissal', async () => {
     const onDismiss = vi.fn();
     render(<CommandBar onDismiss={onDismiss} />);
     await waitFor(() => expect(screen.getByText('Bookmarks Bar')).toBeTruthy());
@@ -1066,6 +1067,20 @@ describe('CommandBar — go-to-URL fallback (F10)', () => {
     });
   });
 
+  it('renders the Go-to row under a "Navigate" section header', async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+
+    await typeOverlayQuery('example.com');
+    await waitFor(() => {
+      const headers = Array.from(container.querySelectorAll('.smb-group-header')).map(
+        (el) => el.textContent
+      );
+      // The synthetic goto row is always last, under its own header.
+      expect(headers[headers.length - 1]).toBe('Navigate');
+    });
+  });
+
   it('does not append a "Go to" row for a plain-word query', async () => {
     render(<CommandBar onDismiss={() => {}} />);
     await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
@@ -1149,13 +1164,19 @@ describe('CommandBar — action-error aria-live region', () => {
   beforeEach(() => setupOverlayMock());
 
   // vitest stubs `?inline` CSS imports to an empty string and jsdom does not
-  // reliably cascade the full stylesheet, so read the shipped file from disk.
+  // reliably cascade the full stylesheet, so read the shipped files from
+  // disk. The overlay injects palette-core.css (shared component rules) plus
+  // command-bar.css (:host scoping) — concatenate them the same way.
   async function loadCommandBarCss(): Promise<string> {
     const { readFileSync } = await import('node:fs');
     const { fileURLToPath } = await import('node:url');
     const { resolve, dirname } = await import('node:path');
     const here = dirname(fileURLToPath(import.meta.url));
-    return readFileSync(resolve(here, '../../styles/command-bar.css'), 'utf8');
+    return (
+      readFileSync(resolve(here, '../../styles/palette-core.css'), 'utf8') +
+      '\n' +
+      readFileSync(resolve(here, '../../styles/command-bar.css'), 'utf8')
+    );
   }
 
   /** Extracts the body of the first CSS rule whose selector list matches exactly. */
@@ -1187,7 +1208,7 @@ describe('CommandBar — action-error aria-live region', () => {
     expect(idle).toContain('position: absolute');
     expect(idle).toContain('width: 1px');
     expect(idle).toContain('height: 1px');
-    expect(idle).toContain('clip: rect(0, 0, 0, 0)');
+    expect(idle).toContain('clip-path: inset(50%)');
     expect(idle).toContain('overflow: hidden');
   });
 
@@ -1196,7 +1217,7 @@ describe('CommandBar — action-error aria-live region', () => {
     const visible = cssRuleBody(css, '.smb-error-strip--visible');
     expect(visible).toContain('display: block');
     expect(visible).toContain('position: static');
-    expect(visible).toContain('clip: auto');
+    expect(visible).toContain('clip-path: none');
     // Visual behavior identical to the old visible state:
     expect(visible).toContain('border: 1px solid var(--color-danger)');
     expect(visible).toContain('background: var(--color-danger-bg)');
@@ -1457,5 +1478,687 @@ describe('CommandBar — EXECUTE_ACTION failure feedback', () => {
       expect(screen.getByRole('status').textContent).toContain('Action failed');
     });
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Popup variant ──────────────────────────────────────────────────────────
+// The action popup renders the same CommandBar without the overlay framing:
+// no backdrop, no position class, fixed window sizing from popup.css.
+
+describe('CommandBar — popup variant', () => {
+  beforeEach(() => setupOverlayMock());
+
+  function fireSmbKey(key: string, shiftKey = false) {
+    document.dispatchEvent(
+      new CustomEvent('smb-keydown', { detail: { key, shiftKey } })
+    );
+  }
+
+  it("variant='popup' renders no .smb-backdrop", async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} variant="popup" />);
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+    expect(container.querySelector('.smb-backdrop')).toBeNull();
+  });
+
+  it("variant='popup' renders .smb-container--popup without a position class", async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} variant="popup" />);
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+    const el = container.querySelector('.smb-container');
+    expect(el).not.toBeNull();
+    expect(el?.classList.contains('smb-container--popup')).toBe(true);
+    expect(el?.classList.contains('smb-container--center')).toBe(false);
+    expect(el?.classList.contains('smb-container--top')).toBe(false);
+    expect(el?.classList.contains('smb-container--bottom')).toBe(false);
+  });
+
+  it('search mode with an empty query keeps the tab grid visible without jump badges', async () => {
+    const { container } = render(
+      <CommandBar onDismiss={() => {}} variant="popup" initialMode="search" />
+    );
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+    // Full surface shown while nothing filters…
+    expect(screen.getByText('Open Tabs')).toBeTruthy();
+    // …but jump-label badges are hidden outside jump mode.
+    expect(container.querySelectorAll('.smb-tab-col-label')).toHaveLength(0);
+  });
+
+  it("variant='popup' keeps the dialog role, error strip and TreeView listbox", async () => {
+    render(<CommandBar onDismiss={() => {}} variant="popup" />);
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByRole('status')).toBeTruthy();
+    expect(screen.getByRole('listbox')).toBeTruthy();
+  });
+
+  it('uses resolveCopyUrl for the "u" copy action, writes the cleaned URL, then dismisses', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const resolveCopyUrl = vi
+      .fn()
+      .mockResolvedValue('https://active-tab.example/page?utm_source=x&id=7');
+    const onDismiss = vi.fn();
+
+    render(
+      <CommandBar onDismiss={onDismiss} variant="popup" resolveCopyUrl={resolveCopyUrl} />
+    );
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+
+    fireSmbKey('u');
+    await waitFor(() => {
+      expect(resolveCopyUrl).toHaveBeenCalled();
+      expect(writeText).toHaveBeenCalledWith('https://active-tab.example/page?id=7');
+      expect(onDismiss).toHaveBeenCalled();
+    });
+  });
+
+  it('a null resolveCopyUrl result writes nothing but still dismisses', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const resolveCopyUrl = vi.fn().mockResolvedValue(null);
+    const onDismiss = vi.fn();
+
+    render(
+      <CommandBar onDismiss={onDismiss} variant="popup" resolveCopyUrl={resolveCopyUrl} />
+    );
+    await waitFor(() => expect(screen.getByText('Alpha One')).toBeTruthy());
+
+    fireSmbKey('u');
+    await waitFor(() => {
+      expect(onDismiss).toHaveBeenCalled();
+    });
+    expect(writeText).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Tab section jumping ────────────────────────────────────────────────────
+// Tab/Shift+Tab jump to the first item of the next/previous SECTION
+// (top-level folders in the jump-mode tree), never one item at a time.
+
+function makeTabJumpMock(options: {
+  tabs: Array<{ id: number; title: string }>;
+  tree: Array<{ id: string; title: string; children: Array<{ id: string; title: string; url?: string; children?: Array<{ id: string; title: string; url: string }> }> }>;
+  history?: Array<{ id: string; title: string; url: string }>;
+  actions?: Array<{ id: string; title: string }>;
+}) {
+  vi.mocked(chrome.runtime.sendMessage).mockReset();
+  vi.mocked(chrome.runtime.sendMessage).mockImplementation(((
+    msg: unknown,
+    callback?: (response: unknown) => void
+  ) => {
+      const message = msg as { type: string };
+      if (message.type === 'GET_SETTINGS' && callback) {
+        callback({
+          settings: {
+            shortcut: 'Ctrl+Shift+Space',
+            position: 'center',
+            theme: 'dark',
+            maxResultsPerGroup: 5,
+            showFavicons: true,
+            searchSources: { tabs: true, bookmarks: true, history: true },
+          },
+        });
+      } else if (message.type === 'GET_ALL_TABS' && callback) {
+        callback({
+          groups: [
+            {
+              label: 'Window 1',
+              type: 'window',
+              tabs: options.tabs.map((t) => ({
+                id: t.id,
+                title: t.title,
+                url: `https://tab-${t.id}.example/`,
+                favIconUrl: '',
+                windowId: 1,
+                pinned: false,
+                audible: false,
+              })),
+            },
+          ],
+        });
+      } else if (message.type === 'GET_BOOKMARK_TREE' && callback) {
+        callback({ tree: options.tree });
+      } else if (message.type === 'GET_HISTORY_ITEMS' && callback) {
+        callback({
+          items: (options.history ?? []).map((h) => ({ ...h, lastVisitTime: 1 })),
+        });
+      } else if (message.type === 'GET_ACTIONS' && callback) {
+        callback({ actions: options.actions ?? [] });
+      } else if (callback) {
+        callback({ success: true });
+      }
+      return undefined as unknown as Promise<unknown>;
+    }) as unknown as typeof chrome.runtime.sendMessage
+  );
+}
+
+function selectedTitle(container: HTMLElement): string {
+  return container.querySelector('.smb-tree-item--selected')?.textContent ?? '';
+}
+
+describe('CommandBar — Tab section jumping (jump mode)', () => {
+  function fireSmbKey(key: string, shiftKey = false) {
+    document.dispatchEvent(new CustomEvent('smb-keydown', { detail: { key, shiftKey } }));
+  }
+
+  beforeEach(() => {
+    makeTabJumpMock({
+      tabs: [
+        { id: 1, title: 'Gmail' },
+        { id: 2, title: 'GitHub' },
+      ],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [
+            { id: '2', title: 'React Docs', url: 'https://react.dev' },
+            { id: '3', title: 'Vue Docs', url: 'https://vuejs.org' },
+          ],
+        },
+        {
+          id: '4',
+          title: 'Work Stuff',
+          children: [{ id: '5', title: 'Jira', url: 'https://jira.example' }],
+        },
+      ],
+    });
+  });
+
+  async function renderTree() {
+    const view = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Work Stuff')).toBeTruthy());
+    return view.container;
+  }
+
+  it('Tab moves selection to the next top-level folder', async () => {
+    const container = await renderTree();
+    expect(selectedTitle(container)).toContain('Bookmarks Bar');
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(container)).toContain('Work Stuff'));
+  });
+
+  it('Shift+Tab moves selection back to the previous top-level folder', async () => {
+    const container = await renderTree();
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(container)).toContain('Work Stuff'));
+    fireSmbKey('Tab', true);
+    await waitFor(() => expect(selectedTitle(container)).toContain('Bookmarks Bar'));
+  });
+
+  it("Tab skips an expanded folder's children and lands on the next top-level folder", async () => {
+    const container = await renderTree();
+    fireSmbKey('ArrowRight'); // expand Bookmarks Bar
+    await waitFor(() => expect(screen.getByText('React Docs')).toBeTruthy());
+    fireSmbKey('Tab');
+    await waitFor(() => {
+      const title = selectedTitle(container);
+      expect(title).toContain('Work Stuff');
+      expect(title).not.toContain('React Docs');
+    });
+  });
+
+  it('Tab wraps from the last top-level folder to the first', async () => {
+    const container = await renderTree();
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(container)).toContain('Work Stuff'));
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(container)).toContain('Bookmarks Bar'));
+  });
+
+  it("Shift+Tab from a folder's child jumps to the PREVIOUS group (wrapping)", async () => {
+    const container = await renderTree();
+    fireSmbKey('ArrowRight'); // expand Bookmarks Bar
+    await waitFor(() => expect(screen.getByText('React Docs')).toBeTruthy());
+    fireSmbKey('ArrowDown'); // React Docs (index 1, inside the FIRST group)
+    await waitFor(() => expect(selectedTitle(container)).toContain('React Docs'));
+    // Previous group from inside the first one wraps to the last group —
+    // never the current group's own start.
+    fireSmbKey('Tab', true);
+    await waitFor(() => expect(selectedTitle(container)).toContain('Work Stuff'));
+    fireSmbKey('Tab', true);
+    await waitFor(() => expect(selectedTitle(container)).toContain('Bookmarks Bar'));
+  });
+});
+
+describe('CommandBar — Tab section jumping (search mode)', () => {
+  function fireSmbKey(key: string, shiftKey = false) {
+    document.dispatchEvent(new CustomEvent('smb-keydown', { detail: { key, shiftKey } }));
+  }
+
+  beforeEach(() => {
+    makeTabJumpMock({
+      tabs: [
+        { id: 1, title: 'Alpha Docs' },
+        { id: 2, title: 'Alpha Blog' },
+      ],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'Alpha Reference', url: 'https://alpha.ref/' }],
+        },
+      ],
+      history: [{ id: 'h1', title: 'Alpha History', url: 'https://alpha.hist/' }],
+      actions: [
+        { id: 'action-close-tab', title: 'Close Tab' },
+        { id: 'action-pin-tab', title: 'Pin Tab' },
+        { id: 'action-new-tab', title: 'New Tab' },
+      ],
+    });
+  });
+
+  async function searchAlpha() {
+    const view = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText(/Alpha Docs/)).toBeTruthy());
+    fireSmbKey('/');
+    const input = (await waitFor(() =>
+      screen.getByPlaceholderText('Search tabs, bookmarks, actions...')
+    )) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'alpha' } });
+    // Results: [tab, tab, bookmark, history] → boundaries [0, 2, 3]
+    await waitFor(() => expect(screen.getByText(/Alpha History/)).toBeTruthy());
+    return view.container;
+  }
+
+  it('Tab jumps from the tabs section to the first bookmark result', async () => {
+    const container = await searchAlpha();
+    expect(selectedTitle(container)).toMatch(/Alpha (Docs|Blog)/);
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(container)).toContain('Alpha Reference'));
+  });
+
+  it('Tab from mid-section jumps to the next section start, not the next item', async () => {
+    const container = await searchAlpha();
+    const initial = selectedTitle(container);
+    fireSmbKey('ArrowDown'); // second tab (index 1)
+    // Premise check: the selection really moved off the first tab.
+    await waitFor(() => {
+      const title = selectedTitle(container);
+      expect(title).toMatch(/Alpha (Docs|Blog)/);
+      expect(title).not.toBe(initial);
+    });
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(container)).toContain('Alpha Reference'));
+  });
+
+  it('Tab walks section starts and wraps to the top', async () => {
+    const container = await searchAlpha();
+    const initial = selectedTitle(container);
+    fireSmbKey('Tab'); // bookmarks
+    await waitFor(() => expect(selectedTitle(container)).toContain('Alpha Reference'));
+    fireSmbKey('Tab'); // history
+    await waitFor(() => expect(selectedTitle(container)).toContain('Alpha History'));
+    fireSmbKey('Tab'); // wrap to first tab
+    await waitFor(() => expect(selectedTitle(container)).toBe(initial));
+  });
+
+  it('Shift+Tab from the first result wraps to the last section start', async () => {
+    const container = await searchAlpha();
+    fireSmbKey('Tab', true);
+    await waitFor(() => expect(selectedTitle(container)).toContain('Alpha History'));
+  });
+
+  it('ArrowDown still moves one item at a time in search mode', async () => {
+    const container = await searchAlpha();
+    const initial = selectedTitle(container);
+    fireSmbKey('ArrowDown');
+    await waitFor(() => {
+      const title = selectedTitle(container);
+      expect(title).toMatch(/Alpha (Docs|Blog)/);
+      expect(title).not.toBe(initial);
+    });
+  });
+
+  it('action mode: Tab falls back to item stepping in a single-section list', async () => {
+    const view = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText(/Alpha Docs/)).toBeTruthy());
+    fireSmbKey('/');
+    const input = (await waitFor(() =>
+      screen.getByPlaceholderText('Search tabs, bookmarks, actions...')
+    )) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: '>' } });
+    await waitFor(() => expect(screen.getByText('Close Tab')).toBeTruthy());
+    // One section, nothing to jump between — Tab must still MOVE, never
+    // no-op or snap back to the top (Enter would then hit the wrong action).
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(view.container)).toContain('Pin Tab'));
+    fireSmbKey('Tab');
+    await waitFor(() => expect(selectedTitle(view.container)).toContain('New Tab'));
+    fireSmbKey('Tab', true);
+    await waitFor(() => expect(selectedTitle(view.container)).toContain('Pin Tab'));
+  });
+
+  it('Tab on an empty result list is a no-op', async () => {
+    const view = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText(/Alpha Docs/)).toBeTruthy());
+    fireSmbKey('/');
+    const input = (await waitFor(() =>
+      screen.getByPlaceholderText('Search tabs, bookmarks, actions...')
+    )) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'zzzz' } });
+    await waitFor(() =>
+      expect(view.container.querySelector('.smb-tree-item--selected')).toBeNull()
+    );
+    fireSmbKey('Tab');
+    expect(screen.getByRole('listbox')).toBeTruthy();
+    expect(view.container.querySelector('.smb-tree-item--selected')).toBeNull();
+  });
+});
+
+// ─── Review-fix pins: same-frame combos and search-mode Backspace recovery ──
+
+describe('CommandBar — rapid input robustness', () => {
+  function fireSmbKey(key: string, shiftKey = false) {
+    document.dispatchEvent(new CustomEvent('smb-keydown', { detail: { key, shiftKey } }));
+  }
+
+  it('a two-char label pressed within one frame activates the combo target', async () => {
+    // 16 extra tabs push labels into two-char territory. Both presses land
+    // in the SAME task — a stale-closure prefix would drop or misroute the
+    // combo (rapid typists, key autorepeat).
+    makeTabJumpMock({
+      tabs: Array.from({ length: 16 }, (_, i) => ({ id: 100 + i, title: `Bulk ${i}` })),
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'Deep Target', url: 'https://deep.example' }],
+        },
+        {
+          id: '4',
+          title: 'Work Stuff',
+          children: [{ id: '5', title: 'Jira', url: 'https://jira.example' }],
+        },
+      ],
+    });
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Work Stuff')).toBeTruthy());
+
+    // Expand the first folder so a LEAF row (deterministic NAVIGATE target)
+    // carries a two-char badge.
+    fireSmbKey('ArrowRight');
+    await waitFor(() => expect(screen.getByText('Deep Target')).toBeTruthy());
+
+    let combo = '';
+    await waitFor(() => {
+      const rows = container.querySelectorAll('.smb-tree-item');
+      for (const row of Array.from(rows)) {
+        if ((row.querySelector('.smb-title')?.textContent ?? '') === 'Deep Target') {
+          combo = row.querySelector('.smb-label-badge')?.textContent ?? '';
+        }
+      }
+      expect(combo).toHaveLength(2);
+    });
+
+    // Same-frame double press — a stale-closure prefix would drop this.
+    fireSmbKey(combo[0]);
+    fireSmbKey(combo[1]);
+
+    await waitFor(() => {
+      const call = vi.mocked(chrome.runtime.sendMessage).mock.calls.find(
+        (c) => (c[0] as unknown as { type: string }).type === 'NAVIGATE'
+      );
+      expect(call).toBeTruthy();
+      expect((call?.[0] as unknown as { payload: { url: string } }).payload.url).toBe(
+        'https://deep.example'
+      );
+    });
+  });
+
+  it('forwarded Backspace in search mode refocuses the query input (keyboard recovery)', async () => {
+    makeTabJumpMock({
+      tabs: [{ id: 1, title: 'Gmail' }],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'React Docs', url: 'https://react.dev' }],
+        },
+      ],
+    });
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+
+    fireSmbKey('/');
+    const input = (await waitFor(() => {
+      const el = container.querySelector('.smb-input') as HTMLInputElement;
+      expect(el.readOnly).toBe(false);
+      return el;
+    })) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'react' } });
+
+    // Focus wanders (e.g. clicking a result row).
+    input.blur();
+    expect(document.activeElement).not.toBe(input);
+
+    // Backspace is the recovery path back into query editing on BOTH
+    // surfaces: it must refocus the input instead of dying.
+    fireSmbKey('Backspace');
+    await waitFor(() => expect(document.activeElement).toBe(input));
+  });
+});
+
+
+// ─── Sleep badge on hibernated tabs ─────────────────────────────────────────
+
+describe('CommandBar — sleep badge on hibernated tabs', () => {
+  beforeEach(() => {
+    mockRawDataMessages({ withDiscardedTab: true });
+  });
+
+  it('renders the sleep badge for a discarded tab in jump mode', async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Sleeping Docs')).toBeTruthy());
+    const badges = container.querySelectorAll('.smb-sleep-badge');
+    expect(badges).toHaveLength(1);
+    expect(badges[0].closest('.smb-tab-col-item')?.textContent).toContain('Sleeping Docs');
+  });
+
+  it('search results retain the sleep badge on discarded tabs', async () => {
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Sleeping Docs')).toBeTruthy());
+    document.dispatchEvent(new CustomEvent('smb-keydown', { detail: { key: '/', shiftKey: false } }));
+    const input = (await waitFor(() => {
+      const el = container.querySelector('.smb-input') as HTMLInputElement;
+      expect(el.readOnly).toBe(false);
+      return el;
+    })) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'Sleeping' } });
+    await waitFor(() => {
+      const row = container.querySelector('.smb-tree-item .smb-sleep-badge');
+      expect(row).not.toBeNull();
+    });
+  });
+});
+
+
+// ─── Coverage-map gap closures (audit 3) ────────────────────────────────────
+
+describe('CommandBar — coverage gap pins', () => {
+  function fireSmbKey(key: string, shiftKey = false) {
+    document.dispatchEvent(new CustomEvent('smb-keydown', { detail: { key, shiftKey } }));
+  }
+
+  it('matches a query that only appears in a URL field (TS-038)', async () => {
+    makeTabJumpMock({
+      tabs: [{ id: 1, title: 'Gmail' }],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [
+            // 'xylophone' appears ONLY in the URL, never in a title.
+            { id: '2', title: 'Weird Site', url: 'https://xylophone.example/deep' },
+          ],
+        },
+      ],
+    });
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+    fireSmbKey('/');
+    const input = (await waitFor(() => {
+      const el = container.querySelector('.smb-input') as HTMLInputElement;
+      expect(el.readOnly).toBe(false);
+      return el;
+    })) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'xylophone' } });
+    await waitFor(() => {
+      expect(screen.getByRole('listbox').textContent).toContain('Weird Site');
+    });
+  });
+
+  it('ArrowDown crosses from the last tab into the first bookmark section (TS-060)', async () => {
+    makeTabJumpMock({
+      tabs: [
+        { id: 1, title: 'Alpha Docs' },
+        { id: 2, title: 'Alpha Blog' },
+      ],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'Alpha Reference', url: 'https://alpha.ref/' }],
+        },
+      ],
+    });
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText(/Alpha Docs/)).toBeTruthy());
+    fireSmbKey('/');
+    const input = (await waitFor(() => {
+      const el = container.querySelector('.smb-input') as HTMLInputElement;
+      expect(el.readOnly).toBe(false);
+      return el;
+    })) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'alpha' } });
+    await waitFor(() => expect(screen.getByText('Alpha Reference')).toBeTruthy());
+
+    const selected = () =>
+      container.querySelector('.smb-tree-item--selected')?.textContent ?? '';
+    fireSmbKey('ArrowDown'); // second tab
+    await waitFor(() => expect(selected()).toMatch(/Alpha (Docs|Blog)/));
+    fireSmbKey('ArrowDown'); // crosses into bookmarks
+    await waitFor(() => expect(selected()).toContain('Alpha Reference'));
+
+    // TS-061: ArrowUp crosses back into the previous section's last item.
+    fireSmbKey('ArrowUp');
+    await waitFor(() => expect(selected()).toMatch(/Alpha (Docs|Blog)/));
+  });
+
+  it('renders HTML-special characters in titles as literal text (TS-171)', async () => {
+    makeTabJumpMock({
+      tabs: [{ id: 1, title: '<b>Tags & Ampersands</b>' }],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'Safe', url: 'https://safe.example' }],
+        },
+      ],
+    });
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('<b>Tags & Ampersands</b>')).toBeTruthy());
+    // The literal text renders; no <b> element was injected anywhere.
+    expect(container.querySelector('b')).toBeNull();
+  });
+
+  it('rows expose the title via tooltip and aria-label, no visible URL (TS-046)', async () => {
+    makeTabJumpMock({
+      tabs: [{ id: 1, title: 'Gmail' }],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'Weird Site', url: 'https://xylophone.example/deep' }],
+        },
+      ],
+    });
+    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+    const gridRow = container.querySelector('[aria-label="Gmail"]');
+    expect(gridRow).toBeTruthy();
+    expect(gridRow!.getAttribute('title')).toBe('Gmail');
+    // Jump-first design: URLs never render as visible row text.
+    expect(container.textContent).not.toContain('xylophone.example');
+  });
+
+  it('a no-match query renders an empty list and Enter is a no-op (TS-170)', async () => {
+    makeTabJumpMock({
+      tabs: [{ id: 1, title: 'Gmail' }],
+      tree: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          children: [{ id: '2', title: 'Docs', url: 'https://docs.example/' }],
+        },
+      ],
+    });
+    const onDismiss = vi.fn();
+    const { container } = render(<CommandBar onDismiss={onDismiss} />);
+    await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
+    fireSmbKey('/');
+    const input = (await waitFor(() => {
+      const el = container.querySelector('.smb-input') as HTMLInputElement;
+      expect(el.readOnly).toBe(false);
+      return el;
+    })) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'zzznomatchzzz' } });
+    await waitFor(() => {
+      expect(container.querySelectorAll('.smb-tree-item').length).toBe(0);
+    });
+    expect(container.querySelector('.smb-tree-item--selected')).toBeNull();
+
+    vi.mocked(chrome.runtime.sendMessage).mockClear();
+    fireSmbKey('Enter');
+    // No activation message of any kind leaves the palette, and it stays open.
+    expect(vi.mocked(chrome.runtime.sendMessage)).not.toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('CommandBar — shipped CSS contract pins (audit 3)', () => {
+  async function loadPaletteCss(): Promise<string> {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { resolve, dirname } = await import('node:path');
+    const here = dirname(fileURLToPath(import.meta.url));
+    return (
+      readFileSync(resolve(here, '../../styles/palette-core.css'), 'utf8') +
+      '\n' +
+      readFileSync(resolve(here, '../../styles/command-bar.css'), 'utf8')
+    );
+  }
+
+  function ruleBody(css: string, selector: string): string {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`).exec(css);
+    expect(match, `rule "${selector}" must exist`).toBeTruthy();
+    return (match as RegExpExecArray)[1];
+  }
+
+  it('open/close animation duration token is 150ms (TS-160)', async () => {
+    const css = await loadPaletteCss();
+    expect(css).toContain('--duration-base: 150ms');
+    expect(ruleBody(css, '.smb-container')).toContain('var(--duration-base)');
+  });
+
+  it('long titles truncate on a single line with an ellipsis (TS-165)', async () => {
+    const body = ruleBody(await loadPaletteCss(), '.smb-title');
+    expect(body).toContain('white-space: nowrap');
+    expect(body).toContain('overflow: hidden');
+    expect(body).toContain('text-overflow: ellipsis');
+  });
+
+  it('long grid titles truncate on a single line with an ellipsis (TS-165)', async () => {
+    const body = ruleBody(await loadPaletteCss(), '.smb-tab-col-title');
+    expect(body).toContain('white-space: nowrap');
+    expect(body).toContain('overflow: hidden');
+    expect(body).toContain('text-overflow: ellipsis');
   });
 });

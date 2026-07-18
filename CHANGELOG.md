@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-18
+
+### Fixed
+
+- Activating a hibernated (discarded/Memory-Saver) tab from the palette now wakes it with an explicit reload on Chrome — previously the switch could land on a blank page. Firefox restores discarded tabs natively on activation and frozen tabs keep their content in memory, so neither is force-reloaded (a reload there would destroy live page state or replace session restore with a cold load).
+- Tab and Shift+Tab now jump to the first item of the next/previous result section (top-level folders in the tree view) instead of duplicating ArrowDown/ArrowUp, in both search and jump modes; single-section lists (such as `>` action mode) fall back to one-item steps so Tab always moves the selection. The onboarding guide gained a matching Shift+Tab row.
+- History results now refresh immediately after a page visit (debounced `history.onVisited` listener) instead of waiting up to five minutes for the next periodic refresh.
+- Hostile host-page CSS (for example a `div { all: revert !important }` reset) could revert the overlay's font: the shadow `:host` reset and every design-token custom property are now `!important`-hardened, so important document rules hitting the host element can no longer override the palette's typography or inject token values (important shadow declarations win per CSS Scoping; custom properties are exempt from `all` and need their own defense).
+
+### Added
+
+- A "zzz" sleep badge marks hibernated tabs in the palette on both surfaces — including pinned tiles — with the state announced in each row's aria-label ("(sleeping)") for screen readers. Plain text rather than the ⏾ glyph, which is missing from common Windows/Linux fonts.
+- Keyboard shortcut now works on the new tab page and other restricted pages (`chrome://`, Chrome Web Store): the browser-level command opens the palette popup there via `chrome.action.openPopup()`.
+- Onboarding gains a "Pin it to your toolbar" step with browser-specific instructions (Chrome / Firefox) and a live "Pinned" confirmation where the browser supports it.
+
+### Removed
+
+- The popup-only "Backspace closes the window" behavior (strict overlay parity — Escape or clicking away still closes it).
+
+### Changed
+
+- Automated coverage expanded substantially: every activation-shortcut preset (including Command variants), settings applied live to the open overlay, theme/position placement, jump labels (including two-character combos), pinned-tab number shortcuts, tree arrow navigation, go-to-URL, `>` action mode, diacritics folding, history section rendering, popup keyboard flows, and real tab-group/multi-window round-trips.
+- Clicking the toolbar icon on normal pages now opens the in-page overlay palette (same as the shortcut); the popup remains the surface on restricted pages.
+- The popup is visually and behaviorally unified with the overlay palette: same CommandBar (tab grid, bookmark tree, jump/search modes, action chips) in a larger 720×540 window, opening in jump mode identical to the overlay (labels pressable on entry, `/` for typed search), with client-side fuzzy search replacing the old background-search mini list. Surface parity is enforced by dedicated unit, e2e, and pixel-diff suites.
+- Minimum browser versions raised: Chrome 127 (for `action.openPopup`) and Firefox 126 (for the `commands.onCommand` tab argument).
+
 ## [1.0.0] - 2026-07-07
 
 Initial public release.

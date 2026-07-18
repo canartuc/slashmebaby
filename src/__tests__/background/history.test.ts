@@ -244,3 +244,97 @@ describe('HistoryCache', () => {
     cache.stopPeriodicRefresh();
   });
 });
+
+describe('HistoryCache — visit listeners', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  function makeHistoryApiWithEvents(items: chrome.history.HistoryItem[] = []) {
+    const visitedListeners: Array<() => void> = [];
+    const removedListeners: Array<() => void> = [];
+    const api = {
+      ...makeHistoryApi(items),
+      onVisited: { addListener: vi.fn((fn: () => void) => visitedListeners.push(fn)) },
+      onVisitRemoved: { addListener: vi.fn((fn: () => void) => removedListeners.push(fn)) },
+    };
+    return { api, visitedListeners, removedListeners };
+  }
+
+  it('setupListeners subscribes onVisited and onVisitRemoved', () => {
+    const { api } = makeHistoryApiWithEvents();
+    vi.stubGlobal('chrome', { history: api });
+    const cache = new HistoryCache();
+    cache.setupListeners();
+    expect(api.onVisited.addListener).toHaveBeenCalledTimes(1);
+    expect(api.onVisitRemoved.addListener).toHaveBeenCalledTimes(1);
+  });
+
+  it('a visit refreshes the cache after the debounce window', async () => {
+    const { api, visitedListeners } = makeHistoryApiWithEvents([makeFakeHistoryItem()]);
+    vi.stubGlobal('chrome', { history: api });
+    const cache = new HistoryCache();
+    cache.setupListeners();
+    expect(cache.getItems()).toHaveLength(0);
+
+    visitedListeners[0]();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(api.search).toHaveBeenCalledTimes(1);
+    expect(cache.getItems()).toHaveLength(1);
+  });
+
+  it('a burst of visits coalesces into one refresh', async () => {
+    const { api, visitedListeners } = makeHistoryApiWithEvents([makeFakeHistoryItem()]);
+    vi.stubGlobal('chrome', { history: api });
+    const cache = new HistoryCache();
+    cache.setupListeners();
+
+    visitedListeners[0]();
+    visitedListeners[0]();
+    visitedListeners[0]();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(api.search).toHaveBeenCalledTimes(1);
+  });
+
+  it('a removed visit also refreshes the cache', async () => {
+    const { api, removedListeners } = makeHistoryApiWithEvents([makeFakeHistoryItem()]);
+    vi.stubGlobal('chrome', { history: api });
+    const cache = new HistoryCache();
+    cache.setupListeners();
+
+    removedListeners[0]();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(api.search).toHaveBeenCalledTimes(1);
+  });
+
+  it('setupListeners is a no-op when the events are unavailable', () => {
+    vi.stubGlobal('chrome', { history: makeHistoryApi() });
+    const cache = new HistoryCache();
+    expect(() => cache.setupListeners()).not.toThrow();
+  });
+
+  it('setupListeners is a no-op when chrome.history is missing entirely', () => {
+    vi.stubGlobal('chrome', {});
+    const cache = new HistoryCache();
+    expect(() => cache.setupListeners()).not.toThrow();
+  });
+
+  it('stopPeriodicRefresh cancels a pending debounced visit refresh', async () => {
+    const { api, visitedListeners } = makeHistoryApiWithEvents([makeFakeHistoryItem()]);
+    vi.stubGlobal('chrome', { history: api });
+    const cache = new HistoryCache();
+    cache.setupListeners();
+
+    visitedListeners[0]();
+    cache.stopPeriodicRefresh();
+    await vi.advanceTimersByTimeAsync(2000);
+    // The orphaned timer must NOT fire refresh against a torn-down chrome.
+    expect(api.search).not.toHaveBeenCalled();
+  });
+});

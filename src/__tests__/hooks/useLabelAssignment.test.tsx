@@ -69,29 +69,31 @@ describe('useLabelAssignment', () => {
 
   // ─── Two-char labels (count > 24) ────────────────────────────────────────
 
-  it('sets pendingPrefix when key could start a two-char label', () => {
+  it('arms a pending prefix when a key could start a two-char label', () => {
     const { result } = renderHook(() => useLabelAssignment(30));
-    // 'a' is both a single-char label AND the start of two-char labels like 'aa','ab'...
-    // So pressing 'a' should set pending
-    expect(result.current.pendingPrefix).toBeNull();
-
+    // 'a' is both a single-char label AND the start of 'aa','ab'... —
+    // pressing it must wait for the second char (consumed, no target).
+    // The prefix itself is internal (a ref, same-frame safe); observe it by
+    // completing the combo.
     act(() => {
       const res = result.current.handleKeyPress('a');
       expect(res.targetIndex).toBeNull();
       expect(res.consumed).toBe(true);
     });
 
-    expect(result.current.pendingPrefix).toBe('a');
+    act(() => {
+      const res = result.current.handleKeyPress('a');
+      expect(res.targetIndex).toBe(14); // 'aa'
+    });
   });
 
   it('completes a two-char label on second key press', () => {
     const { result } = renderHook(() => useLabelAssignment(30));
 
-    // Press 'a' to set pending
+    // Press 'a' to arm the prefix
     act(() => {
       result.current.handleKeyPress('a');
     });
-    expect(result.current.pendingPrefix).toBe('a');
 
     // Press 'a' to complete 'aa' (index 14)
     let res: { targetIndex: number | null; consumed: boolean };
@@ -100,7 +102,12 @@ describe('useLabelAssignment', () => {
     });
     expect(res!.targetIndex).toBe(14);
     expect(res!.consumed).toBe(true);
-    expect(result.current.pendingPrefix).toBeNull();
+
+    // Prefix consumed: the next 'a' arms a fresh prefix (no target).
+    act(() => {
+      res = result.current.handleKeyPress('a');
+    });
+    expect(res!.targetIndex).toBeNull();
   });
 
   it('completes two-char label "ab" correctly', () => {
@@ -133,23 +140,25 @@ describe('useLabelAssignment', () => {
     });
     expect(res!.targetIndex).toBeNull();
     expect(res!.consumed).toBe(true);
-    expect(result.current.pendingPrefix).toBeNull();
   });
 
   // ─── clearPending ─────────────────────────────────────────────────────────
 
-  it('clearPending resets pendingPrefix to null', () => {
+  it('clearPending cancels an armed prefix', () => {
     const { result } = renderHook(() => useLabelAssignment(30));
 
     act(() => {
-      result.current.handleKeyPress('a');
-    });
-    expect(result.current.pendingPrefix).toBe('a');
-
-    act(() => {
+      result.current.handleKeyPress('a'); // arm
       result.current.clearPending();
     });
-    expect(result.current.pendingPrefix).toBeNull();
+
+    // With the prefix cancelled, the next 'a' arms a fresh prefix instead
+    // of completing 'aa'.
+    act(() => {
+      const res = result.current.handleKeyPress('a');
+      expect(res.targetIndex).toBeNull();
+      expect(res.consumed).toBe(true);
+    });
   });
 
   // ─── Edge: key not in label pool at all ───────────────────────────────────
@@ -176,7 +185,7 @@ describe('useLabelAssignment', () => {
 
   // ─── When count fits exactly in single-char pool (24 items) ───────────────
 
-  it('all 14 labels are single-char with no pending state', () => {
+  it('all 14 labels are single-char and resolve directly', () => {
     const { result } = renderHook(() => useLabelAssignment(14));
 
     // Each label key should directly resolve
@@ -188,7 +197,6 @@ describe('useLabelAssignment', () => {
       });
       expect(res!.targetIndex).toBe(i);
       expect(res!.consumed).toBe(true);
-      expect(result.current.pendingPrefix).toBeNull();
     }
   });
 
@@ -203,9 +211,8 @@ describe('useLabelAssignment', () => {
     act(() => {
       result.current.handleKeyPress('a');
     });
-    expect(result.current.pendingPrefix).toBe('a');
 
-    // Changing count doesn't clear pending (it's independent state)
+    // Changing count doesn't clear the armed prefix (independent ref)
     rerender({ count: 5 });
     // pendingPrefix is still 'a' but the maps changed - pressing next key
     // should attempt combo 'ab' which doesn't exist when count=5

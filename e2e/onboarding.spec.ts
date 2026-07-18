@@ -87,14 +87,14 @@ test('Step 3 shows navigation guide', async () => {
 
   // Verify key-action rows exist (↑ ↓ Tab Enter Esc)
   const keyRows = page.locator('.smb-onboarding-key-row');
-  await expect(keyRows).toHaveCount(4);
+  await expect(keyRows).toHaveCount(5);
 
   await context.close();
 });
 
-// ─── Test 5: Step 4 shows completion with Start Browsing button ──────────────
+// ─── Test 5: Step 4 shows pin-to-toolbar instructions ────────────────────────
 
-test('Step 4 shows completion', async () => {
+test('Step 4 shows pin-to-toolbar instructions', async () => {
   const context = await launchWithExtension();
   const id = await getExtensionId(context);
 
@@ -113,7 +113,41 @@ test('Step 4 shows completion', async () => {
   await nextButton.click();
   await new Promise(r => setTimeout(r, 500));
 
-  // Step 4: completion screen
+  // Step 4: pin instructions (Chromium build → Chrome copy). The async
+  // "Pinned" badge is deliberately NOT asserted — the Playwright harness may
+  // or may not report the icon as pinned.
+  await expect(page.locator('text=Pin it to your toolbar')).toBeVisible();
+  await expect(page.locator('.smb-onboarding-pin-step').first()).toContainText(
+    'puzzle-piece Extensions button'
+  );
+
+  await context.close();
+});
+
+// ─── Test 6: Step 5 shows completion with Start Browsing button ──────────────
+
+test('Step 5 shows completion', async () => {
+  const context = await launchWithExtension();
+  const id = await getExtensionId(context);
+
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${id}/onboarding.html`);
+  await page.waitForLoadState('domcontentloaded');
+  await new Promise(r => setTimeout(r, 1000));
+
+  const nextButton = page.locator('button.smb-onboarding-next-btn');
+
+  // Advance through steps 1 → 2 → 3 → 4 → 5
+  await nextButton.click();
+  await new Promise(r => setTimeout(r, 500));
+  await nextButton.click();
+  await new Promise(r => setTimeout(r, 500));
+  await nextButton.click();
+  await new Promise(r => setTimeout(r, 500));
+  await nextButton.click();
+  await new Promise(r => setTimeout(r, 500));
+
+  // Step 5: completion screen
   await expect(page.locator("text=You're all set!")).toBeVisible();
 
   // "Start Browsing" button should be present

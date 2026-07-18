@@ -29,7 +29,8 @@ When you install SlashMeBaby for the first time, an onboarding wizard opens auto
 1. **Choose your shortcut.** Pick the keyboard shortcut you prefer to open the command bar.
 2. **Try it out.** A short demo of how your chosen shortcut opens the command bar (press Next to continue; the shortcut works on regular web pages once you finish).
 3. **Navigate results.** Learn the keyboard shortcuts for navigating the command bar.
-4. **You are ready.** Pro tips and a link to settings.
+4. **Pin it to your toolbar.** Browser-specific instructions for pinning the SlashMeBaby icon (with a live "Pinned" confirmation where the browser supports it).
+5. **You are ready.** Pro tips and a link to settings.
 
 After completing onboarding, you can start using SlashMeBaby on any web page.
 
@@ -39,7 +40,7 @@ After completing onboarding, you can start using SlashMeBaby on any web page.
 
 Type any part of a tab's title or URL to find it instantly. Results show the tab title, hostname, and favicon. Press Enter to switch to the selected tab.
 
-The overlay ranks results by fuzzy match quality. In the toolbar popup, tabs are scored by a combination of fuzzy match quality and recency, so tabs you accessed recently appear higher in its results.
+Results are ranked by fuzzy match quality — identically in the on-page command bar and the toolbar popup.
 
 ### Bookmark Search
 
@@ -47,7 +48,7 @@ Search across your entire bookmark collection. Results show the bookmark title a
 
 ### History Search
 
-Search the last 1,000 items from your browsing history. Results show the page title and URL. In the toolbar popup, history results are also ranked by recency (recently visited pages score higher).
+Search the last 1,000 items from your browsing history. Results show the page title and URL, identically on both surfaces. New visits become searchable within about a second.
 
 ### Browser Actions
 
@@ -95,7 +96,7 @@ You can change the activation shortcut in Settings or via `chrome://extensions/s
 | Enter | Execute the selected result |
 | Escape | Close the command bar |
 
-Backspace edits the query as normal text editing; the on-page command bar never closes on Backspace. In the toolbar-icon popup only, pressing Backspace with an empty input also closes the popup.
+Backspace edits the query as normal text editing; neither the on-page command bar nor the toolbar popup ever closes on Backspace.
 
 ## Settings
 
@@ -122,7 +123,7 @@ The command bar overlay cannot appear on browser-internal pages such as:
 - `about:` pages
 - The Chrome Web Store
 
-On these pages, click the SlashMeBaby icon in the toolbar to open a popup fallback with the same search functionality.
+On these pages, click the SlashMeBaby icon in the toolbar to open a popup running the identical palette — jump labels, keyboard shortcuts, and search all work exactly as in the on-page command bar.
 
 ### How do I change the keyboard shortcut?
 
@@ -142,3 +143,7 @@ Yes. SlashMeBaby supports Firefox via the Firefox Add-ons store. The extension u
 ### Why does the command bar look different from the host page?
 
 SlashMeBaby renders inside a Shadow DOM, which isolates its styles from the host page. The command bar keeps the same look regardless of the website's CSS.
+
+## Sleeping tabs
+
+Tabs hibernated by the browser (Memory Saver) stay searchable and show a "zzz" badge in the palette. Switching to one wakes it automatically — the page loads without a manual refresh.

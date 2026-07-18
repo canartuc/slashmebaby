@@ -3,6 +3,7 @@ import React from 'react';
 const KEYS = [
   { keys: ['\u2191', '\u2193'], action: 'Move between results' },
   { keys: ['Tab'], action: 'Jump to next group' },
+  { keys: ['Shift', 'Tab'], action: 'Jump to previous group' },
   { keys: ['Enter'], action: 'Open selected result' },
   { keys: ['Esc'], action: 'Close the command bar' },
 ] as const;

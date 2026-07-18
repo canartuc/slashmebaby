@@ -1,5 +1,7 @@
 import { chromium, type BrowserContext, type Page } from '@playwright/test';
 import path from 'path';
+import { isInjectableUrl } from '../src/lib/url-safety';
+import { DEFAULT_SETTINGS } from '../src/lib/messaging';
 
 const EXTENSION_PATH = path.resolve('.output/chrome-mv3');
 
@@ -35,7 +37,7 @@ export async function openPage(context: BrowserContext, url = 'https://example.c
   // listener in the same synchronous block at document_idle, so the host's
   // presence means the palette is ready. Extension/chrome pages never get
   // the content script — skip the wait there.
-  if (/^(https?|file):/.test(url)) {
+  if (isInjectableUrl(url)) {
     // Let a timeout propagate: a missing host means the content script did
     // not inject, and every palette interaction after this would fail with
     // misleading errors.
@@ -77,11 +79,47 @@ export async function isOverlayOpen(page: Page): Promise<boolean> {
 
 export async function getSelectedItemTitle(page: Page): Promise<string> {
   return page.evaluate(() => {
-    const host = document.getElementById('slashmebaby-root');
-    // Try new tree view selector first, fall back to old result item selector
-    const selected = host?.shadowRoot?.querySelector('.smb-tree-item--selected')
-      || host?.shadowRoot?.querySelector('.smb-result-item--selected');
+    // Palette root: the overlay's shadow root, or the popup's document.
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const selected =
+      root.querySelector('.smb-tree-item--selected') ||
+      root.querySelector('.smb-result-item--selected');
     return selected?.querySelector('.smb-title')?.textContent || '';
+  });
+}
+
+/** Input state of the palette on either surface (overlay shadow or popup document). */
+export async function getPaletteInputState(
+  page: Page
+): Promise<{ readOnly: boolean; placeholder: string; value: string }> {
+  return page.evaluate(() => {
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const input = root.querySelector('.smb-input') as HTMLInputElement | null;
+    return {
+      readOnly: input?.readOnly ?? false,
+      placeholder: input?.placeholder ?? '',
+      value: input?.value ?? '',
+    };
+  });
+}
+
+/**
+ * The section header text the selected tree item renders under, or ''.
+ * Headers and tree items are siblings under .smb-results (TreeView renders
+ * them via Fragments), so walking previous siblings finds the nearest one.
+ */
+export async function getSelectedItemSection(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const host = document.getElementById('slashmebaby-root');
+    let el: Element | null | undefined =
+      host?.shadowRoot?.querySelector('.smb-tree-item--selected');
+    while (el) {
+      el = el.previousElementSibling;
+      if (el?.classList.contains('smb-group-header')) return el.textContent ?? '';
+    }
+    return '';
   });
 }
 
@@ -100,17 +138,19 @@ export async function getResultCount(page: Page): Promise<number> {
 
 export async function getGroupHeaders(page: Page): Promise<string[]> {
   return page.evaluate(() => {
-    const host = document.getElementById('slashmebaby-root');
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
     // Check for action dividers (new UI) or group headers (old UI)
-    const headers = host?.shadowRoot?.querySelectorAll('.smb-group-header, .smb-action-divider');
-    return Array.from(headers || []).map(h => h.textContent || '');
+    const headers = root.querySelectorAll('.smb-group-header, .smb-action-divider');
+    return Array.from(headers).map(h => h.textContent || '');
   });
 }
 
 export async function typeInCommandBar(page: Page, text: string): Promise<void> {
   await page.evaluate((t) => {
-    const host = document.getElementById('slashmebaby-root');
-    const input = host?.shadowRoot?.querySelector('.smb-input') as HTMLInputElement;
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const input = root.querySelector('.smb-input') as HTMLInputElement;
     if (input) {
       input.value = t;
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -131,27 +171,18 @@ export async function typeInCommandBar(page: Page, text: string): Promise<void> 
 
 export async function getInputValue(page: Page): Promise<string> {
   return page.evaluate(() => {
-    const host = document.getElementById('slashmebaby-root');
-    const input = host?.shadowRoot?.querySelector('.smb-input') as HTMLInputElement;
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const input = root.querySelector('.smb-input') as HTMLInputElement;
     return input?.value || '';
   });
 }
 
 export async function getExtensionId(context: BrowserContext): Promise<string> {
-  const bgPages = context.serviceWorkers();
-  if (bgPages.length > 0) {
-    const url = bgPages[0].url();
-    const match = url.match(/chrome-extension:\/\/([^/]+)/);
-    if (match) return match[1];
-  }
-  // Fallback: wait for service worker
-  await new Promise(r => setTimeout(r, 2000));
-  const workers = context.serviceWorkers();
-  for (const w of workers) {
-    const match = w.url().match(/chrome-extension:\/\/([^/]+)/);
-    if (match) return match[1];
-  }
-  return '';
+  const sw = await getServiceWorker(context);
+  const match = sw.url().match(/chrome-extension:\/\/([^/]+)/);
+  if (!match) throw new Error(`cannot derive extension id from ${sw.url()}`);
+  return match[1];
 }
 
 /**
@@ -160,14 +191,8 @@ export async function getExtensionId(context: BrowserContext): Promise<string> {
  * and launchPersistentContext('') starts from an empty profile.
  */
 export async function seedBookmarks(context: BrowserContext): Promise<void> {
-  // Wait for at least one service worker to be registered.
-  const deadline = Date.now() + 5000;
-  let sw = context.serviceWorkers()[0];
-  while (!sw && Date.now() < deadline) {
-    await new Promise(r => setTimeout(r, 200));
-    sw = context.serviceWorkers()[0];
-  }
-  if (!sw) return;
+  // Seeding must not silently no-op: tests that seed depend on the data.
+  const sw = await getServiceWorker(context);
 
   await sw.evaluate(async () => {
     type CreateArg = { parentId?: string; title?: string; url?: string; index?: number };
@@ -180,4 +205,420 @@ export async function seedBookmarks(context: BrowserContext): Promise<void> {
     await create({ parentId: bar.id, title: 'Mozilla Developer', url: 'https://developer.mozilla.org' });
   });
   await new Promise(r => setTimeout(r, 300));
+}
+
+// ─── Shared service-worker access ────────────────────────────────────────────
+
+export async function getServiceWorker(context: BrowserContext) {
+  const deadline = Date.now() + 5000;
+  let sw = context.serviceWorkers()[0];
+  while (!sw && Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 200));
+    sw = context.serviceWorkers()[0];
+  }
+  if (!sw) throw new Error('extension service worker not available');
+  return sw;
+}
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+
+/**
+ * Read-merge-write of the persisted settings object. Merging matters: the
+ * content script re-reads `settings.shortcut` from every onChanged event,
+ * so a partial write that drops it would break the activation shortcut.
+ */
+export async function setSetting(
+  context: BrowserContext,
+  partial: Record<string, unknown>
+): Promise<void> {
+  const sw = await getServiceWorker(context);
+  await sw.evaluate(
+    async (args: { p: Record<string, unknown>; defaultSources: Record<string, unknown> }) => {
+      const { p, defaultSources } = args;
+      const current = await new Promise<Record<string, unknown>>((resolve) =>
+        chrome.storage.sync.get('settings', (r) => resolve((r.settings as Record<string, unknown>) ?? {}))
+      );
+      const next: Record<string, unknown> = { ...current, ...p };
+      if (current.searchSources || p.searchSources) {
+        // Anchor on the production default shape: on a fresh profile the
+        // stored settings object is empty, and a partial searchSources
+        // write would otherwise drop the missing sources entirely.
+        next.searchSources = {
+          ...defaultSources,
+          ...(current.searchSources as Record<string, unknown>),
+          ...(p.searchSources as Record<string, unknown>),
+        };
+      }
+      await new Promise<void>((resolve) =>
+        chrome.storage.sync.set({ settings: next }, () => resolve())
+      );
+    },
+    { p: partial, defaultSources: { ...DEFAULT_SETTINGS.searchSources } }
+  );
+}
+
+// ─── Seeding ─────────────────────────────────────────────────────────────────
+
+export async function seedManyBookmarks(context: BrowserContext, count: number): Promise<void> {
+  const sw = await getServiceWorker(context);
+  await sw.evaluate(async (n: number) => {
+    type CreateArg = { parentId?: string; title?: string; url?: string };
+    const create = (node: CreateArg): Promise<chrome.bookmarks.BookmarkTreeNode> =>
+      new Promise(r => chrome.bookmarks.create(node, r));
+    for (let i = 1; i <= n; i++) {
+      const nn = String(i).padStart(2, '0');
+      await create({ parentId: '1', title: `Seed ${nn}`, url: `https://example.com/seed-${nn}` });
+    }
+  }, count);
+  await new Promise(r => setTimeout(r, 300));
+}
+
+export async function seedNestedBookmarks(context: BrowserContext): Promise<void> {
+  const sw = await getServiceWorker(context);
+  await sw.evaluate(async () => {
+    type CreateArg = { parentId?: string; title?: string; url?: string };
+    const create = (node: CreateArg): Promise<chrome.bookmarks.BookmarkTreeNode> =>
+      new Promise(r => chrome.bookmarks.create(node, r));
+    const outer = await create({ parentId: '1', title: 'E2E Seeds' });
+    const inner = await create({ parentId: outer.id, title: 'Inner' });
+    await create({ parentId: inner.id, title: 'Deep One', url: 'https://example.com/deep-1' });
+    await create({ parentId: inner.id, title: 'Deep Two', url: 'https://example.com/deep-2' });
+    await create({ parentId: outer.id, title: 'Shallow Leaf', url: 'https://example.com/shallow' });
+  });
+  await new Promise(r => setTimeout(r, 300));
+}
+
+export async function seedDiacriticBookmark(context: BrowserContext): Promise<void> {
+  const sw = await getServiceWorker(context);
+  await sw.evaluate(async () => {
+    await new Promise(r =>
+      chrome.bookmarks.create(
+        { parentId: '1', title: 'Sözcü Gazetesi', url: 'https://www.sozcu.com.tr/' },
+        r
+      )
+    );
+  });
+  await new Promise(r => setTimeout(r, 300));
+}
+
+/**
+ * Puts titled pages into browser history by really visiting them.
+ * chrome.history.addUrl can't set a title and untitled entries are dropped
+ * by the cache; real visits emit onVisited, which the history cache
+ * subscribes to (debounced ~500ms). Only 200 responses count — Chrome
+ * does not record 404 navigations in history at all.
+ */
+export async function seedHistory(context: BrowserContext, urls: string[]): Promise<void> {
+  for (const url of urls) {
+    const page = await context.newPage();
+    await page.goto(url);
+    await page.waitForLoadState('domcontentloaded');
+    await page.close();
+  }
+  // Let the debounced cache refresh run.
+  await new Promise(r => setTimeout(r, 1000));
+}
+
+// ─── Tabs ────────────────────────────────────────────────────────────────────
+
+export async function getTabs(
+  context: BrowserContext
+): Promise<
+  Array<{
+    url: string;
+    pinned: boolean;
+    active: boolean;
+    windowId: number;
+    discarded: boolean;
+    status: string;
+  }>
+> {
+  const sw = await getServiceWorker(context);
+  return sw.evaluate(async () => {
+    const tabs = await chrome.tabs.query({});
+    return tabs.map(t => ({
+      url: t.url ?? '',
+      pinned: t.pinned,
+      active: t.active,
+      windowId: t.windowId,
+      discarded: t.discarded,
+      status: t.status ?? '',
+    }));
+  });
+}
+
+export async function getActiveTabUrlViaSw(context: BrowserContext): Promise<string> {
+  const sw = await getServiceWorker(context);
+  return sw.evaluate(async () => {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    return tab?.url ?? '';
+  });
+}
+
+/**
+ * Discards (hibernates) the tab matching the URL substring. Chrome may
+ * REPLACE the tab with a new id and detaches any Playwright Page — always
+ * re-find by URL afterwards, never cache ids across a discard. Chrome
+ * refuses to discard the active or an audible tab (hence the driver-page
+ * pattern in callers).
+ */
+export async function discardTab(context: BrowserContext, urlSubstring: string): Promise<void> {
+  const sw = await getServiceWorker(context);
+  await sw.evaluate(async (part: string) => {
+    const tabs = await chrome.tabs.query({});
+    const target = tabs.find(t => (t.url ?? '').includes(part));
+    if (target?.id === undefined) throw new Error(`no tab matching ${part} to discard`);
+    await chrome.tabs.discard(target.id);
+    const deadline = Date.now() + 5000;
+    for (;;) {
+      const fresh = await chrome.tabs.query({});
+      const found = fresh.find(t => (t.url ?? '').includes(part));
+      if (found?.discarded === true) return;
+      if (Date.now() > deadline) {
+        throw new Error(
+          `tab matching ${part} did not discard (active or audible tabs refuse discard)`
+        );
+      }
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }, urlSubstring);
+}
+
+/** Titles of palette rows (grid or tree) carrying the sleep badge. */
+export async function getSleepBadgedTitles(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const titles: string[] = [];
+    for (const row of Array.from(root.querySelectorAll('.smb-tab-col-item'))) {
+      if (row.querySelector('.smb-sleep-badge')) {
+        titles.push(row.querySelector('.smb-tab-col-title')?.textContent ?? '');
+      }
+    }
+    for (const row of Array.from(root.querySelectorAll('.smb-tree-item'))) {
+      if (row.querySelector('.smb-sleep-badge')) {
+        titles.push(row.querySelector('.smb-title')?.textContent ?? '');
+      }
+    }
+    return titles;
+  });
+}
+
+export async function pinTab(context: BrowserContext, urlSubstring: string): Promise<void> {
+  const sw = await getServiceWorker(context);
+  await sw.evaluate(async (part: string) => {
+    const tabs = await chrome.tabs.query({});
+    const target = tabs.find(t => (t.url ?? '').includes(part));
+    if (target?.id === undefined) throw new Error(`no tab matching ${part}`);
+    await chrome.tabs.update(target.id, { pinned: true });
+  }, urlSubstring);
+  await new Promise(r => setTimeout(r, 300));
+}
+
+export async function createTabGroup(
+  context: BrowserContext,
+  options: { title: string; urlSubstrings: string[] }
+): Promise<void> {
+  const sw = await getServiceWorker(context);
+  await sw.evaluate(async (opts: { title: string; urlSubstrings: string[] }) => {
+    const tabs = await chrome.tabs.query({});
+    const ids = tabs
+      .filter(t => opts.urlSubstrings.some(part => (t.url ?? '').includes(part)))
+      .map(t => t.id)
+      .filter((id): id is number => id !== undefined);
+    if (ids.length === 0) throw new Error('no tabs matched for grouping');
+    const groupId = await chrome.tabs.group({ tabIds: ids as [number, ...number[]] });
+    await chrome.tabGroups.update(groupId, { title: opts.title });
+    // Wait until the group is queryable under its title.
+    const deadline = Date.now() + 5000;
+    for (;;) {
+      const groups = await chrome.tabGroups.query({ title: opts.title });
+      if (groups.length > 0) return;
+      if (Date.now() > deadline) throw new Error('tab group not queryable');
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }, options);
+  await new Promise(r => setTimeout(r, 300));
+}
+
+// ─── Overlay readers ─────────────────────────────────────────────────────────
+
+export interface SectionedResults {
+  header: string;
+  items: Array<{ title: string; selected: boolean; label: string }>;
+}
+
+/** DOM-order sections (headers + tree rows) inside the overlay results. */
+export async function getSectionedResults(page: Page): Promise<SectionedResults[]> {
+  return page.evaluate(() => {
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const results = root.querySelector('.smb-results');
+    if (!results) return [];
+    const sections: Array<{ header: string; items: Array<{ title: string; selected: boolean; label: string }> }> = [];
+    for (const child of Array.from(results.children)) {
+      if (child.classList.contains('smb-group-header')) {
+        sections.push({ header: child.textContent ?? '', items: [] });
+      } else if (child.classList.contains('smb-tree-item')) {
+        const current = sections[sections.length - 1];
+        if (!current) continue;
+        current.items.push({
+          title: child.querySelector('.smb-title')?.textContent ?? '',
+          selected: child.classList.contains('smb-tree-item--selected'),
+          label: child.querySelector('.smb-label-badge')?.textContent ?? '',
+        });
+      }
+    }
+    return sections;
+  });
+}
+
+export async function getOverlayTheme(page: Page): Promise<{ host: string; container: string }> {
+  return page.evaluate(() => {
+    const host = document.getElementById('slashmebaby-root');
+    return {
+      host: host?.getAttribute('data-theme') ?? '',
+      container:
+        host?.shadowRoot?.querySelector('.smb-container')?.getAttribute('data-theme') ?? '',
+    };
+  });
+}
+
+export async function getContainerBox(
+  page: Page
+): Promise<{ top: number; bottom: number; innerHeight: number; className: string } | null> {
+  return page.evaluate(() => {
+    const host = document.getElementById('slashmebaby-root');
+    const el = host?.shadowRoot?.querySelector('.smb-container');
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    return {
+      top: rect.top,
+      bottom: rect.bottom,
+      innerHeight: window.innerHeight,
+      className: el.className,
+    };
+  });
+}
+
+export async function getFaviconCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const host = document.getElementById('slashmebaby-root');
+    const sr = host?.shadowRoot;
+    if (!sr) return 0;
+    return sr.querySelectorAll('.smb-favicon, .smb-pinned-icon').length;
+  });
+}
+
+export async function getTabGridLabelForTitle(page: Page, title: string): Promise<string> {
+  return page.evaluate((t: string) => {
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const items = root.querySelectorAll('.smb-tab-col-item');
+    for (const item of Array.from(items)) {
+      if ((item.querySelector('.smb-tab-col-title')?.textContent ?? '').includes(t)) {
+        return item.querySelector('.smb-tab-col-label')?.textContent ?? '';
+      }
+    }
+    return '';
+  }, title);
+}
+
+/** First two-character jump label in the tree rows plus its row title. */
+export async function getFirstTwoCharTreeLabel(
+  page: Page
+): Promise<{ label: string; title: string } | null> {
+  return page.evaluate(() => {
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const rows = root.querySelectorAll('.smb-tree-item');
+    for (const row of Array.from(rows)) {
+      const label = row.querySelector('.smb-label-badge')?.textContent ?? '';
+      if (label.length === 2) {
+        return { label, title: row.querySelector('.smb-title')?.textContent ?? '' };
+      }
+    }
+    return null;
+  });
+}
+
+// ─── Popup page ──────────────────────────────────────────────────────────────
+
+export async function openPopupPage(context: BrowserContext): Promise<Page> {
+  const id = await getExtensionId(context);
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${id}/popup.html`);
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForFunction(
+    () => !!document.querySelector('.smb-container--popup'),
+    undefined,
+    { timeout: 10000 }
+  );
+  return page;
+}
+
+
+// ─── Screenshot determinism ──────────────────────────────────────────────────
+
+/** Static normalization for pixel captures: kills motion and network-adjacent
+ *  pixels without touching designed geometry. */
+export const STATIC_NORMALIZE_CSS = `
+  * { animation: none !important; transition: none !important;
+      caret-color: transparent !important; }
+  .smb-favicon, .smb-pinned-icon { visibility: hidden !important; }
+`;
+
+/** Injects normalization CSS into the palette root (overlay shadow root or
+ *  plain document) and settles two frames. */
+export async function injectNormalizationCss(
+  page: Page,
+  css: string = STATIC_NORMALIZE_CSS
+): Promise<void> {
+  await page.evaluate((cssText: string) => {
+    const host = document.getElementById('slashmebaby-root');
+    const root: ParentNode & { appendChild: (n: Node) => unknown } =
+      host?.shadowRoot ?? document.head;
+    const style = document.createElement('style');
+    style.textContent = cssText;
+    root.appendChild(style);
+  }, css);
+  await page.evaluate(
+    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+  );
+}
+
+/** Fresh installs auto-open the onboarding tab (runtime.onInstalled) — close
+ *  it (and the initial about:blank page) so jump-view tab grids are
+ *  deterministic. */
+export async function closeOnboardingTab(context: BrowserContext): Promise<void> {
+  const sw = await getServiceWorker(context);
+  await sw.evaluate(async () => {
+    const deadline = Date.now() + 5000;
+    for (;;) {
+      const tabs = await chrome.tabs.query({});
+      const onboarding = tabs.find(t => (t.url ?? '').includes('onboarding.html'));
+      if (onboarding?.id !== undefined) {
+        await chrome.tabs.remove(onboarding.id);
+        return;
+      }
+      if (Date.now() > deadline) return; // never appeared — nothing to close
+      await new Promise(r => setTimeout(r, 200));
+    }
+  });
+  const blank = context.pages().find(p => p.url() === 'about:blank');
+  await blank?.close().catch(() => {});
+}
+
+/** Waits until two consecutive sectioned-results reads are identical —
+ *  the settled-state gate before any pixel capture. */
+export async function waitForStableSections(page: Page): Promise<void> {
+  let previous = '';
+  const deadline = Date.now() + 10000;
+  for (;;) {
+    const current = JSON.stringify(await getSectionedResults(page));
+    if (current === previous && current !== '[]') return;
+    if (Date.now() > deadline) throw new Error('palette sections never stabilized');
+    previous = current;
+    await new Promise(r => setTimeout(r, 250));
+  }
 }

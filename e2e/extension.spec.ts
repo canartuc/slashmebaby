@@ -91,16 +91,16 @@ test('onboarding page renders step 1 (shortcut picker)', async () => {
   const shortcutButtons = page.locator('.smb-onboarding-shortcut-option');
   await expect(shortcutButtons).toHaveCount(4);
 
-  // Verify progress dots are present (4 steps)
+  // Verify progress dots are present (5 steps)
   const dots = page.locator('.smb-onboarding-dot');
-  await expect(dots).toHaveCount(4);
+  await expect(dots).toHaveCount(5);
 
   await context.close();
 });
 
 // ─── Test 5: Onboarding advances through all steps ──────────────────────────
 
-test('onboarding advances through all 4 steps', async () => {
+test('onboarding advances through all 5 steps', async () => {
   const context = await launchWithExtension();
   const id = await getExtensionId(context);
 
@@ -132,7 +132,14 @@ test('onboarding advances through all 4 steps', async () => {
   await nextButton.click();
   await new Promise(r => setTimeout(r, 500));
 
-  // Step 4: Completion
+  // Step 4: Pin to toolbar
+  await expect(page.locator('text=Pin it to your toolbar')).toBeVisible();
+
+  // Click "Next" to advance to step 5
+  await nextButton.click();
+  await new Promise(r => setTimeout(r, 500));
+
+  // Step 5: Completion
   await expect(page.locator("text=You're all set!")).toBeVisible();
 
   // Verify the "Start Browsing" button is shown (not "Next")

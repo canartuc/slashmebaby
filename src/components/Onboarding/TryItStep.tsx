@@ -9,8 +9,9 @@ export const TryItStep: React.FC<TryItStepProps> = ({ shortcut }) => {
     <div className="smb-onboarding-step">
       <h2 className="smb-onboarding-step-title">Try it out!</h2>
       <p className="smb-onboarding-step-desc">
-        Heads up: the shortcut won't work on this page. Browsers block extensions
-        on pages like this one, the Chrome Web Store, and chrome:// pages.
+        Heads up: on pages like this one, the Chrome Web Store, and chrome://
+        pages the shortcut opens the palette in a toolbar popup instead of the
+        in-page bar — browsers block extensions from drawing on those pages.
       </p>
       <div className="smb-onboarding-try-it">
         <div className="smb-onboarding-try-it-prompt">

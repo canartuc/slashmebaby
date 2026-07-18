@@ -27,6 +27,8 @@ export interface TreeItem {
   tabId?: number;
   pinned?: boolean;
   siteName?: string;
+  /** Hibernated (discarded/frozen) tab — renders the sleep badge. */
+  discarded?: boolean;
   /** For type 'action': the EXECUTE_ACTION id (already 'action-' prefixed). */
   actionId?: string;
 }
@@ -52,6 +54,7 @@ function toTabItem(tab: TabWithGroup, pinned: boolean): Omit<TreeItem, 'isExpand
     tabId: tab.id,
     pinned,
     siteName: getSiteName(tab.url),
+    discarded: tab.discarded,
   };
 }
 

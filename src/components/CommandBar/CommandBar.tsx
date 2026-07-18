@@ -10,6 +10,7 @@ import type { TreeItem } from '../../hooks/useTreeData';
 import { useLabelAssignment } from '../../hooks/useLabelAssignment';
 import { useTheme } from '../../hooks/useTheme';
 import { isActionKey, getActionForKey } from '../../lib/labels';
+import { computeSectionBoundaries, stepSectionBoundary } from '../../lib/palette-sections';
 import { cleanUrl } from '../../lib/url-clean';
 import { foldDiacritics } from '../../lib/diacritics';
 import { guessNavigableUrl } from '../../lib/url-guess';
@@ -29,6 +30,9 @@ const FUSE_OPTIONS: IFuseOptions<TreeItem> = {
 // Search results render grouped by section, in this order (F04).
 const RESULT_GROUP_ORDER = ['tab', 'bookmark', 'history'] as const;
 
+// Stable empty labels map for non-jump modes (jump badges hidden).
+const EMPTY_LABELS: Map<number, string> = new Map();
+
 function nextIndex(prev: number, len: number, dir: 1 | -1): number {
   if (len <= 0) return 0;
   if (dir === 1) return prev >= len - 1 ? 0 : prev + 1;
@@ -37,10 +41,28 @@ function nextIndex(prev: number, len: number, dir: 1 | -1): number {
 
 export interface CommandBarProps {
   onDismiss: () => void;
+  /** 'overlay' (default): backdrop + viewport-positioned container.
+   *  'popup': container fills the extension-action popup window, no
+   *  backdrop, no position class — sizing comes from popup.css. */
+  variant?: 'overlay' | 'popup';
+  /** Mode on mount. BOTH production surfaces open in 'jump' (surface
+   *  parity); retained as a prop so tests can mount directly in search
+   *  mode. */
+  initialMode?: 'jump' | 'search';
+  /** Resolves the URL 'copy-clean-link' should copy. When absent, the
+   *  synchronous window.location.href path is used (overlay: the host
+   *  page). The popup passes the active tab's URL — its own location is
+   *  the extension page. */
+  resolveCopyUrl?: () => Promise<string | null>;
 }
 
-export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
-  const [mode, setMode] = useState<'jump' | 'search'>('jump');
+export const CommandBar: React.FC<CommandBarProps> = ({
+  onDismiss,
+  variant = 'overlay',
+  initialMode = 'jump',
+  resolveCopyUrl,
+}) => {
+  const [mode, setMode] = useState<'jump' | 'search'>(initialMode);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
@@ -330,12 +352,33 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
       return;
     }
 
+    // Keyboard recovery: a forwarded Backspace only reaches here when no
+    // writable input has focus (the forwarder passes it to the input
+    // otherwise). In search mode that means focus wandered off the query —
+    // pull it back so editing keeps working on both surfaces. In jump mode
+    // it falls through to the label handling below (clears a pending
+    // two-char prefix).
+    if (key === 'Backspace' && currentMode === 'search') {
+      const input = containerRef.current?.querySelector<HTMLInputElement>('.smb-input');
+      input?.focus();
+      return;
+    }
+
     // Action keys work in BOTH modes
     if (isActionKey(key)) {
       const actionId = getActionForKey(key);
       // copy-clean-link writes the stripped URL to the clipboard from the
-      // content-script context; MV3 service workers have no clipboard access.
+      // palette's own context; MV3 service workers have no clipboard access.
       if (actionId === 'copy-clean-link') {
+        if (resolveCopyUrl) {
+          resolveCopyUrl()
+            .then((href) =>
+              href ? navigator.clipboard?.writeText(cleanUrl(href)) : undefined
+            )
+            .catch(() => undefined)
+            .finally(() => onDismiss());
+          return;
+        }
         const cleaned = cleanUrl(window.location.href);
         Promise.resolve(navigator.clipboard?.writeText(cleaned))
           .catch(() => undefined)
@@ -351,7 +394,18 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     // Navigation + activation — identical in jump and search modes
     switch (key) {
       case 'Tab':
-        setSelectedIndex(prev => nextIndex(prev, items.length, shiftKey ? -1 : 1));
+        // Section jump, not item step: first item of the next/previous
+        // section (top-level folders in the jump-mode tree), wrapping.
+        // Lists with fewer than two sections fall back to item stepping so
+        // Tab always moves the selection.
+        setSelectedIndex(prev => {
+          const target = stepSectionBoundary(
+            computeSectionBoundaries(items),
+            prev,
+            shiftKey ? -1 : 1
+          );
+          return target ?? nextIndex(prev, items.length, shiftKey ? -1 : 1);
+        });
         return;
       case 'ArrowDown':
         setSelectedIndex(prev => nextIndex(prev, items.length, 1));
@@ -398,32 +452,27 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
       : bkItems[result.targetIndex - tabs.length];
     if (!item) return;
     if (!activate(item, shiftKey)) setSelectedIndex(result.targetIndex);
-  }, [toggleExpand, onDismiss, handleKeyPress, activate, switchTab, dispatchAction]);
+  }, [toggleExpand, onDismiss, handleKeyPress, activate, switchTab, dispatchAction, resolveCopyUrl]);
 
-  // Listen for smb-keydown custom events from the content script
+  // Listen for smb-keydown custom events. Two production channels share
+  // this contract: the content script dispatches into the shadow root
+  // (overlay), and usePopupKeySource dispatches on the document (action
+  // popup — NOT a test shim; jsdom tests ride the same document path).
   useEffect(() => {
-    const shadowRoot = containerRef.current?.getRootNode();
-    if (!(shadowRoot instanceof ShadowRoot)) {
-      // Fallback for testing: listen on the container's document
-      const doc = containerRef.current?.ownerDocument;
-      if (!doc) return;
-
-      const handler = (e: Event) => {
-        const detail = (e as CustomEvent).detail;
-        handleKey(detail.key, detail.shiftKey || false);
-      };
-
-      doc.addEventListener('smb-keydown', handler);
-      return () => doc.removeEventListener('smb-keydown', handler);
-    }
+    const rootNode = containerRef.current?.getRootNode();
+    const target: EventTarget | undefined =
+      rootNode instanceof ShadowRoot
+        ? rootNode
+        : containerRef.current?.ownerDocument ?? undefined;
+    if (!target) return;
 
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       handleKey(detail.key, detail.shiftKey || false);
     };
 
-    shadowRoot.addEventListener('smb-keydown', handler);
-    return () => shadowRoot.removeEventListener('smb-keydown', handler);
+    target.addEventListener('smb-keydown', handler);
+    return () => target.removeEventListener('smb-keydown', handler);
   }, [handleKey]);
 
   // Backdrop click to dismiss — use native listener since React events may not work
@@ -438,46 +487,61 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onDismiss }) => {
     return () => el.removeEventListener('click', handler);
   }, [onDismiss]);
 
-  const positionClass = `smb-container--${settings.position}`;
+  // In the popup the window itself is the frame: no backdrop, no
+  // margin-based position class — popup.css sizes .smb-container--popup.
+  const containerClass =
+    variant === 'popup'
+      ? 'smb-container smb-container--popup'
+      : `smb-container smb-container--${settings.position}`;
+
+  const dialog = (
+    <div
+      ref={containerRef}
+      className={containerClass}
+      data-theme={theme}
+      role="dialog"
+      aria-label="Command palette"
+      aria-modal="true"
+    >
+      <SearchInput query={query} onQueryChange={setQuery} mode={mode} />
+      {/* Always mounted so aria-live announcements fire when text appears */}
+      <div
+        className={`smb-error-strip${actionError ? ' smb-error-strip--visible' : ''}`}
+        role="status"
+        aria-live="polite"
+      >
+        {actionError ?? ''}
+      </div>
+      <TreeView
+        pinnedTabs={pinnedTabs}
+        allTabs={allTabs}
+        visibleItems={filteredItems}
+        // Jump badges only make sense while label keys are live.
+        labels={mode === 'jump' ? labels : EMPTY_LABELS}
+        selectedIndex={selectedIndex}
+        showFavicons={settings.showFavicons}
+        onSelectItem={handleItemSelect}
+        onPinnedTabSelect={handlePinnedTabSelect}
+        onTabGridSelect={handlePinnedTabSelect}
+        // Grids collapse only while a query is filtering; an empty search
+        // box keeps the full surface (pinned, tabs, bookmarks) visible —
+        // this is what the popup's search-first entry state shows.
+        searchMode={mode === 'search' && query.length > 0}
+        searchQuery={query}
+        emptyStateMessage={
+          actionMode && actionsLoadFailed && filteredItems.length === 0
+            ? "Couldn't load actions"
+            : undefined
+        }
+      />
+    </div>
+  );
+
+  if (variant === 'popup') return dialog;
 
   return (
     <div ref={backdropRef} className="smb-backdrop">
-      <div
-        ref={containerRef}
-        className={`smb-container ${positionClass}`}
-        data-theme={theme}
-        role="dialog"
-        aria-label="Command palette"
-        aria-modal="true"
-      >
-        <SearchInput query={query} onQueryChange={setQuery} mode={mode} />
-        {/* Always mounted so aria-live announcements fire when text appears */}
-        <div
-          className={`smb-error-strip${actionError ? ' smb-error-strip--visible' : ''}`}
-          role="status"
-          aria-live="polite"
-        >
-          {actionError ?? ''}
-        </div>
-        <TreeView
-          pinnedTabs={pinnedTabs}
-          allTabs={allTabs}
-          visibleItems={filteredItems}
-          labels={labels}
-          selectedIndex={selectedIndex}
-          showFavicons={settings.showFavicons}
-          onSelectItem={handleItemSelect}
-          onPinnedTabSelect={handlePinnedTabSelect}
-          onTabGridSelect={handlePinnedTabSelect}
-          searchMode={mode === 'search'}
-          searchQuery={query}
-          emptyStateMessage={
-            actionMode && actionsLoadFailed && filteredItems.length === 0
-              ? "Couldn't load actions"
-              : undefined
-          }
-        />
-      </div>
+      {dialog}
     </div>
   );
 };

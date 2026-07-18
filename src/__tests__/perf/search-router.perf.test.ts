@@ -3,6 +3,7 @@ import { appendFileSync } from 'node:fs';
 import { createMessageRouter } from '../../entrypoints/background/index';
 import { createSearchEngine } from '../../lib/search';
 import type { SearchableItem } from '../../lib/search';
+import { makeFakeTab } from '../helpers/fake-tab';
 
 const RESULTS_FILE = process.env.PERF_OUT ?? '/tmp/slashmebaby-perf.log';
 function report(line: string): void {
@@ -25,24 +26,14 @@ const SITES = [
 ];
 
 function fakeTab(i: number): chrome.tabs.Tab {
-  return {
+  return makeFakeTab({
     id: i,
     index: i,
-    pinned: false,
-    highlighted: false,
-    windowId: 1,
     active: i === 0,
-    incognito: false,
-    selected: false,
-    discarded: false,
-    autoDiscardable: true,
-    frozen: false,
-    groupId: -1,
     title: `Tab ${i} — ${SITES[i % SITES.length]} page about topic ${i}`,
     url: `https://${SITES[i % SITES.length]}/page/${i}`,
     lastAccessed: Date.now() - i * 60_000,
-    mutedInfo: { muted: false },
-  };
+  });
 }
 
 function fakeBookmarkLeaves(count: number): chrome.bookmarks.BookmarkTreeNode[] {

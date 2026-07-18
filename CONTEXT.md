@@ -168,7 +168,7 @@ Settings page (src/entrypoints/settings/):
 
 Onboarding wizard (src/entrypoints/onboarding/):
 - Component: src/components/Onboarding/OnboardingWizard.tsx (step container)
-- Steps: ShortcutPicker (1) → TryItStep (2) → NavigationGuide (3) → CompletionStep (4)
+- Steps: ShortcutPicker (1) → TryItStep (2) → NavigationGuide (3) → PinToToolbarStep (4) → CompletionStep (5)
 - Trigger: runtime.onInstalled
 - Storage: chrome.storage.local, key: 'onboarding', schema: { completedStep: number, completed: boolean }
 - NOT synced (per-device)

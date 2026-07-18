@@ -12,8 +12,8 @@ test('Popup page loads', async () => {
   await page.waitForLoadState('domcontentloaded');
   await new Promise(r => setTimeout(r, 1000));
 
-  // The popup container should render
-  const popup = page.locator('.smb-popup');
+  // The popup renders the shared palette in its popup framing
+  const popup = page.locator('.smb-container--popup');
   await expect(popup).toBeVisible();
 
   await context.close();
