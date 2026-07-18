@@ -2,6 +2,7 @@ import React from 'react';
 import type { TreeItem as TreeItemData } from '../../hooks/useTreeData';
 import { TreeItem } from './TreeItem';
 import { Favicon } from './Favicon';
+import { SleepBadge, sleepAriaLabel } from './SleepBadge';
 import { sectionOf } from '../../lib/palette-sections';
 
 // ─── Action definitions ─────────────────────────────────────────────────────
@@ -105,7 +106,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
                 title={tab.title}
                 onClick={() => tab.tabId && onPinnedTabSelect(tab.tabId)}
                 role="option"
-                aria-label={tab.title}
+                aria-label={sleepAriaLabel(tab.title, tab.discarded)}
               >
                 <span className="smb-pinned-number">{i + 1}</span>
                 {showFavicons && tab.icon ? (
@@ -113,6 +114,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
                 ) : (
                   <span className="smb-pinned-letter">{(tab.siteName || tab.title.charAt(0)).charAt(0).toUpperCase()}</span>
                 )}
+                {tab.discarded && <SleepBadge />}
               </div>
             ))}
           </div>
@@ -133,20 +135,12 @@ export const TreeView: React.FC<TreeViewProps> = ({
                   title={tab.title}
                   onClick={() => tab.tabId && onTabGridSelect(tab.tabId)}
                   role="option"
-                  aria-label={tab.title}
+                  aria-label={sleepAriaLabel(tab.title, tab.discarded)}
                 >
                   {label && <span className="smb-tab-col-label">{label}</span>}
                   {showFavicons && <Favicon src={tab.icon} size={14} />}
                   <span className="smb-tab-col-title">{tab.title}</span>
-                  {tab.discarded && (
-                    <span
-                      className="smb-sleep-badge"
-                      title="Sleeping tab — wakes on switch"
-                      aria-hidden="true"
-                    >
-                      {'\u23FE'}
-                    </span>
-                  )}
+                  {tab.discarded && <SleepBadge />}
                 </div>
               );
             })}

@@ -634,12 +634,23 @@ describe('createMessageRouter', () => {
       expect(order(chromeMock.windows.update)).toBeLessThan(order(chromeMock.tabs.reload));
     });
 
-    it('reloads a frozen tab after activating it', async () => {
+    it('does not reload a frozen tab — its content is memory-resident and unfreezes on activation', async () => {
       const chromeMock = makeSwitchMock(makeFakeTab({ frozen: true, windowId: 1 }));
       const router = await createMessageRouter();
       const response = await router({ type: 'SWITCH_TAB', payload: { tabId: 7 } }) as { success: boolean };
       expect(response.success).toBe(true);
-      expect(chromeMock.tabs.reload).toHaveBeenCalledWith(7);
+      expect(chromeMock.tabs.reload).not.toHaveBeenCalled();
+    });
+
+    it('does not reload a discarded tab on Firefox — activation triggers native session restore', async () => {
+      const chromeMock = makeSwitchMock(makeFakeTab({ discarded: true, windowId: 1 }));
+      // Firefox MV2: no chrome.action namespace (browserAction instead).
+      delete (chromeMock as { action?: unknown }).action;
+      vi.stubGlobal('chrome', chromeMock);
+      const router = await createMessageRouter();
+      const response = await router({ type: 'SWITCH_TAB', payload: { tabId: 7 } }) as { success: boolean };
+      expect(response.success).toBe(true);
+      expect(chromeMock.tabs.reload).not.toHaveBeenCalled();
     });
 
     it('does not reload a normal tab', async () => {

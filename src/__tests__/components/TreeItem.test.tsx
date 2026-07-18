@@ -334,6 +334,11 @@ describe('TreeItem — sleep badge', () => {
       />
     );
     expect(container.querySelectorAll('.smb-sleep-badge')).toHaveLength(1);
+    // Cross-platform glyph safety + accessible announcement.
+    expect(container.querySelector('.smb-sleep-badge')?.textContent).toBe('zzz');
+    expect(container.querySelector('[role="option"]')?.getAttribute('aria-label')).toBe(
+      'Sleeping Docs (sleeping)'
+    );
   });
 
   it('never shows a sleep badge on bookmark or folder rows', () => {

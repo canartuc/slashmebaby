@@ -398,4 +398,4 @@ All icons are inline SVG strings embedded in the component source. This avoids e
 
 ### Sleep badge
 
-`.smb-sleep-badge` — U+23FE on hibernated tab rows (grid and search results): `--color-text-muted`, 12px, line-height 1, no background. Identical on both surfaces via `palette-core.css`.
+`.smb-sleep-badge` — the text "zzz" on hibernated tab rows (tab grid, search results, and pinned tiles): `--color-text-muted`, 9px, weight 600, 0.5px letter-spacing, line-height 1. Plain text instead of U+23FE, which lacks glyph coverage in common Windows/Linux fonts. Inside the 44px pinned tile it overlays the bottom-right corner on a `--color-bg-secondary` chip. The badge is `aria-hidden`; the row's `aria-label` appends " (sleeping)" so the state is announced. Rendered by the shared `SleepBadge` component; identical on both surfaces via `palette-core.css`.

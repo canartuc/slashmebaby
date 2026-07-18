@@ -145,4 +145,4 @@ SlashMeBaby renders inside a Shadow DOM, which isolates its styles from the host
 
 ## Sleeping tabs
 
-Tabs hibernated by the browser (Memory Saver) stay searchable and show a ⏾ badge in the palette. Switching to one wakes it automatically — the page reloads without a manual refresh.
+Tabs hibernated by the browser (Memory Saver) stay searchable and show a "zzz" badge in the palette. Switching to one wakes it automatically — the page loads without a manual refresh.

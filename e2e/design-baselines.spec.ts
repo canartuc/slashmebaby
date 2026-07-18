@@ -9,6 +9,7 @@ import {
   pinTab,
   typeInCommandBar,
   getSectionedResults,
+  isOverlayOpen,
   injectNormalizationCss,
   closeOnboardingTab,
   waitForStableSections,
@@ -103,7 +104,9 @@ test('overlay search results match baseline (dark)', async () => {
   // section.
   await expect
     .poll(async () => {
-      await openCommandBar(page).catch(() => {});
+      // preparedOverlay leaves the palette open; the shortcut is a toggle,
+      // so only (re)open when it is actually closed.
+      if (!(await isOverlayOpen(page))) await openCommandBar(page).catch(() => {});
       await page.keyboard.press('/');
       await typeInCommandBar(page, 'example');
       const headers = (await getSectionedResults(page)).map(s => s.header);

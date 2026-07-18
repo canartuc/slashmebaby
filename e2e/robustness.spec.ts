@@ -7,6 +7,7 @@ import {
   openPage,
   openCommandBar,
   isOverlayOpen,
+  OPEN_SHORTCUT,
 } from './helpers';
 
 const EXTENSION_PATH = path.resolve('.output/chrome-mv3');
@@ -32,6 +33,7 @@ test('settings survive a browser restart on the same profile (TS-008)', async ()
     await first.waitForEvent('serviceworker', { timeout: 10000 }).catch(() => {});
   }
   const sw1 = first.serviceWorkers()[0];
+  if (!sw1) throw new Error('extension service worker never registered in first launch');
   await sw1.evaluate(
     () =>
       new Promise<void>((resolve) =>
@@ -48,6 +50,7 @@ test('settings survive a browser restart on the same profile (TS-008)', async ()
     await second.waitForEvent('serviceworker', { timeout: 10000 }).catch(() => {});
   }
   const sw2 = second.serviceWorkers()[0];
+  if (!sw2) throw new Error('extension service worker never registered after relaunch');
   const stored = await sw2.evaluate(
     () =>
       new Promise<Record<string, unknown>>((resolve) =>
@@ -95,10 +98,8 @@ test('rapid shortcut toggling never duplicates the overlay (TS-168)', async () =
     if (msg.type() === 'error') errors.push(msg.text());
   });
 
-  const shortcut =
-    process.platform === 'darwin' ? 'Meta+Shift+Space' : 'Control+Shift+Space';
   for (let i = 0; i < 6; i++) {
-    await page.keyboard.press(shortcut);
+    await page.keyboard.press(OPEN_SHORTCUT);
   }
   await new Promise(r => setTimeout(r, 800));
 
@@ -128,6 +129,9 @@ test('overlay resists hostile host-page CSS (TS-138/140/141/142)', async () => {
       body { font-size: 40px !important; color: red !important; font-family: serif !important; line-height: 3 !important; }
       div, span, input { all: revert !important; }
       div[id] span { color: lime !important; letter-spacing: 12px !important; }
+      /* Design-token injection: custom properties are exempt from \`all\`,
+         so they need their own !important defense on :host. */
+      div[id] { --color-bg-primary: red !important; --text-lg: 40px !important; }
     `,
   });
 
@@ -138,13 +142,16 @@ test('overlay resists hostile host-page CSS (TS-138/140/141/142)', async () => {
       const input = host?.shadowRoot?.querySelector('.smb-input');
       const title = host?.shadowRoot?.querySelector('.smb-group-header');
       if (!input || !title) return null;
+      const container = host?.shadowRoot?.querySelector('.smb-container');
       const inputCs = getComputedStyle(input as Element);
       const titleCs = getComputedStyle(title as Element);
+      const containerCs = container ? getComputedStyle(container) : null;
       return {
         inputFontSize: inputCs.fontSize,
         inputFontFamily: inputCs.fontFamily,
         titleLetterSpacing: titleCs.letterSpacing,
         titleColorIsLime: titleCs.color === 'rgb(0, 255, 0)',
+        containerBackground: containerCs?.backgroundColor ?? '',
       };
     });
   // Section headers render only after the async tab fetch — poll for them.
@@ -157,6 +164,8 @@ test('overlay resists hostile host-page CSS (TS-138/140/141/142)', async () => {
   expect(style!.inputFontFamily).toContain('system-ui'); // not serif
   expect(style!.titleColorIsLime).toBe(false);
   expect(style!.titleLetterSpacing).not.toBe('12px');
+  // Injected --color-bg-primary: red must not recolor the palette.
+  expect(style!.containerBackground).not.toBe('rgb(255, 0, 0)');
 
   await context.close();
 });

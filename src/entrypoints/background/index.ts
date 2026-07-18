@@ -248,12 +248,14 @@ export async function createMessageRouter(): Promise<MessageRouter> {
         if (tab.windowId) {
           await chrome.windows.update(tab.windowId, { focused: true });
         }
-        // Wake hibernated tabs: Chrome's auto-reload on activation is not
-        // guaranteed through the API path, so a discarded/frozen tab can
-        // stay blank after the switch. frozen is Chrome-only (undefined on
-        // Firefox MV2 — the === true check is feature-tolerant). Reload
-        // last and best-effort: the switch itself already succeeded.
-        if (tab.discarded === true || tab.frozen === true) {
+        // Wake hibernated tabs: Chrome does not auto-reload a discarded tab
+        // on programmatic activation, so it stays blank after the switch.
+        // Only discarded tabs on Chrome need this — frozen tabs keep their
+        // content in memory and unfreeze on activation (a reload would wipe
+        // live form/SPA state), and Firefox restores discarded tabs natively
+        // on activation (a reload would replace session restore with a cold
+        // network load). chrome.action is absent on the Firefox MV2 build.
+        if (tab.discarded === true && chrome.action !== undefined) {
           try {
             await chrome.tabs.reload(tabId);
           } catch {

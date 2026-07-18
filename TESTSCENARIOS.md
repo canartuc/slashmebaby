@@ -357,7 +357,7 @@ Each scenario has a unique ID (TS-NNN), a priority (P0/P1), and a one-line descr
 |----|----------|----------|
 | TS-184 | P0 | Activating a discarded (sleeping) tab from the overlay reloads it and shows the page (unit-pinned; e2e fixme-gated — chrome.tabs.discard crashes the current Chromium-for-Testing build; verify manually via Memory Saver) |
 | TS-185 | P0 | Activating a discarded tab from the popup reloads it and shows the page (same gating as TS-184) |
-| TS-186 | P0 | Discarded tabs show the ⏾ sleep badge identically on both surfaces |
+| TS-186 | P0 | Discarded tabs show the "zzz" sleep badge identically on both surfaces (grid, search rows, and pinned tiles), with "(sleeping)" announced in the row aria-label |
 | TS-187 | P1 | A frozen tab (Chrome-only) is woken on activation like a discarded one |
 | TS-188 | P2 | Manual: incognito tabs are invisible to the palette (no `incognito` manifest key) unless the user enables "Allow in Incognito" |
 
