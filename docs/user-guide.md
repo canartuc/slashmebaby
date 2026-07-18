@@ -29,7 +29,8 @@ When you install SlashMeBaby for the first time, an onboarding wizard opens auto
 1. **Choose your shortcut.** Pick the keyboard shortcut you prefer to open the command bar.
 2. **Try it out.** A short demo of how your chosen shortcut opens the command bar (press Next to continue; the shortcut works on regular web pages once you finish).
 3. **Navigate results.** Learn the keyboard shortcuts for navigating the command bar.
-4. **You are ready.** Pro tips and a link to settings.
+4. **Pin it to your toolbar.** Browser-specific instructions for pinning the SlashMeBaby icon (with a live "Pinned" confirmation where the browser supports it).
+5. **You are ready.** Pro tips and a link to settings.
 
 After completing onboarding, you can start using SlashMeBaby on any web page.
 

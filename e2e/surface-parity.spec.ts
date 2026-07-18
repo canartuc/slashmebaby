@@ -55,6 +55,10 @@ test('popup and overlay render identical jump-first surfaces for the same data',
   await expect
     .poll(() => collectGridLabels(popup), { timeout: 5000 })
     .not.toEqual([]);
+  // Seeded bookmarks load async — snapshot only the complete state.
+  await expect
+    .poll(() => getGroupHeaders(popup), { timeout: 5000 })
+    .toContain('Bookmarks');
   const popupState = {
     input: await getPaletteInputState(popup),
     headers: await getGroupHeaders(popup),
@@ -72,6 +76,9 @@ test('popup and overlay render identical jump-first surfaces for the same data',
   await expect
     .poll(() => collectGridLabels(page), { timeout: 5000 })
     .not.toEqual([]);
+  await expect
+    .poll(() => getGroupHeaders(page), { timeout: 5000 })
+    .toContain('Bookmarks');
   const overlayState = {
     input: await getPaletteInputState(page),
     headers: await getGroupHeaders(page),

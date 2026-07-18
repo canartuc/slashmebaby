@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { OPEN_SHORTCUT, seedBookmarks, launchBrowserWithExtension as launchWithExtension, openCommandBar, typeInCommandBar, getSelectedItemSection, getSelectedItemTitle } from './helpers';
+import { OPEN_SHORTCUT, seedBookmarks, launchBrowserWithExtension as launchWithExtension, openCommandBar, openPage, typeInCommandBar, getSelectedItemSection, getSelectedItemTitle } from './helpers';
 
 async function getOverlayState(page: Page): Promise<string> {
   return page.evaluate(() => {
@@ -200,10 +200,7 @@ test('Tab jumps between top-level bookmark folders in jump mode', async () => {
     );
   });
 
-  const page = await context.newPage();
-  await page.goto('https://example.com');
-  await page.waitForLoadState('domcontentloaded');
-  await new Promise(r => setTimeout(r, 1000));
+  const page = await openPage(context, 'https://example.com');
 
   await openCommandBar(page);
   await new Promise(r => setTimeout(r, 500)); // tree data settle

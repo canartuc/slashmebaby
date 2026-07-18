@@ -62,17 +62,23 @@ function collectSurfaceState(container: HTMLElement): SurfaceState {
 
 type Surface = 'overlay' | 'popup';
 
-function sendKey(surface: Surface, key: string, shiftKey = false) {
+function sendKey(
+  surface: Surface,
+  key: string,
+  shiftKey = false,
+  mods: { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean } = {}
+) {
+  const { ctrlKey = false, metaKey = false, altKey = false } = mods;
   act(() => {
     if (surface === 'popup') {
-      fireEvent.keyDown(document, { key, shiftKey });
+      fireEvent.keyDown(document, { key, shiftKey, ctrlKey, metaKey, altKey });
     } else {
       // Mirror the content-script forwarder faithfully: run the SHARED
       // routing layer first (so overlay-leg parity exercises
       // routePaletteKey's pass/forward/normalization decisions too), then
       // dispatch the normalized CustomEvent the overlay consumes.
       const decision = routePaletteKey(
-        { key, shiftKey, ctrlKey: false, metaKey: false, altKey: false } as KeyboardEvent,
+        { key, shiftKey, ctrlKey, metaKey, altKey } as KeyboardEvent,
         { activeElement: document.activeElement }
       );
       if (decision.kind === 'forward') {
@@ -107,7 +113,11 @@ async function runOn<T>(
   fixture: MockPaletteOptions,
   scenario: (ctx: {
     container: HTMLElement;
-    key: (k: string, shift?: boolean) => void;
+    key: (
+      k: string,
+      shift?: boolean,
+      mods?: { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean }
+    ) => void;
   }) => Promise<T>
 ): Promise<T> {
   mockRawDataMessages(fixture);
@@ -116,7 +126,7 @@ async function runOn<T>(
   try {
     return await scenario({
       container: view.container,
-      key: (k, shift = false) => sendKey(surface, k, shift),
+      key: (k, shift = false, mods = {}) => sendKey(surface, k, shift, mods),
     });
   } finally {
     view.unmount();
@@ -274,12 +284,12 @@ describe('surface parity — popup is the overlay in a different frame', () => {
   });
 
   it('modifier chords never trigger palette actions on either surface', async () => {
-    const [overlay, popup] = await runOnBoth(PINNED_FIXTURE, async ({ container }) => {
+    const [overlay, popup] = await runOnBoth(PINNED_FIXTURE, async ({ container, key }) => {
       // Ctrl+C / Cmd+C must be inert (browser copy chords, not palette keys).
-      act(() => {
-        fireEvent.keyDown(document, { key: 'c', ctrlKey: true });
-        fireEvent.keyDown(document, { key: 'c', metaKey: true });
-      });
+      // Through key() both surfaces exercise their REAL routing path — the
+      // overlay leg runs routePaletteKey's chord guard, not a bare no-op.
+      key('c', false, { ctrlKey: true });
+      key('c', false, { metaKey: true });
       await new Promise((r) => setTimeout(r, 50));
       return {
         executed: countSentMessages('EXECUTE_ACTION'),

@@ -23,7 +23,7 @@ test("opens in jump mode; '/' enters typed search which filters immediately", as
   await expect
     .poll(async () =>
       popup.evaluate(
-        () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? false
+        () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? true
       ), { timeout: 5000 })
     .toBe(true);
   await expect
@@ -76,7 +76,7 @@ test("opens with jump labels; '/' toggles typed search and back", async () => {
 
   const isReadOnly = () =>
     popup.evaluate(
-      () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? false
+      () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? true
     );
 
   // Jump-first: read-only with labels on entry.
@@ -157,7 +157,7 @@ test("action key 't' in jump mode opens a new tab", async () => {
   // into search and back so the press below runs in jump mode.
   const readOnly = () =>
     popup.evaluate(
-      () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? false
+      () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? true
     );
   await expect
     .poll(async () => {
@@ -183,7 +183,7 @@ test('Backspace never closes the popup; Escape does', async () => {
   const popup = await openPopupPage(context);
   const readOnly = () =>
     popup.evaluate(
-      () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? false
+      () => (document.querySelector('.smb-input') as HTMLInputElement)?.readOnly ?? true
     );
 
   // Backspace on jump-mode entry: inert (strict overlay parity).

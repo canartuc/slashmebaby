@@ -74,6 +74,8 @@ test('the results region renders pixel-identical (within tolerance) in popup and
       ];
       return (
         popupHeaders.includes('Open Tabs') &&
+        // Seeded bookmarks load async — capture only the complete state.
+        popupHeaders.includes('Bookmarks') &&
         JSON.stringify(overlayHeaders) === JSON.stringify(popupHeaders) &&
         popupTheme === 'dark' &&
         overlayTheme === 'dark'

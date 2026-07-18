@@ -179,9 +179,10 @@ export async function getInputValue(page: Page): Promise<string> {
 }
 
 export async function getExtensionId(context: BrowserContext): Promise<string> {
-  const sw = await getServiceWorker(context).catch(() => null);
-  const match = sw?.url().match(/chrome-extension:\/\/([^/]+)/);
-  return match?.[1] ?? '';
+  const sw = await getServiceWorker(context);
+  const match = sw.url().match(/chrome-extension:\/\/([^/]+)/);
+  if (!match) throw new Error(`cannot derive extension id from ${sw.url()}`);
+  return match[1];
 }
 
 /**
@@ -190,9 +191,8 @@ export async function getExtensionId(context: BrowserContext): Promise<string> {
  * and launchPersistentContext('') starts from an empty profile.
  */
 export async function seedBookmarks(context: BrowserContext): Promise<void> {
-  // Historic silent-return semantics: seeding is best-effort.
-  const sw = await getServiceWorker(context).catch(() => null);
-  if (!sw) return;
+  // Seeding must not silently no-op: tests that seed depend on the data.
+  const sw = await getServiceWorker(context);
 
   await sw.evaluate(async () => {
     type CreateArg = { parentId?: string; title?: string; url?: string; index?: number };

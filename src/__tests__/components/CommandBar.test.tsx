@@ -1208,7 +1208,7 @@ describe('CommandBar — action-error aria-live region', () => {
     expect(idle).toContain('position: absolute');
     expect(idle).toContain('width: 1px');
     expect(idle).toContain('height: 1px');
-    expect(idle).toContain('clip: rect(0, 0, 0, 0)');
+    expect(idle).toContain('clip-path: inset(50%)');
     expect(idle).toContain('overflow: hidden');
   });
 
@@ -1217,7 +1217,7 @@ describe('CommandBar — action-error aria-live region', () => {
     const visible = cssRuleBody(css, '.smb-error-strip--visible');
     expect(visible).toContain('display: block');
     expect(visible).toContain('position: static');
-    expect(visible).toContain('clip: auto');
+    expect(visible).toContain('clip-path: none');
     // Visual behavior identical to the old visible state:
     expect(visible).toContain('border: 1px solid var(--color-danger)');
     expect(visible).toContain('background: var(--color-danger-bg)');
@@ -2098,7 +2098,8 @@ describe('CommandBar — coverage gap pins', () => {
         },
       ],
     });
-    const { container } = render(<CommandBar onDismiss={() => {}} />);
+    const onDismiss = vi.fn();
+    const { container } = render(<CommandBar onDismiss={onDismiss} />);
     await waitFor(() => expect(screen.getByText('Gmail')).toBeTruthy());
     fireSmbKey('/');
     const input = (await waitFor(() => {
@@ -2114,8 +2115,9 @@ describe('CommandBar — coverage gap pins', () => {
 
     vi.mocked(chrome.runtime.sendMessage).mockClear();
     fireSmbKey('Enter');
-    // No activation message of any kind leaves the palette.
+    // No activation message of any kind leaves the palette, and it stays open.
     expect(vi.mocked(chrome.runtime.sendMessage)).not.toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 });
 

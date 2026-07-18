@@ -76,9 +76,16 @@ test("tabs from a second window appear in the palette", async () => {
     }
   });
 
-  // Retitle it so the grid row is uniquely identifiable.
-  const otherPage = context.pages().find(p => p.url().startsWith('https://example.net'));
-  await otherPage?.evaluate(() => { document.title = 'Quokka Second Window'; });
+  // Retitle it so the grid row is uniquely identifiable. Poll: Playwright's
+  // Page registration for the sw-created window can lag the tab creation.
+  let otherPage;
+  const deadline = Date.now() + 5000;
+  while (!otherPage && Date.now() < deadline) {
+    otherPage = context.pages().find(p => p.url().startsWith('https://example.net'));
+    if (!otherPage) await new Promise(r => setTimeout(r, 200));
+  }
+  if (!otherPage) throw new Error('second-window page never registered');
+  await otherPage.evaluate(() => { document.title = 'Quokka Second Window'; });
 
   // Focus back on window 1 and open the palette there.
   await page.bringToFront();

@@ -197,7 +197,7 @@ Generated 2026-07-18; regenerate per the procedure at the bottom.
 | TS-184 | unit | src/__tests__/background/index.test.ts :: reloads a discarded tab after activating it (asserts tabs.reload(7) and activate→focus→reload ordering); e2e/tab-states.spec.ts :: activating a hibernated tab from the palette reloads and shows the page exists but is test.fixme-gated (chrome.tabs.discard segfaults the Chromium-for-Testing build); manual check via Memory Saver per spec header |
 | TS-185 | unit | src/__tests__/background/index.test.ts :: reloads a discarded tab after activating it (wake path is surface-agnostic SWITCH_TAB); src/__tests__/components/surface-parity.test.tsx :: a digit key sends the same SWITCH_TAB pinned-tab message from both surfaces, exactly once (popup leg emits the identical message); e2e/tab-states.spec.ts :: activating a hibernated tab from the popup reloads and shows the page is fixme-gated (same chrome.tabs.discard segfault) |
 | TS-186 | unit | src/__tests__/components/surface-parity.test.tsx :: popup and overlay render identical sleep badges on discarded tab rows; src/__tests__/components/TreeView.test.tsx :: shows a sleep badge on discarded tabs in the tab grid; src/__tests__/components/TreeItem.test.tsx :: shows a sleep badge on a discarded tab row in search mode; e2e/tab-states.spec.ts :: discarded tabs show the sleep badge on both surfaces is fixme-gated (chrome.tabs.discard segfault) |
-| TS-187 | unit | src/__tests__/background/index.test.ts :: reloads a frozen tab after activating it (asserts tabs.reload(7)); src/__tests__/background/index.test.ts :: folds frozen (Chrome-only) into discarded: true |
+| TS-187 | unit | src/__tests__/background/index.test.ts :: does not reload a frozen tab — its content is memory-resident and unfreezes on activation; src/__tests__/background/index.test.ts :: does not reload a discarded tab on Firefox — activation triggers native session restore; src/__tests__/background/index.test.ts :: folds frozen (Chrome-only) into discarded: true |
 | TS-188 | manual | Marked Manual in TESTSCENARIOS.md (TS-188 row): incognito is in the infeasible register — no `incognito` manifest key, palette invisibility verified by enabling 'Allow in Incognito' by hand |
 | TS-189 | e2e | e2e/design-baselines.spec.ts :: overlay jump view matches baseline (dark, center) (toHaveScreenshot overlay-jump-dark.png with pinned grid, baseline checked in under e2e/__screenshots__/darwin/) |
 | TS-190 | e2e | e2e/design-baselines.spec.ts :: overlay position variants match baseline (dark) (toHaveScreenshot overlay-jump-top-dark.png and overlay-jump-bottom-dark.png) |
@@ -214,32 +214,32 @@ Generated 2026-07-18; regenerate per the procedure at the bottom.
 
 | Feature | Name | Covered by scenario rows |
 |---------|------|--------------------------|
-| F01 | Command bar overlay | TS-009..TS-015, TS-129..TS-137 (Shadow DOM), TS-189 |
+| F01 | Command bar overlay | TS-009..TS-015, TS-137..TS-142 (Shadow DOM), TS-189 |
 | F02 | Tab search & switch | TS-032, TS-041..TS-044, TS-184..TS-187 (hibernation) |
 | F03 | Bookmark search | TS-033, TS-045 |
 | F04 | History search | TS-034, TS-047 |
-| F05 | Recency scoring (background SEARCH API) | TS-048..TS-052 |
+| F05 | Recency scoring (background SEARCH API) | TS-049..TS-052 |
 | F06 | Grouped results | TS-040..TS-046 |
-| F07 | Keyboard navigation | TS-053..TS-070 |
+| F07 | Keyboard navigation | TS-058..TS-070 |
 | F08 | Smart suggestions | Superseded — TS-026..TS-031 rewritten/superseded |
 | F09 | Tab actions | TS-071..TS-085 |
 | F10 | Navigation actions | TS-087..TS-090 |
 | F11 | Utility actions | TS-086, TS-091..TS-093 |
-| F12 | Action prefix mode | TS-053..TS-059 |
+| F12 | Action prefix mode | TS-053..TS-057 |
 | F13 | Keyboard shortcut | TS-016..TS-020, TS-094..TS-098 |
 | F14 | Theme | TS-104..TS-108, TS-193..TS-196 |
-| F15 | Shadow DOM isolation | TS-129..TS-142 |
+| F15 | Shadow DOM isolation | TS-137..TS-142 |
 | F16 | Cross-browser | TS-143..TS-149 |
-| F17 | Onboarding | TS-116..TS-125, TS-197 |
+| F17 | Onboarding | TS-116..TS-128, TS-197 |
 | F18 | Settings | TS-099..TS-115 |
 | F19 | Position options | TS-101..TS-103, TS-190 |
-| F20 | Icon click & popup | TS-126..TS-128, TS-177..TS-183 |
+| F20 | Icon click & popup | TS-129..TS-136, TS-177..TS-183 |
 | F21-F24 | (not implemented) | n/a |
-| F25 | Tree view | TS-063..TS-066 |
+| F25 | Tree view | TS-026, TS-062..TS-063, TS-177..TS-183 (jump view) |
 | F26 | EasyJump labels | TS-067..TS-070, TS-183 |
 | F27 | Jump/search toggle | TS-062, TS-179 |
 | F28 | Smart tab grouping | TS-150..TS-153 |
-| F29 | Nested bookmark folders | TS-064..TS-066 |
+| F29 | Nested bookmark folders | TS-033, TS-045, TS-177..TS-183 (bookmark tree in jump view) |
 
 ## Known-untestable register
 
