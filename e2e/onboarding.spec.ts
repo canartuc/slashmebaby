@@ -87,7 +87,7 @@ test('Step 3 shows navigation guide', async () => {
 
   // Verify key-action rows exist (↑ ↓ Tab Enter Esc)
   const keyRows = page.locator('.smb-onboarding-key-row');
-  await expect(keyRows).toHaveCount(4);
+  await expect(keyRows).toHaveCount(5);
 
   await context.close();
 });

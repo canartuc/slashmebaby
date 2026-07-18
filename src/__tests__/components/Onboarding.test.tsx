@@ -172,10 +172,17 @@ describe('NavigationGuide', () => {
     expect(screen.getByText('Close the command bar')).toBeTruthy();
   });
 
+  it('lists Shift+Tab for jumping to the previous group', () => {
+    render(<NavigationGuide />);
+    expect(screen.getByText('Jump to previous group')).toBeTruthy();
+    expect(screen.getByText('Shift')).toBeTruthy();
+  });
+
   it('renders key badges', () => {
     render(<NavigationGuide />);
 
-    expect(screen.getByText('Tab')).toBeTruthy();
+    // 'Tab' appears twice: the Tab row and the Shift+Tab row.
+    expect(screen.getAllByText('Tab')).toHaveLength(2);
     expect(screen.getByText('Enter')).toBeTruthy();
     expect(screen.getByText('Esc')).toBeTruthy();
   });
