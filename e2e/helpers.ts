@@ -330,6 +330,8 @@ export async function getTabs(
       pinned: t.pinned,
       active: t.active,
       windowId: t.windowId,
+      discarded: t.discarded,
+      status: t.status ?? '',
     }));
   });
 }
@@ -339,6 +341,55 @@ export async function getActiveTabUrlViaSw(context: BrowserContext): Promise<str
   return sw.evaluate(async () => {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     return tab?.url ?? '';
+  });
+}
+
+/**
+ * Discards (hibernates) the tab matching the URL substring. Chrome may
+ * REPLACE the tab with a new id and detaches any Playwright Page — always
+ * re-find by URL afterwards, never cache ids across a discard. Chrome
+ * refuses to discard the active or an audible tab (hence the driver-page
+ * pattern in callers).
+ */
+export async function discardTab(context: BrowserContext, urlSubstring: string): Promise<void> {
+  const sw = await getServiceWorker(context);
+  await sw.evaluate(async (part: string) => {
+    const tabs = await chrome.tabs.query({});
+    const target = tabs.find(t => (t.url ?? '').includes(part));
+    if (target?.id === undefined) throw new Error(`no tab matching ${part} to discard`);
+    await chrome.tabs.discard(target.id);
+    const deadline = Date.now() + 5000;
+    for (;;) {
+      const fresh = await chrome.tabs.query({});
+      const found = fresh.find(t => (t.url ?? '').includes(part));
+      if (found?.discarded === true) return;
+      if (Date.now() > deadline) {
+        throw new Error(
+          `tab matching ${part} did not discard (active or audible tabs refuse discard)`
+        );
+      }
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }, urlSubstring);
+}
+
+/** Titles of palette rows (grid or tree) carrying the sleep badge. */
+export async function getSleepBadgedTitles(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const root: ParentNode =
+      document.getElementById('slashmebaby-root')?.shadowRoot ?? document;
+    const titles: string[] = [];
+    for (const row of Array.from(root.querySelectorAll('.smb-tab-col-item'))) {
+      if (row.querySelector('.smb-sleep-badge')) {
+        titles.push(row.querySelector('.smb-tab-col-title')?.textContent ?? '');
+      }
+    }
+    for (const row of Array.from(root.querySelectorAll('.smb-tree-item'))) {
+      if (row.querySelector('.smb-sleep-badge')) {
+        titles.push(row.querySelector('.smb-title')?.textContent ?? '');
+      }
+    }
+    return titles;
   });
 }
 
