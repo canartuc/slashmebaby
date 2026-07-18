@@ -5,6 +5,15 @@ import { launchBrowserWithExtension as launchWithExtension, openPage } from './h
 // shortcuts, so these tests assert the observable contract of the per-tab
 // popup routing instead: the popup string the background maintains for each
 // tab, read through the service worker.
+//
+// Recovery-path e2e (unreachableTabs marking → default-popup restore →
+// clear on navigation/successful message) is INFEASIBLE here:
+// requestOverlayToggle is reachable only from action.onClicked (not
+// clickable by automation) and commands.onCommand (CDP keys never fire
+// registered extension commands), and the function is closed over inside
+// createActionRouting — unreachable from sw.evaluate. No production test
+// hooks are added for this; the full recovery contract is pinned by unit
+// tests in src/__tests__/background/action-routing.test.ts.
 
 async function getPopupForUrl(
   context: Awaited<ReturnType<typeof launchWithExtension>>,
