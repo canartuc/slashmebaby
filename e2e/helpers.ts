@@ -86,6 +86,24 @@ export async function getSelectedItemTitle(page: Page): Promise<string> {
   });
 }
 
+/**
+ * The section header text the selected tree item renders under, or ''.
+ * Headers and tree items are siblings under .smb-results (TreeView renders
+ * them via Fragments), so walking previous siblings finds the nearest one.
+ */
+export async function getSelectedItemSection(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const host = document.getElementById('slashmebaby-root');
+    let el: Element | null | undefined =
+      host?.shadowRoot?.querySelector('.smb-tree-item--selected');
+    while (el) {
+      el = el.previousElementSibling;
+      if (el?.classList.contains('smb-group-header')) return el.textContent ?? '';
+    }
+    return '';
+  });
+}
+
 export async function getResultCount(page: Page): Promise<number> {
   return page.evaluate(() => {
     const host = document.getElementById('slashmebaby-root');
