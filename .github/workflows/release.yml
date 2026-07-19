@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Pack and publish extension zips
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package version
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Pack Chrome zip
+        run: npm run pack
+
+      - name: Pack Firefox zip
+        run: npm run pack:firefox
+
+      # Attach zips to the release for this tag; create the release from the
+      # tag if it does not exist yet (manual gh-CLI releases keep working —
+      # this then only uploads/overwrites the assets).
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" \
+              --title "SlashMeBaby $VERSION" \
+              --generate-notes
+          fi
+          gh release upload "$GITHUB_REF_NAME" --clobber \
+            ".output/slashmebaby-${VERSION}-chrome.zip" \
+            ".output/slashmebaby-${VERSION}-firefox.zip"

@@ -36,9 +36,9 @@ jobs:
       - name: Unit tests
         run: npx vitest run
 
+      # Gating: vitest.config thresholds fail this step on regression.
       - name: Coverage
         run: npx vitest run --coverage
-        continue-on-error: true
 
       - name: Upload coverage artifact
         if: always()
@@ -72,6 +72,9 @@ jobs:
 
       - name: Build Firefox MV2 bundle
         run: npm run build:firefox
+
+      - name: Firefox smoke tests (manifest + web-ext lint)
+        run: npm run test:firefox
 
       - name: Upload bundles
         uses: actions/upload-artifact@v7
