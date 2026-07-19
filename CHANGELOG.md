@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-07-19
+
+### Changed
+
+- Bumped fuse.js to 7.5.0 (runtime search engine) and dev tooling (eslint 10.7, typescript-eslint 8.64).
+
+### Fixed
+
+- A test-suite race could kill otherwise-green CI runs: the content-script teardown now drains React's concurrent scheduler before removing the overlay DOM, so no render task fires after the jsdom environment is gone.
+
 ## [1.1.0] - 2026-07-18
 
 ### Fixed
@@ -57,5 +67,6 @@ Initial public release.
 - Background favicon proxy: fetches site favicons image-only with credentials omitted, converts them to `data:` URLs, and caches them in memory, with a globe-glyph fallback.
 - Cross-browser builds via WXT: Chrome MV3 (primary) and Firefox MV2.
 
+[1.1.1]: https://github.com/canartuc/slashmebaby/releases/tag/v1.1.1
 [1.1.0]: https://github.com/canartuc/slashmebaby/releases/tag/v1.1.0
 [1.0.0]: https://github.com/canartuc/slashmebaby/releases/tag/v1.0.0

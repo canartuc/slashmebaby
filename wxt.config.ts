@@ -8,7 +8,7 @@ export default defineConfig({
   manifest: ({ browser }) => ({
     name: 'SlashMeBaby',
     description: 'A keyboard-driven command palette for your browser. Switch tabs, search bookmarks and history, and run actions in one keystroke.',
-    version: '1.1.0',
+    version: '1.1.1',
     // Note: "commands" is a manifest key, not a permission, and "activeTab"
     // is unused (no executeScript/captureVisibleTab/insertCSS anywhere).
     // "tabGroups" is Chrome-only — Firefox rejects it, and the background's
