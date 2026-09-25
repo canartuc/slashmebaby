@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-09-25
+
+### Changed
+
+- Updated React and React DOM together to 19.3.0, with matching TypeScript types; updated jsdom to 30 and refreshed development tooling.
+- Updated the dependency lockfile to patched versions. The release dependency tree reports no npm audit vulnerabilities.
+- CI now enforces coverage thresholds and runs Firefox smoke checks; version tags build and publish Chrome, Firefox, and source archives.
+
 ## [1.1.1] - 2026-07-19
 
 ### Changed
@@ -67,6 +75,7 @@ Initial public release.
 - Background favicon proxy: fetches site favicons image-only with credentials omitted, converts them to `data:` URLs, and caches them in memory, with a globe-glyph fallback.
 - Cross-browser builds via WXT: Chrome MV3 (primary) and Firefox MV2.
 
+[1.1.2]: https://github.com/canartuc/slashmebaby/releases/tag/v1.1.2
 [1.1.1]: https://github.com/canartuc/slashmebaby/releases/tag/v1.1.1
 [1.1.0]: https://github.com/canartuc/slashmebaby/releases/tag/v1.1.0
 [1.0.0]: https://github.com/canartuc/slashmebaby/releases/tag/v1.0.0

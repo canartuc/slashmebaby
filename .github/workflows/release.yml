@@ -39,6 +39,18 @@ jobs:
       - name: Pack Firefox zip
         run: npm run pack:firefox
 
+      - name: Verify packed manifest versions
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          for BROWSER in chrome firefox; do
+            ARCHIVE=".output/slashmebaby-${VERSION}-${BROWSER}.zip"
+            MANIFEST_VERSION=$(unzip -p "$ARCHIVE" manifest.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')
+            if [ "$MANIFEST_VERSION" != "$VERSION" ]; then
+              echo "$ARCHIVE has manifest version $MANIFEST_VERSION, expected $VERSION" >&2
+              exit 1
+            fi
+          done
+
       # Attach zips to the release for this tag; create the release from the
       # tag if it does not exist yet (manual gh-CLI releases keep working —
       # this then only uploads/overwrites the assets).
@@ -54,4 +66,5 @@ jobs:
           fi
           gh release upload "$GITHUB_REF_NAME" --clobber \
             ".output/slashmebaby-${VERSION}-chrome.zip" \
-            ".output/slashmebaby-${VERSION}-firefox.zip"
+            ".output/slashmebaby-${VERSION}-firefox.zip" \
+            ".output/slashmebaby-${VERSION}-sources.zip"
