@@ -5,6 +5,14 @@ import { DEFAULT_SETTINGS } from '../src/lib/messaging';
 
 const EXTENSION_PATH = path.resolve('.output/chrome-mv3');
 
+// example.com/.org are live IANA pages that change without notice. The 2026
+// rewrite (translated paragraphs from a script) leaked into the translucent
+// backdrop of design baselines, and on Linux grew tall enough to add a
+// classic scrollbar, which shifts the centered overlay by half a pixel and
+// breaks the surface-parity capture. Every spec gets the page as captured
+// with the design baselines (Wayback snapshot 2026-07-17) instead.
+const EXAMPLE_DOMAIN_HTML = '<!doctype html><html lang="en"><head><title>Example Domain</title><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{background:#eee;width:60vw;margin:15vh auto;font-family:system-ui,sans-serif}h1{font-size:1.5em}div{opacity:0.8}a:link,a:visited{color:#348}</style></head><body><div><h1>Example Domain</h1><p>This domain is for use in documentation examples without needing permission. Avoid use in operations.</p><p><a href="https://iana.org/domains/example">Learn more</a></p></div></body></html>';
+
 export async function launchBrowserWithExtension(): Promise<BrowserContext> {
   const context = await chromium.launchPersistentContext('', {
     headless: false,
@@ -26,6 +34,9 @@ export async function launchBrowserWithExtension(): Promise<BrowserContext> {
   if (context.serviceWorkers().length === 0) {
     throw new Error('Extension service worker did not register — is .output/chrome-mv3 built?');
   }
+  await context.route(/^https:\/\/example\.(com|org)\//, route =>
+    route.fulfill({ contentType: 'text/html', body: EXAMPLE_DOMAIN_HTML })
+  );
   return context;
 }
 
