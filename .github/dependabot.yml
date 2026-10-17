@@ -6,6 +6,14 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
+      # vitest and @vitest/* pin each other as exact peers, so a split
+      # bump fails `npm ci` with ERESOLVE. Group every update type
+      # (majors included) so they always land in one PR. Listed first
+      # because dependabot assigns a dependency to its first matching group.
+      vitest:
+        patterns:
+          - vitest
+          - '@vitest/*'
       dev-dependencies:
         dependency-type: development
         update-types:
