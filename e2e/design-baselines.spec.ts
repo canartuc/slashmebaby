@@ -30,19 +30,10 @@ test.skip(
 
 const VIEWPORT = { width: 1200, height: 800 };
 
-// The translucent backdrop lets the host page show through, and example.com
-// is a live page IANA changes at will (it gained translated paragraphs and a
-// script in 2026). Serve the page as captured with the baselines (Wayback
-// snapshot 2026-07-17) so the shots depend only on the extension.
-const EXAMPLE_DOMAIN_HTML = '<!doctype html><html lang="en"><head><title>Example Domain</title><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{background:#eee;width:60vw;margin:15vh auto;font-family:system-ui,sans-serif}h1{font-size:1.5em}div{opacity:0.8}a:link,a:visited{color:#348}</style></head><body><div><h1>Example Domain</h1><p>This domain is for use in documentation examples without needing permission. Avoid use in operations.</p><p><a href="https://iana.org/domains/example">Learn more</a></p></div></body></html>';
-
 async function preparedOverlay(
   options: { theme?: 'dark' | 'light'; position?: string; withPinned?: boolean } = {}
 ) {
   const context = await launchWithExtension();
-  await context.route(/^https:\/\/example\.(com|org)\//, route =>
-    route.fulfill({ contentType: 'text/html', body: EXAMPLE_DOMAIN_HTML })
-  );
   await closeOnboardingTab(context);
   await seedBookmarks(context);
   if (options.withPinned) {
